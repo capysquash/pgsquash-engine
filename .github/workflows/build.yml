@@ -40,7 +40,7 @@ jobs:
         run: go mod verify
 
       - name: Build
-        run: go build -v -o pgsquash cmd/pgsquash/main.go
+        run: go build -v -o pgsquash ./cmd/pgsquash
 
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
@@ -108,7 +108,7 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then
             OUTPUT_NAME="${OUTPUT_NAME}.exe"
           fi
-          go build -ldflags="-w -s" -o "${OUTPUT_NAME}" cmd/pgsquash/main.go
+          go build -ldflags="-w -s" -o "${OUTPUT_NAME}" ./cmd/pgsquash
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

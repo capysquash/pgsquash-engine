@@ -61,7 +61,7 @@ RUN CGO_ENABLED=1 go build \
     -X 'main.version=${BUILD_VERSION}' \
     -X 'main.buildDate=${BUILD_DATE}' \
     -X 'main.gitCommit=${GIT_COMMIT}'" \
-    -o pgsquash cmd/pgsquash/main.go
+    -o pgsquash ./cmd/pgsquash
 
 # Runtime stage
 FROM ubuntu:noble AS runtime

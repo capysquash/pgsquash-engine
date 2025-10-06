@@ -119,7 +119,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+            ${{ env.DOCKERHUB_REGISTRY }}/idominikos/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -187,9 +187,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ needs.metadata.outputs.platforms }}
+          platforms: ${{ needs.metadata.outputs.push == 'true' && needs.metadata.outputs.platforms || 'linux/amd64' }}
           push: ${{ needs.metadata.outputs.push }}
-          load: ${{ needs.metadata.outputs.push == 'false' }}
+          load: ${{ needs.metadata.outputs.push != 'true' }}
           tags: ${{ matrix.tags }}
           labels: ${{ needs.metadata.outputs.labels }}
           cache-from: type=gha

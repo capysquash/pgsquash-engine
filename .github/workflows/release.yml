@@ -75,7 +75,7 @@ jobs:
             -X 'main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
             -X 'main.gitCommit=${{ github.sha }}'" \
             -o "${OUTPUT_NAME}" \
-            cmd/pgsquash/main.go
+            ./cmd/pgsquash
 
           # Create checksums
           if [ "${{ matrix.goos }}" = "windows" ]; then
