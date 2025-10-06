@@ -19,146 +19,39 @@ env:
   GO_VERSION: '1.25.1'
 
 jobs:
-  build-binaries:
-    name: Build Release Binaries
+  goreleaser:
+    name: Release with GoReleaser
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            cgo: 1
-          - goos: linux
-            goarch: arm64
-            cgo: 0
-          - goos: darwin
-            goarch: amd64
-            cgo: 0
-          - goos: darwin
-            goarch: arm64
-            cgo: 0
-          - goos: windows
-            goarch: amd64
-            cgo: 0
-
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: true
 
-      - name: Get version
-        id: version
-        run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Build binary
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: '~> v2'
+          args: release --clean
         env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: ${{ matrix.cgo }}
-        run: |
-          OUTPUT_NAME="pgsquash-${{ steps.version.outputs.VERSION }}-${{ matrix.goos }}-${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            OUTPUT_NAME="${OUTPUT_NAME}.exe"
-          fi
-
-          go build \
-            -ldflags="-w -s \
-            -X 'main.version=${{ steps.version.outputs.TAG }}' \
-            -X 'main.buildDate=$(date -u +%Y-%m-%dT%H:%M:%SZ)' \
-            -X 'main.gitCommit=${{ github.sha }}'" \
-            -o "${OUTPUT_NAME}" \
-            ./cmd/pgsquash
-
-          # Create checksums
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            sha256sum "${OUTPUT_NAME}" > "${OUTPUT_NAME}.sha256"
-          else
-            shasum -a 256 "${OUTPUT_NAME}" > "${OUTPUT_NAME}.sha256"
-          fi
-
-          # Create tarball for non-Windows
-          if [ "${{ matrix.goos }}" != "windows" ]; then
-            tar czf "${OUTPUT_NAME}.tar.gz" "${OUTPUT_NAME}"
-            shasum -a 256 "${OUTPUT_NAME}.tar.gz" > "${OUTPUT_NAME}.tar.gz.sha256"
-          fi
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: pgsquash-*
-          retention-days: 1
-
-  create-release:
-    name: Create GitHub Release
-    needs: build-binaries
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v5
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Get version
-        id: version
-        run: |
-          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          echo "TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Extract changelog for version
-        id: changelog
-        run: |
-          # Extract the changelog section for this version
-          VERSION="${{ steps.version.outputs.VERSION }}"
-
-          # Create release notes from CHANGELOG.md
-          if [ -f "CHANGELOG.md" ]; then
-            awk "/## \[${VERSION}\]/,/## \[/" CHANGELOG.md | sed '1d;$d' > release_notes.md
-          fi
-
-          # If no changelog entry, use release notes from docs
-          if [ ! -s "release_notes.md" ] && [ -f "docs/internal/archive/RELEASE_NOTES_v${VERSION}.md" ]; then
-            cp "docs/internal/archive/RELEASE_NOTES_v${VERSION}.md" release_notes.md
-          fi
-
-          # Fallback to auto-generated notes
-          if [ ! -s "release_notes.md" ]; then
-            echo "## What's Changed" > release_notes.md
-            echo "" >> release_notes.md
-            echo "See full changelog at [CHANGELOG.md](CHANGELOG.md)" >> release_notes.md
-          fi
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: pg-squash Engine ${{ steps.version.outputs.TAG }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(steps.version.outputs.VERSION, 'beta') || contains(steps.version.outputs.VERSION, 'alpha') || contains(steps.version.outputs.VERSION, 'rc') }}
-          files: |
-            artifacts/pgsquash-*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: dist
+          path: dist/*
 
   trigger-docker-publish:
     name: Trigger Docker Image Publishing
-    needs: create-release
+    needs: goreleaser
     runs-on: ubuntu-latest
 
     steps:

@@ -9,7 +9,7 @@ before:
 
 builds:
   - id: pgsquash
-    main: ./cmd/pgsquash/main.go
+    main: ./cmd/pgsquash
     binary: pgsquash
     env:
       - CGO_ENABLED=1
@@ -21,21 +21,23 @@ builds:
       - amd64
       - arm64
     ignore:
-      # Windows ARM64 builds can be problematic with CGO
       - goos: windows
         goarch: arm64
     ldflags:
       - -s -w
-      - -X github.com/capysquash/pg-squash-engine/internal/cli.Version={{.Version}}
-      - -X github.com/capysquash/pg-squash-engine/internal/cli.BuildDate={{.Date}}
-      - -X github.com/capysquash/pg-squash-engine/internal/cli.GitCommit={{.FullCommit}}
+      - -X main.version={{.Version}}
+      - -X main.buildDate={{.Date}}
+      - -X main.gitCommit={{.FullCommit}}
     flags:
       - -trimpath
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
   - id: pgsquash-archive
-    rlcp: true  # Replace deprecated format: tar.gz
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
