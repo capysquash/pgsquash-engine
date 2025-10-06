@@ -1,0 +1,368 @@
+# pg-squash Complete Development & Production Environment
+# This compose setup provides everything needed for migration squashing with validation
+
+services:
+  # Main pg-squash application
+  pgsquash:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - BUILD_VERSION=${BUILD_VERSION:-dev}
+        - BUILD_DATE=${BUILD_DATE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
+        - GIT_COMMIT=${GIT_COMMIT:-$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")}
+    image: pgsquash:${BUILD_VERSION:-dev}
+    container_name: pgsquash-app
+    restart: unless-stopped
+    environment:
+      # pg-squash configuration
+      - PGSQUASH_SAFETY_LEVEL=${PGSQUASH_SAFETY_LEVEL:-standard}
+      - PGSQUASH_AUTO_VALIDATE=${PGSQUASH_AUTO_VALIDATE:-true}
+      - PGSQUASH_DOCKER_ENABLED=true
+      - PGSQUASH_INIT_SAMPLE=${PGSQUASH_INIT_SAMPLE:-false}
+      - PGSQUASH_AUTO_SETUP=true
+
+      # Docker configuration
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+      # Logging
+      - PGSQUASH_LOG_LEVEL=${PGSQUASH_LOG_LEVEL:-info}
+      - PGSQUASH_LOG_FORMAT=json
+    volumes:
+      # Migration files
+      - ./migrations:/app/migrations:ro
+      - ./output:/app/output
+      - ./config:/app/config
+
+      # Logs and cache
+      - pgsquash-logs:/app/logs
+      - pgsquash-cache:/app/.cache
+
+      # Docker socket for validation features
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # SSH keys for git operations (optional)
+      - ~/.ssh:/home/pgsquash/.ssh:ro
+    networks:
+      - pgsquash-net
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    labels:
+      - "com.pg-squash.service=engine"
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgsquash.rule=Host(`pgsquash.localhost`)"
+      - "traefik.http.services.pgsquash.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "pgsquash", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Primary PostgreSQL for validation
+  postgres-primary:
+    image: postgres:17
+    container_name: pgsquash-postgres-17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=pgsquash_primary
+      - POSTGRES_USER=pgsquash
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pgsquash_secure_password}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres-primary-data:/var/lib/postgresql/data
+      - ./docker/init-scripts/supabase-compat.sql:/docker-entrypoint-initdb.d/01-supabase-compat.sql:ro
+      - ./docker/init-scripts/init-postgres.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+      - pgsquash-logs:/var/log/postgresql
+    networks:
+      - pgsquash-net
+    ports:
+      - "${POSTGRES_PRIMARY_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgsquash -d pgsquash_primary"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "com.pg-squash.service=postgres-primary"
+      - "com.pg-squash.version=17"
+
+  # Secondary PostgreSQL for validation (Production-grade, Debian-based)
+  postgres-secondary:
+    image: postgres:15
+    container_name: pgsquash-postgres-15
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=pgsquash_secondary
+      - POSTGRES_USER=pgsquash
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pgsquash_secure_password}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres-secondary-data:/var/lib/postgresql/data
+      - ./docker/init-scripts/supabase-compat.sql:/docker-entrypoint-initdb.d/01-supabase-compat.sql:ro
+      - ./docker/init-scripts/init-postgres.sql:/docker-entrypoint-initdb.d/02-init.sql:ro
+    networks:
+      - pgsquash-net
+    ports:
+      - "${POSTGRES_SECONDARY_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgsquash -d pgsquash_secondary"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "com.pg-squash.service=postgres-secondary"
+      - "com.pg-squash.version=15"
+    profiles:
+      - "multi-version"
+
+  # PostgreSQL for legacy testing
+  postgres-legacy:
+    image: postgres:13
+    container_name: pgsquash-postgres-13
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=pgsquash_legacy
+      - POSTGRES_USER=pgsquash
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pgsquash_secure_password}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres-legacy-data:/var/lib/postgresql/data
+      - ./docker/init-scripts/init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - pgsquash-net
+    ports:
+      - "${POSTGRES_LEGACY_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgsquash -d pgsquash_legacy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - "com.pg-squash.service=postgres-legacy"
+      - "com.pg-squash.version=13"
+    profiles:
+      - "legacy"
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7
+    container_name: pgsquash-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-pgsquash_redis}
+    volumes:
+      - redis-data:/data
+    networks:
+      - pgsquash-net
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    profiles:
+      - "caching"
+
+  # MinIO for file storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: pgsquash-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-pgsquash}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-pgsquash_minio_password}
+    volumes:
+      - minio-data:/data
+    networks:
+      - pgsquash-net
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - "storage"
+
+  # Grafana for monitoring and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pgsquash-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-pgsquash_grafana}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=redis-datasource,postgres
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana:/etc/grafana/provisioning:ro
+    networks:
+      - pgsquash-net
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - postgres-primary
+    profiles:
+      - "monitoring"
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pgsquash-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus-data:/prometheus
+      - ./docker/prometheus:/etc/prometheus:ro
+    networks:
+      - pgsquash-net
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    profiles:
+      - "monitoring"
+
+  # Traefik for reverse proxy and load balancing
+  traefik:
+    image: traefik:v3.0
+    container_name: pgsquash-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@localhost}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    networks:
+      - pgsquash-net
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    profiles:
+      - "proxy"
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgsquash-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@pgsquash.localhost}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-pgsquash_pgadmin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - pgsquash-net
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres-primary
+    profiles:
+      - "management"
+
+  # File browser for managing migration files
+  filebrowser:
+    image: filebrowser/filebrowser:latest
+    container_name: pgsquash-filebrowser
+    restart: unless-stopped
+    volumes:
+      - ./:/srv
+      - filebrowser-data:/database
+    networks:
+      - pgsquash-net
+    ports:
+      - "${FILEBROWSER_PORT:-8081}:80"
+    environment:
+      - FB_DATABASE=/database/filebrowser.db
+      - FB_ROOT=/srv
+    profiles:
+      - "management"
+
+# Networks
+networks:
+  pgsquash-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    labels:
+      - "com.pg-squash.network=main"
+
+# Volumes
+volumes:
+  # PostgreSQL data
+  postgres-primary-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=postgres-primary-data"
+  postgres-secondary-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=postgres-secondary-data"
+  postgres-legacy-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=postgres-legacy-data"
+
+  # Application data
+  pgsquash-logs:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=logs"
+  pgsquash-cache:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=cache"
+
+  # Service data
+  redis-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=redis-data"
+  minio-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=minio-data"
+  grafana-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=grafana-data"
+  prometheus-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=prometheus-data"
+  pgadmin-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=pgadmin-data"
+  filebrowser-data:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=filebrowser-data"
+  traefik-letsencrypt:
+    driver: local
+    labels:
+      - "com.pg-squash.volume=letsencrypt"

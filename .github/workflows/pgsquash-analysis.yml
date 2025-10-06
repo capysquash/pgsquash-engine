@@ -1,0 +1,44 @@
+name: PG-Squash Analysis
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'db/migrations/**.sql'
+
+jobs:
+  analyze-migrations:
+    name: Analyze PostgreSQL Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.1'
+
+      - name: Install pg-squash
+        run: go install github.com/capysquash/pg-squash/cmd/pgsquash@latest
+
+      - name: Find migration files
+        id: migrations
+        run: |
+          files=$(find db/migrations -type f -name "*.sql" | tr '\n' ' ')
+          echo "files=$files" >> $GITHUB_OUTPUT
+
+      - name: Run pg-squash analysis
+        if: steps.migrations.outputs.files != ''
+        run: pgsquash analyze ${{ steps.migrations.outputs.files }}
+
+      - name: Run pg-squash validation
+        if: steps.migrations.outputs.files != ''
+        run: |
+          # Create a dummy squashed output for validation demonstration
+          mkdir -p squashed_migrations
+          pgsquash squash --output squashed_migrations ${{ steps.migrations.outputs.files }}
+          pgsquash validate db/migrations squashed_migrations

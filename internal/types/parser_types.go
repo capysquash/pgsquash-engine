@@ -1,0 +1,122 @@
+// Package types contains shared type definitions used across multiple packages.
+// This avoids import cycles between parser, plugins, tracking, and other packages.
+package types
+
+// Migration represents a parsed migration file with metadata and statements
+type Migration struct {
+	Filename   string      // Migration filename
+	Sequence   int         // Migration sequence number
+	Statements []Statement // Parsed SQL statements
+	Size       int64       // File size in bytes
+}
+
+// Statement represents a single parsed SQL statement with rich metadata
+//
+// Note: ParseTree is kept as interface{} to avoid circular dependencies.
+// In practice, this is typically *pg_query.ParseResult from the parser package.
+// Plugins and other packages should use SQL and metadata fields instead of ParseTree.
+type Statement struct {
+	SQL          string         // Original SQL text
+	ParseTree    interface{}    // Parse tree (kept as interface{} to avoid pg_query dependency)
+	ObjectType   ObjectType     // Type of database object (TABLE, INDEX, FUNCTION, etc.)
+	ObjectName   string         // Name of the object being operated on
+	Operation    Operation      // SQL operation (CREATE, ALTER, DROP, etc.)
+	Line         int            // Line number in migration file
+	IsDataOp     bool           // Whether this is a data operation (INSERT, UPDATE, DELETE)
+	Category     Category       // Statement category for organization
+	Dependencies []string       // Object dependencies (foreign keys, function calls, etc.)
+	Comments     []string       // Associated SQL comments
+	Schema       string         // Schema name (defaults to "public")
+	CrossSchema  []CrossSchemaRef // Cross-schema references
+	AuthPattern  AuthPatternType  // Detected authentication pattern
+	IsDynamic    bool           // Whether SQL contains dynamic elements
+	IfNotExists  bool           // Whether statement uses IF NOT EXISTS clause
+
+	// GRANT/REVOKE specific fields
+	Grantees   []string // Users/roles receiving permissions
+	Privileges []string // Privileges being granted/revoked
+}
+
+// ObjectType represents the type of database object
+type ObjectType string
+
+const (
+	TypeTable           ObjectType = "TABLE"
+	TypeIndex           ObjectType = "INDEX"
+	TypeFunction        ObjectType = "FUNCTION"
+	TypeTrigger         ObjectType = "TRIGGER"
+	TypeView            ObjectType = "VIEW"
+	TypeSequence        ObjectType = "SEQUENCE"
+	TypeConstraint      ObjectType = "CONSTRAINT"
+	TypePolicy          ObjectType = "POLICY"
+	TypeRole            ObjectType = "ROLE"
+	TypeSchema          ObjectType = "SCHEMA"
+	TypeExtension       ObjectType = "EXTENSION"
+	TypePublication     ObjectType = "PUBLICATION"
+	TypeComment         ObjectType = "COMMENT"
+	TypeDoBlock         ObjectType = "DO_BLOCK"
+	TypeType            ObjectType = "TYPE"              // CREATE TYPE statements (enums, composites, domains)
+	TypeDomain          ObjectType = "DOMAIN"            // CREATE DOMAIN statements
+	TypeEnum            ObjectType = "ENUM"              // CREATE TYPE ... AS ENUM statements
+	TypeComposite       ObjectType = "COMPOSITE"         // CREATE TYPE ... AS (composite types)
+	TypeSubscription    ObjectType = "SUBSCRIPTION"      // PostgreSQL 15+
+	TypeStatistic       ObjectType = "STATISTIC"         // PostgreSQL 15+
+	TypeGeneratedColumn ObjectType = "GENERATED_COLUMN"  // PostgreSQL 15+
+	TypeMultirangeType  ObjectType = "MULTIRANGE_TYPE"   // PostgreSQL 14+
+	TypeVectorIndex     ObjectType = "VECTOR_INDEX"      // pgvector extension
+	TypeEventTrigger    ObjectType = "EVENT_TRIGGER"     // PostgreSQL 17+
+	TypeUnknown         ObjectType = "UNKNOWN"
+)
+
+// CrossSchemaRef represents a reference to an object in a different schema
+type CrossSchemaRef struct {
+	Schema     string     // Referenced schema name
+	ObjectType ObjectType // Type of referenced object
+	ObjectName string     // Name of referenced object
+}
+
+// AuthPatternType represents detected authentication/authorization patterns
+type AuthPatternType string
+
+const (
+	AuthPatternNone       AuthPatternType = ""
+	AuthPatternSupabase   AuthPatternType = "SUPABASE_AUTH"   // Supabase auth.uid(), auth.users
+	AuthPatternClerk      AuthPatternType = "CLERK_AUTH"      // Clerk generic patterns
+	AuthPatternClerkJWTV2 AuthPatternType = "CLERK_JWT_V2"    // Clerk JWT v2 with organization claims
+	AuthPatternAuth0      AuthPatternType = "AUTH0_AUTH"      // Auth0 JWT patterns
+	AuthPatternNextAuth   AuthPatternType = "NEXTAUTH_AUTH"   // NextAuth.js session patterns
+	AuthPatternFirebase   AuthPatternType = "FIREBASE_AUTH"   // Firebase custom tokens
+	AuthPatternRLS        AuthPatternType = "RLS_POLICY"      // Row-Level Security policies
+	AuthPatternStorage    AuthPatternType = "STORAGE_POLICY"  // Storage bucket policies
+	AuthPatternCustomJWT  AuthPatternType = "CUSTOM_JWT"      // Custom JWT implementation
+)
+
+// Operation represents the SQL operation being performed
+type Operation string
+
+const (
+	OpCreate  Operation = "CREATE"
+	OpAlter   Operation = "ALTER"
+	OpDrop    Operation = "DROP"
+	OpInsert  Operation = "INSERT"
+	OpUpdate  Operation = "UPDATE"
+	OpDelete  Operation = "DELETE"
+	OpGrant   Operation = "GRANT"
+	OpRevoke  Operation = "REVOKE"
+	OpComment Operation = "COMMENT"
+)
+
+// Category represents the semantic category of a statement for organization
+type Category string
+
+const (
+	CategoryFoundation  Category = "foundation"  // Schemas, extensions, base types
+	CategoryConstraints Category = "constraints" // Foreign keys, checks, unique constraints
+	CategoryIndexes     Category = "indexes"     // Indexes and index-like objects
+	CategoryFunctions   Category = "functions"   // Functions, procedures, triggers
+	CategoryTriggers    Category = "triggers"    // Trigger definitions
+	CategorySecurity    Category = "security"    // RLS policies, grants, roles
+	CategoryData        Category = "data"        // INSERT, UPDATE, DELETE statements
+	CategoryExtensions  Category = "extensions"  // PostgreSQL extensions
+	CategoryCritical    Category = "critical"    // Critical statements that should never be modified
+)
