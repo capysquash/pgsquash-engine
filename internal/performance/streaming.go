@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // StreamingProcessor handles memory-efficient processing of large migration sets

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/parser"
-	"github.com/capysquash/pg-squash/internal/tracking"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/tracking"
 )
 
 // UnifiedDependencyResolver provides comprehensive dependency resolution

@@ -26,9 +26,9 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
-      - -X github.com/capysquash/pg-squash/internal/cli.Version={{.Version}}
-      - -X github.com/capysquash/pg-squash/internal/cli.BuildDate={{.Date}}
-      - -X github.com/capysquash/pg-squash/internal/cli.GitCommit={{.FullCommit}}
+      - -X github.com/capysquash/pg-squash-engine/internal/cli.Version={{.Version}}
+      - -X github.com/capysquash/pg-squash-engine/internal/cli.BuildDate={{.Date}}
+      - -X github.com/capysquash/pg-squash-engine/internal/cli.GitCommit={{.FullCommit}}
     flags:
       - -trimpath
     mod_timestamp: '{{ .CommitTimestamp }}'
@@ -112,7 +112,7 @@ release:
 
     #### Go Install
     ```bash
-    go install github.com/capysquash/pg-squash/cmd/pgsquash@{{ .Tag }}
+    go install github.com/capysquash/pg-squash-engine/cmd/pgsquash@{{ .Tag }}
     ```
 
     #### Docker
@@ -130,7 +130,7 @@ release:
   footer: |
     ---
 
-    **Full Changelog**: https://github.com/capysquash/pg-squash/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/capysquash/pg-squash-engine/compare/{{ .PreviousTag }}...{{ .Tag }}
 
     ## 🐳 Docker Images
 
@@ -152,15 +152,15 @@ release:
 
     ## 🆘 Support
 
-    - 📖 [Documentation](https://github.com/capysquash/pg-squash)
-    - 🐛 [Report Issues](https://github.com/capysquash/pg-squash/issues)
-    - 💬 [Discussions](https://github.com/capysquash/pg-squash/discussions)
+    - 📖 [Documentation](https://github.com/capysquash/pg-squash-engine)
+    - 🐛 [Report Issues](https://github.com/capysquash/pg-squash-engine/issues)
+    - 💬 [Discussions](https://github.com/capysquash/pg-squash-engine/discussions)
 
 # Homebrew tap (optional - uncomment if you have a tap repository)
 # brews:
 #   - name: pgsquash
 #     description: "PostgreSQL migration squasher and optimizer"
-#     homepage: "https://github.com/capysquash/pg-squash"
+#     homepage: "https://github.com/capysquash/pg-squash-engine"
 #     license: "MIT"
 #     repository:
 #       owner: capysquash
@@ -189,7 +189,7 @@ release:
 # scoops:
 #   - name: pgsquash
 #     description: "PostgreSQL migration squasher and optimizer"
-#     homepage: "https://github.com/capysquash/pg-squash"
+#     homepage: "https://github.com/capysquash/pg-squash-engine"
 #     license: MIT
 #     repository:
 #       owner: capysquash
@@ -199,7 +199,7 @@ release:
 # AUR (Arch Linux) - optional
 # aurs:
 #   - name: pgsquash-bin
-#     homepage: "https://github.com/capysquash/pg-squash"
+#     homepage: "https://github.com/capysquash/pg-squash-engine"
 #     description: "PostgreSQL migration squasher and optimizer"
 #     maintainers:
 #       - "Your Name <your.email@example.com>"
@@ -229,7 +229,7 @@ metadata:
 #   - id: packages
 #     package_name: pgsquash
 #     vendor: capysquash
-#     homepage: https://github.com/capysquash/pg-squash
+#     homepage: https://github.com/capysquash/pg-squash-engine
 #     maintainer: Your Name <your.email@example.com>
 #     description: PostgreSQL migration squasher and optimizer
 #     license: MIT

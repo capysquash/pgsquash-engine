@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // AddRule adds a risk assessment rule

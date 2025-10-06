@@ -23,7 +23,7 @@ jobs:
           go-version: '1.25.1'
 
       - name: Install pg-squash
-        run: go install github.com/capysquash/pg-squash/cmd/pgsquash@latest
+        run: go install github.com/capysquash/pg-squash-engine/cmd/pgsquash@latest
 
       - name: Find migration files
         id: migrations

@@ -5,8 +5,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/metadata"
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/metadata"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // Tracker is an alias for UnifiedTracker to maintain API compatibility

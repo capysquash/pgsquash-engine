@@ -2,10 +2,10 @@ module github.com/capysquash/pg-squash-api
 
 go 1.25.1
 
-replace github.com/capysquash/pg-squash => ../../
+replace github.com/capysquash/pg-squash-engine => ../../
 
 require (
-	github.com/capysquash/pg-squash v0.0.0-00010101000000-000000000000
+	github.com/capysquash/pg-squash-engine v0.0.0-00010101000000-000000000000
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 )

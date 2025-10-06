@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // ChangeType represents the type of schema change

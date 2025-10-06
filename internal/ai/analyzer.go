@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/ai/providers"
+	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
 )
 
 // Analyzer provides AI-powered analysis using the modular provider system

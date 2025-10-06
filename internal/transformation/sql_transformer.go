@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/plugins"
+	"github.com/capysquash/pg-squash-engine/internal/plugins"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 

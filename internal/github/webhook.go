@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/capysquash/pg-squash/internal/parser"
-	"github.com/capysquash/pg-squash/internal/squasher"
-	"github.com/capysquash/pg-squash/internal/tracking"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/squasher"
+	"github.com/capysquash/pg-squash-engine/internal/tracking"
 )
 
 // WebhookHandler handles GitHub webhook events

@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/capysquash/pg-squash/internal/ai/providers"
+	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
 )
 
 // TestAIIntegration demonstrates the new modular AI system

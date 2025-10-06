@@ -114,10 +114,10 @@ LABEL org.opencontainers.image.title="pg-squash Engine" \
       org.opencontainers.image.version="${BUILD_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.vendor="pg-squash" \
+      org.opencontainers.image.vendor="capysquash" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/pg-squash/pg-squash-engine" \
-      org.opencontainers.image.documentation="https://github.com/pg-squash/pg-squash-engine/blob/main/README.md"
+      org.opencontainers.image.source="https://github.com/capysquash/pg-squash-engine" \
+      org.opencontainers.image.documentation="https://github.com/capysquash/pg-squash-engine/blob/main/README.md"
 
 # Health check - using dedicated health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

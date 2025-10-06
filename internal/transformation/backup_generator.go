@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // BackupType defines the type of backup to generate

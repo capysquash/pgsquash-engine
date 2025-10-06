@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // MetadataManager provides comprehensive PostgreSQL metadata management

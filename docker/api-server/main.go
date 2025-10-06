@@ -17,9 +17,9 @@ import (
 	"github.com/gorilla/mux"
 
 	// Internal packages
-	"github.com/capysquash/pg-squash/internal/config"
-	"github.com/capysquash/pg-squash/internal/github"
-	"github.com/capysquash/pg-squash/internal/squasher"
+	"github.com/capysquash/pg-squash-engine/internal/config"
+	"github.com/capysquash/pg-squash-engine/internal/github"
+	"github.com/capysquash/pg-squash-engine/internal/squasher"
 )
 
 type Server struct {

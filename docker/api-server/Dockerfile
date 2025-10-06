@@ -99,10 +99,10 @@ LABEL org.opencontainers.image.title="pg-squash API Server" \
       org.opencontainers.image.version="${BUILD_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.vendor="pg-squash" \
+      org.opencontainers.image.vendor="capysquash" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/pg-squash/pg-squash-engine" \
-      org.opencontainers.image.documentation="https://github.com/pg-squash/pg-squash-engine/blob/main/docker/api-server/README.md"
+      org.opencontainers.image.source="https://github.com/capysquash/pg-squash-engine" \
+      org.opencontainers.image.documentation="https://github.com/capysquash/pg-squash-engine/blob/main/docker/api-server/README.md"
 
 # Switch to non-root user
 USER pgsquash

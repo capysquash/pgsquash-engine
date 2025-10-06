@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/metadata"
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/metadata"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // UnifiedTracker provides comprehensive object lifecycle tracking with advanced metadata integration

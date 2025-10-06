@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // ParallelDependencyResolver handles concurrent dependency resolution with topological sorting

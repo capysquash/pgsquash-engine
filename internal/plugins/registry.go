@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/capysquash/pg-squash/internal/types"
+	"github.com/capysquash/pg-squash-engine/internal/types"
 )
 
 // Registry manages the lifecycle of all plugins

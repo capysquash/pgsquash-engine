@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // RollbackPlan represents a complete rollback strategy

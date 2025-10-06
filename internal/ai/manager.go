@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/ai/providers"
+	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
 )
 
 // Type aliases to avoid import cycles

@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
-	"github.com/capysquash/pg-squash/internal/performance"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/performance"
 )
 
 // StreamingTracker integrates UnifiedTracker with performance streaming capabilities

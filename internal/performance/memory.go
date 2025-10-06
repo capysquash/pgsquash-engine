@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
 )
 
 // MemoryManager handles memory-efficient processing with deduplication and size limits

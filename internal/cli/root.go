@@ -12,13 +12,13 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/capysquash/pg-squash/internal/ai"
-	"github.com/capysquash/pg-squash/internal/config"
-	"github.com/capysquash/pg-squash/internal/parser"
-	"github.com/capysquash/pg-squash/internal/squasher"
-	"github.com/capysquash/pg-squash/internal/tracking"
-	"github.com/capysquash/pg-squash/internal/transformation"
-	"github.com/capysquash/pg-squash/internal/validation"
+	"github.com/capysquash/pg-squash-engine/internal/ai"
+	"github.com/capysquash/pg-squash-engine/internal/config"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/squasher"
+	"github.com/capysquash/pg-squash-engine/internal/tracking"
+	"github.com/capysquash/pg-squash-engine/internal/transformation"
+	"github.com/capysquash/pg-squash-engine/internal/validation"
 )
 
 var (

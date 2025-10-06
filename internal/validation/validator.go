@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash/internal/parser"
-	"github.com/capysquash/pg-squash/internal/performance"
-	"github.com/capysquash/pg-squash/internal/plugins"
+	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/capysquash/pg-squash-engine/internal/performance"
+	"github.com/capysquash/pg-squash-engine/internal/plugins"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"

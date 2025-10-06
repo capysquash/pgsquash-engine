@@ -361,7 +361,7 @@ install_native() {
         git pull origin main
     else
         log_substep "Cloning repository..."
-        git clone https://github.com/capysquash/pg-squash.git "$repo_dir"
+        git clone https://github.com/capysquash/pg-squash-engine.git "$repo_dir"
         cd "$repo_dir"
     fi
 
@@ -626,8 +626,8 @@ show_summary() {
     fi
 
     echo
-    log_info "📚 Documentation: https://github.com/capysquash/pg-squash"
-    log_info "💬 Support: https://github.com/capysquash/pg-squash/issues"
+    log_info "📚 Documentation: https://github.com/capysquash/pg-squash-engine"
+    log_info "💬 Support: https://github.com/capysquash/pg-squash-engine/issues"
 
     if [[ "$INTERACTIVE_MODE" == "true" ]]; then
         echo
