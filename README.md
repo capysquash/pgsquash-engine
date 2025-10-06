@@ -2,9 +2,13 @@
 
 PostgreSQL migration consolidator that squashes multiple migration files into clean, optimized migrations while preserving data integrity and dependency order.
 
-**Status:** Beta (v0.8.0)
+**Status:** Beta (v0.8.1)
 
 Core engine powering CapySquash and other migration management tools.
+
+> **⚠️ Important Notice**
+>
+> This tool modifies SQL migration files. Always maintain backups of your original migrations before running consolidation operations. While pg-squash includes validation and safety checks, you should verify the output matches your expectations. Test consolidated migrations in a non-production environment first.
 
 ## Features
 
@@ -192,8 +196,9 @@ See [docs/dev/CONTRIBUTING.md](docs/dev/CONTRIBUTING.md)
 - [ ] Multi-platform binaries
 
 **Phase 3 (Week 3-4):**
-- [ ] Additional auth plugins (Auth0, NextAuth, Firebase)
+- [ ] Additional auth plugins (Auth0, NextAuth)
 - [ ] Platform plugins (Neon, Railway)
+- [ ] PostgreSQL 18 support
 - [ ] 1.0.0 release
 
 [Full Roadmap](docs/internal/roadmap/ROADMAP.md)

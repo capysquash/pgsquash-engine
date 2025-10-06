@@ -110,5 +110,5 @@ pgsquash init-config
 
 ---
 
-**Version**: 0.8.0-beta (docs for 1.0.0 in progress)
+**Version**: 0.8.1-beta (docs for 1.0.0 in progress)
 **Last Updated**: 2025-10-06

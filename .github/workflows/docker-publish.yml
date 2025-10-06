@@ -89,7 +89,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=edge,branch=main
-            type=sha,prefix={{branch}}-
+            type=sha
           labels: |
             org.opencontainers.image.title=pg-squash
             org.opencontainers.image.description=PostgreSQL Migration Squasher and Optimizer
@@ -112,7 +112,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=edge,branch=main
-            type=sha,prefix={{branch}}-
+            type=sha
 
       - name: Extract metadata (Docker Hub)
         id: meta-dockerhub
@@ -127,7 +127,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=edge,branch=main
-            type=sha,prefix={{branch}}-
+            type=sha
 
   # ============================================
   # Build and Test

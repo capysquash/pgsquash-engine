@@ -53,7 +53,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "pgsquash",
 	Short:   "pg-squash Engine - PostgreSQL migration squasher and optimizer",
-	Version: "0.8.0-beta",
+	Version: "0.8.1-beta",
 	Long: `pg-squash Engine analyzes PostgreSQL migration files and consolidates them
 into optimized, organized migration files while preserving data integrity
 and dependency order.

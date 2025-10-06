@@ -91,5 +91,5 @@ func getVersion() string {
 	if version := os.Getenv("PGSQUASH_VERSION"); version != "" {
 		return version
 	}
-	return "0.8.0-beta"
+	return "0.8.1-beta"
 }
