@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.1-beta] - 2025-10-06
+## [0.8.2-beta] - 2025-10-06
 
 ### Added
 
@@ -147,5 +147,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostgreSQL 18 support
 - 1.0.0 release
 
-[unreleased]: https://github.com/capysquash/pg-squash-engine/compare/v0.8.1-beta...HEAD
-[0.8.1-beta]: https://github.com/capysquash/pg-squash-engine/releases/tag/v0.8.1-beta
+[unreleased]: https://github.com/capysquash/pg-squash-engine/compare/v0.8.2-beta...HEAD
+[0.8.2-beta]: https://github.com/capysquash/pg-squash-engine/releases/tag/v0.8.2-beta

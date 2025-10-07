@@ -2,7 +2,7 @@
 
 PostgreSQL migration consolidator that squashes multiple migration files into clean, optimized migrations while preserving data integrity and dependency order.
 
-**Status:** Beta (v0.8.1)
+**Status:** Beta (v0.8.2)
 
 Core engine powering CapySquash and other migration management tools.
 

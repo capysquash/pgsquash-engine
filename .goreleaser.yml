@@ -1,4 +1,17 @@
 # GoReleaser configuration for pg-squash Engine
+#
+# Uses goreleaser-cross for robust CGO cross-compilation to all platforms.
+# goreleaser-cross includes pre-built toolchains for Linux, macOS, and Windows.
+#
+# Supported platforms:
+# - Linux: AMD64, ARM64
+# - macOS: AMD64 (Intel), ARM64 (Apple Silicon)
+# - Windows: AMD64, ARM64 (future)
+#
+# Requirements:
+# - goreleaser-cross distribution (set in GitHub Actions)
+# - CGO enabled for all builds (required by pg_query_go)
+# - Docker with QEMU for multi-platform support
 version: 2
 
 before:
@@ -8,21 +21,81 @@ before:
     - go mod tidy
 
 builds:
-  - id: pgsquash
+  # Linux AMD64
+  - id: linux-amd64
     main: ./cmd/pgsquash
     binary: pgsquash
     env:
       - CGO_ENABLED=1
+      - CC=x86_64-linux-gnu-gcc
+      - CXX=x86_64-linux-gnu-g++
     goos:
       - linux
-      - darwin
-      - windows
     goarch:
       - amd64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildDate={{.Date}}
+      - -X main.gitCommit={{.FullCommit}}
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+  # Linux ARM64
+  - id: linux-arm64
+    main: ./cmd/pgsquash
+    binary: pgsquash
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+      - CXX=aarch64-linux-gnu-g++
+    goos:
+      - linux
+    goarch:
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildDate={{.Date}}
+      - -X main.gitCommit={{.FullCommit}}
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+  # macOS AMD64 (Intel)
+  - id: darwin-amd64
+    main: ./cmd/pgsquash
+    binary: pgsquash
+    env:
+      - CGO_ENABLED=1
+      - CC=o64-clang
+      - CXX=o64-clang++
+    goos:
+      - darwin
+    goarch:
+      - amd64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.buildDate={{.Date}}
+      - -X main.gitCommit={{.FullCommit}}
+    flags:
+      - -trimpath
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+  # macOS ARM64 (Apple Silicon)
+  - id: darwin-arm64
+    main: ./cmd/pgsquash
+    binary: pgsquash
+    env:
+      - CGO_ENABLED=1
+      - CC=oa64-clang
+      - CXX=oa64-clang++
+    goos:
+      - darwin
+    goarch:
+      - arm64
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
@@ -34,10 +107,8 @@ builds:
 
 archives:
   - id: pgsquash-archive
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
+    formats:
+      - tar.gz
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
@@ -47,8 +118,11 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    builds:
-      - pgsquash
+    ids:
+      - linux-amd64
+      - linux-arm64
+      - darwin-amd64
+      - darwin-arm64
     files:
       - LICENSE
       - README.md
@@ -102,6 +176,12 @@ release:
     ## pg-squash Engine {{ .Version }}
 
     **Release Date**: {{ .Date }}
+
+    ### Supported Platforms
+
+    This release includes native binaries for:
+    - **Linux**: AMD64 (x86_64), ARM64 (aarch64)
+    - **macOS**: AMD64 (Intel), ARM64 (Apple Silicon)
 
     ### Installation
 
