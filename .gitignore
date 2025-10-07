@@ -134,3 +134,16 @@ test_migrations/003_add_comments.sql
 test_migrations/004_alter_posts.sql
 test_migrations/005_add_function.sql
 test_migrations/006_rls_policies.sql
+BUG_REPORT_COMPREHENSIVE.md
+squashed_output/001_squashed_migration.sql
+squashed_simple/001_squashed_migration.sql
+test-config.json
+test_migrations/002_add_columns.sql
+test_migrations/003_create_comments.sql
+test_migrations/004_alter_and_modify.sql
+test_migrations/005_functions_and_triggers.sql
+test_migrations/006_supabase_auth.sql
+test_migrations/007_clerk_integration.sql
+test_migrations_clerk/001_clerk_setup.sql
+test_migrations_simple/001_basic.sql
+test_migrations_simple/002_add_column.sql

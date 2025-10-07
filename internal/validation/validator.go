@@ -1793,6 +1793,27 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 		}
 	}
 
+	// Check if migrationPath is a file or directory
+	info, err := os.Stat(migrationPath)
+	if err != nil {
+		return fmt.Errorf("stat migration path: %w", err)
+	}
+
+	// If it's a single file, execute it directly
+	if !info.IsDir() {
+		content, err := os.ReadFile(migrationPath)
+		if err != nil {
+			return fmt.Errorf("read migration file: %w", err)
+		}
+
+		if _, err := db.Exec(string(content)); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", migrationPath, err)
+		}
+
+		return nil
+	}
+
+	// If it's a directory, walk through all SQL files
 	return filepath.Walk(migrationPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil || !strings.HasSuffix(path, ".sql") || info.IsDir() {
 			return err

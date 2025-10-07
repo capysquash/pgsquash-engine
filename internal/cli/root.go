@@ -48,6 +48,10 @@ var (
 	// AI fix options
 	maxFixAttempts int
 	autoApplyFixes bool
+
+	// Validation options
+	validationMode string
+	workflowOutputDir string
 )
 
 var rootCmd = &cobra.Command{
@@ -257,6 +261,18 @@ The core migration optimization engine that powers CapySquash
 		"Automatically apply fixes without confirmation (default: false)")
 	aiFixCmd.Flags().BoolVar(&verbose, "verbose", false,
 		"Enable verbose output")
+
+	// Validate command flags
+	validateCmd.Flags().StringVar(&validationMode, "validation-mode", "",
+		"Validation approach: TWO_CONTAINERS, TWO_DATABASES, or SCHEMA_DIFF (default: from config or TWO_DATABASES)")
+
+	// Workflow command flags (safe, fast, analyze-deep)
+	safeCmd.Flags().StringVarP(&workflowOutputDir, "output", "o", "",
+		"Output directory for squashed migrations (overrides config)")
+	fastCmd.Flags().StringVarP(&workflowOutputDir, "output", "o", "",
+		"Output directory for squashed migrations (overrides config)")
+	analyzeDeepCmd.Flags().StringVarP(&workflowOutputDir, "output", "o", "",
+		"Output directory for analysis results (overrides config)")
 
 	// Add commands to root
 	rootCmd.AddCommand(analyzeCmd, squashCmd, validateCmd, initConfigCmd, aiTestCmd, aiDemoCmd, aiFixCmd, safeCmd, fastCmd, analyzeDeepCmd)
@@ -546,6 +562,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Original: %s\n", originalDir)
 	fmt.Printf("Squashed: %s\n", squashedDir)
 
+	// Load config to get validation settings
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	// Load migrations to detect auth patterns
 	migrations, err := filepath.Glob(filepath.Join(originalDir, "*.sql"))
 	if err == nil && len(migrations) > 0 {
@@ -566,14 +588,36 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		}
 
 		// Create validation config with Docker support
-		config := validation.DefaultValidationConfig()
-		config.DockerApproach = validation.ApproachTwoDatabases
-		config.EnableExtensionDetection = true
-		config.EnableSQLFixes = true
-		config.Verbose = true
-		config.AuthCompatibilitySQL = extAnalysis.AuthCompatibilitySQL // Inject auth compatibility
+		valConfig := validation.DefaultValidationConfig()
 
-		validator := validation.NewSchemaValidator(config, nil, nil)
+		// Use validation mode from flag, config, or default
+		mode := cfg.Validation.Mode
+		if validationMode != "" {
+			mode = validationMode
+		}
+
+		// Set Docker approach based on mode
+		switch strings.ToUpper(mode) {
+		case "TWO_CONTAINERS":
+			valConfig.DockerApproach = validation.ApproachTwoContainers
+		case "TWO_DATABASES":
+			valConfig.DockerApproach = validation.ApproachTwoDatabases
+		case "SCHEMA_DIFF":
+			valConfig.DockerApproach = validation.ApproachSchemaDiff
+		default:
+			valConfig.DockerApproach = validation.ApproachTwoDatabases // Default
+		}
+
+		valConfig.EnableExtensionDetection = cfg.Validation.EnableExtensionDetection
+		valConfig.EnableSQLFixes = cfg.Validation.EnableSQLFixes
+		valConfig.Verbose = cfg.Validation.Verbose
+		valConfig.AuthCompatibilitySQL = extAnalysis.AuthCompatibilitySQL // Inject auth compatibility
+
+		if mode != "" {
+			color.Cyan("🔍 Using validation mode: %s\n", strings.ToUpper(mode))
+		}
+
+		validator := validation.NewSchemaValidator(valConfig, nil, nil)
 		defer func() { _ = validator.Close() }()
 
 		result, err := validator.ValidateWithDocker(cmd.Context(), originalDir, squashedDir)
@@ -744,9 +788,15 @@ func runSafeWorkflow(cmd *cobra.Command, args []string) error {
 	cfg.SafetyLevel = safetyLevel
 	cfg.Performance.ShowProgress = true
 
+	// Override output directory if flag is provided
+	if workflowOutputDir != "" {
+		cfg.Output.Directory = workflowOutputDir
+	}
+
 	color.Yellow("📋 SAFE Workflow Configuration:\n")
 	color.Yellow("   • Safety Level: %s (minimal changes)\n", cfg.SafetyLevel)
 	color.Yellow("   • Docker Validation: TWO_CONTAINERS (maximum accuracy)\n")
+	color.Yellow("   • Output Directory: %s\n", cfg.Output.Directory)
 	color.Yellow("   • Backup: %v (pre-squash safety)\n", enableBackup)
 	color.Yellow("   • Rollback: %v (recovery planning)\n", enableRollback)
 	color.Yellow("   • Auto SQL Fix: disabled (manual review required)\n")
@@ -779,9 +829,15 @@ func runFastWorkflow(cmd *cobra.Command, args []string) error {
 	cfg.Performance.ShowProgress = true
 	cfg.Performance.ParallelProcessing = true
 
+	// Override output directory if flag is provided
+	if workflowOutputDir != "" {
+		cfg.Output.Directory = workflowOutputDir
+	}
+
 	color.Yellow("📋 FAST Workflow Configuration:\n")
 	color.Yellow("   • Safety Level: %s (balanced optimization)\n", cfg.SafetyLevel)
 	color.Yellow("   • Docker Validation: SCHEMA_DIFF (fastest approach)\n")
+	color.Yellow("   • Output Directory: %s\n", cfg.Output.Directory)
 	color.Yellow("   • Streaming: %v (memory efficient)\n", streaming)
 	color.Yellow("   • DDL Cycle Detection: %v (resolves conflicts)\n", enableCycleDetection)
 	color.Yellow("   • SQL Transformation: %v (modern syntax)\n", enableTransformation)
@@ -1300,8 +1356,12 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 
 		validator := validation.NewSchemaValidator(validationConfig, nil, nil)
 
+		// Get the original migrations directory and the output file for validation
+		originalDir := filepath.Dir(args[0])
+		outputFile := filepath.Join(outputDir, "001_consolidated_migration.sql")
+
 		ctx := context.Background()
-		result, err := validator.ValidateWithDocker(ctx, filepath.Dir(args[0]), outputDir)
+		result, err := validator.ValidateWithDocker(ctx, originalDir, outputFile)
 		if err != nil {
 			color.Red("❌ Validation failed: %v\n", err)
 		} else if result != nil && len(result.Errors) == 0 {

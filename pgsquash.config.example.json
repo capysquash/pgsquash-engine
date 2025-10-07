@@ -111,30 +111,16 @@
     "auto_detect": true,
     "enabled_plugins": [],
     "disabled_plugins": [],
-    "verbose": false,
-    "clerk": {
-      "enabled": false,
-      "jwt_version": "v2",
-      "organization_support": true,
-      "public_metadata_support": true
-    },
-    "supabase": {
-      "enabled": true,
-      "enable_rls": true,
-      "storage_integration": true,
-      "realtime_support": true
-    },
-    "prisma": {
-      "enabled": false,
-      "preserve_migration_table": true,
-      "shadow_database": true,
-      "optimize_indices": true
-    },
-    "drizzle": {
-      "enabled": false,
-      "prefer_identity_columns": true,
-      "preserve_drizzle_meta": true,
-      "optimize_sequences": true
-    }
+    "verbose": false
+  },
+  "validation": {
+    "mode": "TWO_DATABASES",
+    "docker_image": "postgres:15",
+    "timeout_seconds": 120,
+    "container_ready_timeout": 30,
+    "enable_extension_detection": true,
+    "auto_install_extensions": true,
+    "enable_sql_fixes": false,
+    "verbose": true
   }
 }

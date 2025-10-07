@@ -9,6 +9,7 @@ import (
 // InjectCompatibilityLayer returns SQL to mock Supabase authentication for validation
 // This creates:
 //   - auth schema
+//   - auth.users table (stub for foreign key references)
 //   - Supabase roles (anon, authenticated, service_role)
 //   - Mock auth.uid() function
 //   - Mock auth.jwt() function
@@ -16,6 +17,42 @@ import (
 func (sp *SupabasePlugin) InjectCompatibilityLayer(ctx context.Context) string {
     return `-- Supabase Authentication Compatibility Layer
 CREATE SCHEMA IF NOT EXISTS auth;
+
+-- Create auth.users table stub for foreign key references
+-- This allows migrations to reference auth.users(id) without errors
+CREATE TABLE IF NOT EXISTS auth.users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT,
+    encrypted_password TEXT,
+    email_confirmed_at TIMESTAMPTZ,
+    invited_at TIMESTAMPTZ,
+    confirmation_token TEXT,
+    confirmation_sent_at TIMESTAMPTZ,
+    recovery_token TEXT,
+    recovery_sent_at TIMESTAMPTZ,
+    email_change_token_new TEXT,
+    email_change TEXT,
+    email_change_sent_at TIMESTAMPTZ,
+    last_sign_in_at TIMESTAMPTZ,
+    raw_app_meta_data JSONB,
+    raw_user_meta_data JSONB,
+    is_super_admin BOOLEAN,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    phone TEXT,
+    phone_confirmed_at TIMESTAMPTZ,
+    phone_change TEXT,
+    phone_change_token TEXT,
+    phone_change_sent_at TIMESTAMPTZ,
+    confirmed_at TIMESTAMPTZ,
+    email_change_token_current TEXT,
+    email_change_confirm_status SMALLINT,
+    banned_until TIMESTAMPTZ,
+    reauthentication_token TEXT,
+    reauthentication_sent_at TIMESTAMPTZ,
+    is_sso_user BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMPTZ
+);
 
 -- Create Supabase roles (used in RLS policies)
 DO $$

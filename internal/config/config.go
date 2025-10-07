@@ -17,7 +17,8 @@ type Config struct {
 	ConflictResolution     ConflictResolutionConfig `json:"conflict_resolution"`
 	PostgreSQLFeatures     PostgreSQLFeaturesConfig `json:"postgresql_features"`
 	ThirdPartyIntegrations ThirdPartyConfig         `json:"third_party_integrations"`
-	Plugins                PluginSettings           `json:"plugins"` // Plugin system configuration
+	Plugins                PluginSettings           `json:"plugins"`    // Plugin system configuration
+	Validation             ValidationConfig         `json:"validation"` // Docker validation configuration
 }
 
 type OutputConfig struct {
@@ -133,10 +134,22 @@ type PlanetScaleConfig struct {
 
 // PluginSettings configures the plugin system behavior
 type PluginSettings struct {
-	AutoDetect     bool     `json:"auto_detect"`      // Automatically detect and enable plugins (default: true)
-	EnabledPlugins []string `json:"enabled_plugins"`  // Explicitly enabled plugins (empty = auto-detect all)
+	AutoDetect      bool     `json:"auto_detect"`      // Automatically detect and enable plugins (default: true)
+	EnabledPlugins  []string `json:"enabled_plugins"`  // Explicitly enabled plugins (empty = auto-detect all)
 	DisabledPlugins []string `json:"disabled_plugins"` // Explicitly disabled plugins
-	Verbose        bool     `json:"verbose"`          // Log plugin activity (default: false)
+	Verbose         bool     `json:"verbose"`          // Log plugin activity (default: false)
+}
+
+// ValidationConfig configures Docker-based validation behavior
+type ValidationConfig struct {
+	Mode                   string `json:"mode"`                      // Validation approach: TWO_CONTAINERS, TWO_DATABASES, or SCHEMA_DIFF
+	DockerImage            string `json:"docker_image"`              // PostgreSQL Docker image (default: postgres:15)
+	TimeoutSeconds         int    `json:"timeout_seconds"`           // Validation timeout in seconds (default: 120)
+	ContainerReadyTimeout  int    `json:"container_ready_timeout"`   // Container startup timeout in seconds (default: 30)
+	EnableExtensionDetection bool `json:"enable_extension_detection"` // Auto-detect and install extensions (default: true)
+	AutoInstallExtensions  bool   `json:"auto_install_extensions"`   // Automatically install detected extensions (default: true)
+	EnableSQLFixes         bool   `json:"enable_sql_fixes"`          // Apply automatic SQL fixes during validation (default: false)
+	Verbose                bool   `json:"verbose"`                   // Show detailed validation output (default: true)
 }
 
 func DefaultConfig() *Config {
@@ -230,10 +243,20 @@ func DefaultConfig() *Config {
 			},
 		},
 		Plugins: PluginSettings{
-			AutoDetect:      true,                // Automatically detect applicable plugins
-			EnabledPlugins:  []string{},          // Empty = enable all detected plugins
-			DisabledPlugins: []string{},          // Explicitly disable specific plugins
-			Verbose:         false,               // Don't log plugin details by default
+			AutoDetect:      true,     // Automatically detect applicable plugins
+			EnabledPlugins:  []string{}, // Empty = enable all detected plugins
+			DisabledPlugins: []string{}, // Explicitly disable specific plugins
+			Verbose:         false,    // Don't log plugin details by default
+		},
+		Validation: ValidationConfig{
+			Mode:                     "TWO_DATABASES", // Best balance of speed and accuracy
+			DockerImage:              "postgres:15",   // Default PostgreSQL version
+			TimeoutSeconds:           120,             // 2 minute timeout for validation
+			ContainerReadyTimeout:    30,              // 30 second timeout for container startup
+			EnableExtensionDetection: true,            // Auto-detect required extensions
+			AutoInstallExtensions:    true,            // Auto-install detected extensions
+			EnableSQLFixes:           false,           // Manual review recommended by default
+			Verbose:                  true,            // Show detailed validation output
 		},
 	}
 }
