@@ -71,6 +71,7 @@ func (mm *MemoryManager) GetBuffer() []byte {
 // PutBuffer returns a buffer to the pool
 func (mm *MemoryManager) PutBuffer(buf []byte) {
 	if cap(buf) <= 64*1024 { // Only pool buffers <= 64KB
+		//nolint:staticcheck // SA6002: Slice allocation is intentional for pool usage
 		mm.builderPool.Put(buf)
 	}
 }

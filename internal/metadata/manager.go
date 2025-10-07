@@ -503,10 +503,10 @@ func (m *MetadataManager) loadVersion(ctx context.Context) (*PostgreSQLVersion, 
 		if len(parts) >= 2 {
 			versionParts := strings.Split(parts[1], ".")
 			if len(versionParts) >= 2 {
-				fmt.Sscanf(versionParts[0], "%d", &version.Major)
-				fmt.Sscanf(versionParts[1], "%d", &version.Minor)
+				_, _ = fmt.Sscanf(versionParts[0], "%d", &version.Major)
+				_, _ = fmt.Sscanf(versionParts[1], "%d", &version.Minor)
 				if len(versionParts) >= 3 {
-					fmt.Sscanf(versionParts[2], "%d", &version.Patch)
+					_, _ = fmt.Sscanf(versionParts[2], "%d", &version.Patch)
 				}
 			}
 		}

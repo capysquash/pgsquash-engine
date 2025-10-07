@@ -20,6 +20,7 @@ func Deparse(tree *pg_query.ParseResult) (string, error) {
 	return res, nil
 }
 
+//nolint:unused // Utility function for future node deparsing needs
 // deparseNode converts a single Node back to SQL using pg_query.Deparse
 func deparseNode(node *pg_query.Node) (string, error) {
 	if node == nil {

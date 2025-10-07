@@ -215,10 +215,9 @@ func (ta *TypeAnalyzer) extractTypesFromAlterTable(ctx context.Context, stmt *pg
 				}
 
 			case pg_query.AlterTableType_AT_AlterColumnType:
-				if typeName := alterCmd.GetDef(); typeName != nil {
-					// This would require more complex parsing to extract the new type
-					// For now, we'll skip detailed analysis of column type changes
-				}
+				// This would require more complex parsing to extract the new type
+				// For now, we'll skip detailed analysis of column type changes
+				// Future enhancement: Parse alterCmd.GetDef() to extract the new type
 			}
 		}
 	}
@@ -430,7 +429,7 @@ func (ta *TypeAnalyzer) extractTypeNameFromNode(typeNameNode *pg_query.TypeName)
 	typeName := strings.Join(parts, ".")
 
 	// Handle array types
-	if typeNameNode.ArrayBounds != nil && len(typeNameNode.ArrayBounds) > 0 {
+	if len(typeNameNode.ArrayBounds) > 0 {
 		for range typeNameNode.ArrayBounds {
 			typeName += "[]"
 		}

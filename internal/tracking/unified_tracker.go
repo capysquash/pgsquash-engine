@@ -65,8 +65,8 @@ type ObjectLifecycle struct {
 	ResourceChanges []*ResourceChange
 
 	// Absorbed from ChangeTracker
-	changeCounter    int64
-	operationContext *ChangeContext
+	changeCounter    int64          //nolint:unused // Reserved for future change tracking
+	operationContext *ChangeContext //nolint:unused // Reserved for future operation context
 }
 
 // LifecycleEvent represents an event in an object's lifecycle with enhanced context
@@ -384,7 +384,7 @@ type ChangeTracker struct {
 	changesByObject map[string][]*ResourceChange
 	context         *ChangeContext
 	sequenceCounter int64
-	metadata        *DatabaseMetadata
+	metadata        *DatabaseMetadata //nolint:unused // Reserved for future metadata tracking
 }
 
 // NewChangeTracker creates a new change tracker

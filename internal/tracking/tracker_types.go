@@ -954,6 +954,7 @@ func integrateAlterIntoCreate(createStmt *parser.Statement, alterStmts []parser.
 	return createSQL
 }
 
+//nolint:unused // Reserved for future column integration functionality
 // extractColumnDefinition extracts column definition from ALTER TABLE ADD COLUMN statement
 func extractColumnDefinition(alterSQL, columnName string) string {
 	// Simple regex-based extraction for ALTER TABLE ADD COLUMN
@@ -976,6 +977,7 @@ func extractColumnDefinition(alterSQL, columnName string) string {
 	return ""
 }
 
+//nolint:unused // Reserved for future column integration functionality
 // integrateColumnsIntoCreate adds columns to the CREATE TABLE statement
 func integrateColumnsIntoCreate(createSQL string, columns []string) string {
 	// Find the last column in the CREATE statement and add new columns
@@ -1673,6 +1675,7 @@ func mergeMultipleCreateStatements(createStmts []parser.Statement, tableName str
 	return reconstructCreateWithColumns(baseSQL, allColumns, columnOrder, tableConstraints, tableName)
 }
 
+//nolint:unused // Utility function kept for potential future use
 // min2 returns the minimum of two integers
 func min2(a, b int) int {
 	if a < b {

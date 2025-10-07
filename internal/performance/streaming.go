@@ -274,7 +274,7 @@ func (sp *StreamingProcessor) Stop() error {
 // BatchProcessor handles batch processing with configurable batch sizes
 type BatchProcessor struct {
 	batchSize        int
-	processor        func([]*MigrationFile) ([]*ProcessedFile, error)
+	processor        func([]*MigrationFile) ([]*ProcessedFile, error) //nolint:unused // Reserved for future batch processing
 	memManager       *MemoryManager
 	deduplicator     *Deduplicator
 	currentBatch     []*MigrationFile

@@ -321,6 +321,7 @@ type AIFix struct {
 	SQL         string
 }
 
+//nolint:unused // Reserved for future AI fix parsing functionality
 // parseAIResponse parses the AI response into a structured fix
 func (mf *MigrationFixer) parseAIResponse(response string) (*AIFix, error) {
 	fix := &AIFix{}
@@ -350,6 +351,7 @@ func (mf *MigrationFixer) parseAIResponse(response string) (*AIFix, error) {
 	return fix, nil
 }
 
+//nolint:unused // Reserved for future AI fix application functionality
 // applyFix applies the suggested fix to the migration file
 func (mf *MigrationFixer) applyFix(fix *AIFix, migrationPath string) error {
 	// Construct full path

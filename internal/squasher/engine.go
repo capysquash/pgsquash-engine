@@ -1257,6 +1257,7 @@ func fixExtensionOrder(sql string) string {
 }
 
 // sortExtensionsByDependency sorts extension CREATE statements by dependency order
+//nolint:unused // Reserved for future extension dependency sorting
 // Some extensions depend on others and must be created in the right order
 func sortExtensionsByDependency(extensionLines []string) []string {
 	// Simple hardcoded order for known dependencies
@@ -1394,6 +1395,7 @@ func (e *Engine) initializePlugins(ctx context.Context, migrations map[int]strin
 	return nil
 }
 
+//nolint:unused // Plugin preservation feature not yet integrated
 // shouldPreserveStatement checks if plugins want to preserve a statement
 // Preserved statements are marked as critical and skipped during consolidation
 func (e *Engine) shouldPreserveStatement(stmt *parser.Statement) bool {
@@ -1401,6 +1403,7 @@ func (e *Engine) shouldPreserveStatement(stmt *parser.Statement) bool {
 	return registry.ShouldPreserve(stmt)
 }
 
+//nolint:unused // Plugin consolidation rules not yet integrated
 // getPluginConsolidationRules retrieves consolidation rules from all active plugins
 // These rules are merged with standard consolidation rules
 func (e *Engine) getPluginConsolidationRules() []plugins.ConsolidationRule {

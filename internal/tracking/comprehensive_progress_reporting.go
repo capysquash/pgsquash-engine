@@ -491,7 +491,7 @@ func (r *ComprehensiveProgressReporter) generateProgressBar(progress float64) st
 
 func (r *ComprehensiveProgressReporter) printFinalSummary(totalDuration time.Duration) {
     r.logSuccess("\n🎉 Migration squashing completed successfully!")
-    r.logSuccess(fmt.Sprintf("📊 Final Statistics:"))
+    r.logSuccess("📊 Final Statistics:")
     r.logSuccess(fmt.Sprintf("   • Total duration: %s", totalDuration))
     r.logSuccess(fmt.Sprintf("   • Files processed: %d (skipped: %d, failed: %d)",
         r.metrics.ProcessedFiles, r.metrics.SkippedFiles, r.metrics.FailedFiles))

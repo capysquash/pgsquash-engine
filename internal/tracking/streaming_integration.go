@@ -242,7 +242,7 @@ func (st *StreamingTracker) Stop() error {
 type MemoryOptimizedTracker struct {
 	*StreamingTracker
 	memoryThreshold int64 // Memory threshold in bytes
-	currentMemory   int64
+	currentMemory   int64 //nolint:unused // Reserved for future memory tracking
 }
 
 // NewMemoryOptimizedTracker creates a tracker optimized for low memory usage

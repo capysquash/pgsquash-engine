@@ -95,9 +95,15 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 
     switch eventType {
     case "pull_request":
-        h.handlePullRequest(r.Context(), body)
+        if err := h.handlePullRequest(r.Context(), body); err != nil {
+            http.Error(w, fmt.Sprintf("Failed to handle pull request: %v", err), http.StatusInternalServerError)
+            return
+        }
     case "issue_comment":
-        h.handleIssueComment(r.Context(), body)
+        if err := h.handleIssueComment(r.Context(), body); err != nil {
+            http.Error(w, fmt.Sprintf("Failed to handle issue comment: %v", err), http.StatusInternalServerError)
+            return
+        }
     default:
         w.WriteHeader(http.StatusOK)
         return
@@ -206,8 +212,10 @@ func (h *WebhookHandler) handleAnalyzeCommand(ctx context.Context, event IssueCo
 
     migrationFiles := h.filterMigrationFiles(files)
     if len(migrationFiles) == 0 {
-        h.githubClient.PostPRComment(ctx, event.Repository.FullName, event.Issue.Number,
-            "No migration files found in this PR.")
+        if err := h.githubClient.PostPRComment(ctx, event.Repository.FullName, event.Issue.Number,
+            "No migration files found in this PR."); err != nil {
+            return fmt.Errorf("failed to post PR comment: %w", err)
+        }
         return nil
     }
 

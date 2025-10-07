@@ -1524,6 +1524,7 @@ func (sv *SchemaValidator) waitForPostgreSQLReady(ctx context.Context, container
 	}
 }
 
+//nolint:unused // Backward compatibility alias, kept for potential future use
 // Backward compatibility alias
 func (sv *SchemaValidator) waitForContainer(ctx context.Context, containerInfo *ContainerInfo) error {
 	return sv.waitForPostgreSQLReady(ctx, containerInfo)
@@ -1653,7 +1654,7 @@ func (sv *SchemaValidator) installExtensionsViaPackageManager(ctx context.Contex
 
 	// Set DEBIAN_FRONTEND=noninteractive to avoid interactive prompts
 	setEnvCmd := []string{"sh", "-c", "export DEBIAN_FRONTEND=noninteractive"}
-	sv.execInContainer(ctx, containerID, setEnvCmd) // Ignore error
+	_ = sv.execInContainer(ctx, containerID, setEnvCmd) // Ignore error - best effort
 
 	// Update apt repositories
 	updateCmd := []string{"apt-get", "update"}
@@ -1672,7 +1673,7 @@ func (sv *SchemaValidator) installExtensionsViaPackageManager(ctx context.Contex
 
 	// Clean up apt cache to save space
 	cleanCmd := []string{"apt-get", "clean"}
-	sv.execInContainer(ctx, containerID, cleanCmd) // Ignore error
+	_ = sv.execInContainer(ctx, containerID, cleanCmd) // Ignore error - best effort
 
 	sv.logInfo("✓ Successfully installed Debian packages")
 	return nil

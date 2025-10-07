@@ -620,7 +620,7 @@ func (st *SQLTransformer) fixReturnNextWithOutParams(sql string, result *Transfo
 		bodyRegex := regexp.MustCompile(`(?s)AS\s+\$\$(.+?)\$\$`)
 		bodyMatch := bodyRegex.FindStringSubmatchIndex(transformedSQL[funcStart:])
 
-		if bodyMatch == nil || len(bodyMatch) < 4 {
+		if len(bodyMatch) < 4 {
 			continue
 		}
 
@@ -729,6 +729,7 @@ func (st *SQLTransformer) parseTableColumns(columnsSpec string) []string {
 }
 
 // fixMissingSemicolons adds missing semicolons to function definitions
+//nolint:unused // Reserved for future semicolon fixing functionality
 func (st *SQLTransformer) fixMissingSemicolons(sql string, result *TransformationResult) string {
 	// Look for $$ followed by newline without semicolon
 	// Use a simpler approach compatible with RE2: match $$ + whitespace + newline + non-semicolon
@@ -830,7 +831,7 @@ func (st *SQLTransformer) fixFunctionVolatilityMarkers(ctx context.Context, sql 
 		bodyMatch := bodyPattern.FindStringSubmatchIndex(transformedSQL[bodyStart:])
 
 		var functionBody string
-		if bodyMatch != nil && len(bodyMatch) >= 4 {
+		if len(bodyMatch) >= 4 {
 			functionBody = transformedSQL[bodyStart+bodyMatch[2] : bodyStart+bodyMatch[3]]
 		} else {
 			functionBody = "" // Can't determine body, default to STABLE

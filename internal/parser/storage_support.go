@@ -5,6 +5,9 @@ import (
 	"strings"
 )
 
+// NOTE: This file contains Supabase storage support functionality that is not yet integrated
+// into the main parsing flow. These functions are planned for future use but currently unused.
+
 // StoragePattern represents a recognized storage operation pattern
 type StoragePattern struct {
 	BucketName  string
@@ -14,6 +17,7 @@ type StoragePattern struct {
 	IsPublic    bool
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // parseStorageOperation analyzes Supabase storage-related SQL statements
 func parseStorageOperation(stmt *Statement) *StoragePattern {
 	sql := strings.ToLower(stmt.SQL)
@@ -31,6 +35,7 @@ func parseStorageOperation(stmt *Statement) *StoragePattern {
 	return nil
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // parseStorageBucket extracts bucket configuration details
 func parseStorageBucket(stmt *Statement) *StoragePattern {
 	sql := stmt.SQL
@@ -54,6 +59,7 @@ func parseStorageBucket(stmt *Statement) *StoragePattern {
 	return pattern
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // parseStoragePolicy extracts storage policy details
 func parseStoragePolicy(stmt *Statement) *StoragePattern {
 	sql := strings.ToLower(stmt.SQL)
@@ -87,6 +93,7 @@ func parseStoragePolicy(stmt *Statement) *StoragePattern {
 	return pattern
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // detectUserAccessPattern identifies how users access storage objects
 func detectUserAccessPattern(sql string) string {
 	// JWT v2 patterns
@@ -125,6 +132,7 @@ func detectUserAccessPattern(sql string) string {
 	return "UNKNOWN_PATTERN"
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // Enhanced storage object tracking
 func addStorageTracking(stmt *Statement) {
 	if storagePattern := parseStorageOperation(stmt); storagePattern != nil {
@@ -146,12 +154,14 @@ func addStorageTracking(stmt *Statement) {
 	}
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // generateStoragePolicyName creates a consistent naming scheme for storage policies
 func generateStoragePolicyName(bucketName, operation, userPattern string) string {
 	parts := []string{bucketName, operation, userPattern}
 	return strings.ToLower(strings.Join(parts, "_"))
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // isStorageRelated checks if a statement involves Supabase storage
 func isStorageRelated(stmt *Statement) bool {
 	sql := strings.ToLower(stmt.SQL)
@@ -160,6 +170,7 @@ func isStorageRelated(stmt *Statement) bool {
 		(stmt.ObjectType == TypePolicy && strings.Contains(sql, "bucket_id"))
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // consolidateStoragePolicies groups related storage policies for optimization
 func consolidateStoragePolicies(statements []*Statement) map[string][]*Statement {
 	bucketPolicies := make(map[string][]*Statement)
@@ -180,6 +191,7 @@ func consolidateStoragePolicies(statements []*Statement) map[string][]*Statement
 	return bucketPolicies
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // Storage-specific validation patterns
 var storageValidationPatterns = []struct {
 	Name    string
@@ -203,6 +215,7 @@ var storageValidationPatterns = []struct {
 	},
 }
 
+//nolint:unused // Reserved for future Supabase storage support
 // validateStoragePolicy checks storage policies for common issues
 func validateStoragePolicy(stmt *Statement) []string {
 	var issues []string

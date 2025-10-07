@@ -107,7 +107,7 @@ func ParseMigrationWithContext(ctx context.Context, content string, filename str
 	stmts, err := pg_query.SplitWithScanner(cleanContent, true)
 	if err != nil {
 		parseCtx := errorHandler.CreateContext(filename, 0, nil)
-		errorHandler.HandleParseError(err, parseCtx)
+		_ = errorHandler.HandleParseError(err, parseCtx) // Log the error for tracking
 		if !errorHandler.ShouldContinue() {
 			return nil, fmt.Errorf("failed to split statements: %w", err)
 		}
@@ -150,23 +150,8 @@ func ParseMigrationWithContext(ctx context.Context, content string, filename str
 		return migration, fmt.Errorf("parsing failed with errors")
 	}
 
-	// Ensure migration is never nil when successful
-	if migration == nil {
-		migration = &Migration{
-			Filename:   filename,
-			Statements: make([]Statement, 0),
-			Size:       int64(len(content)),
-		}
-	}
-
+	// migration is never nil here since it was initialized at line 120
 	return migration, nil
-}
-
-// parseStatementWithNormalization parses a statement with PostgreSQL-specific normalization
-func parseStatementWithNormalization(sql string, line int, normalizer *ContextualNormalizer) (*Statement, error) {
-	ctx := context.Background()
-	errorHandler := NewErrorHandler(ctx)
-	return parseStatementWithNormalizationAndContext(sql, line, normalizer, errorHandler, "")
 }
 
 // parseStatementWithNormalizationAndContext parses a statement with context and error handling
@@ -177,7 +162,7 @@ func parseStatementWithNormalizationAndContext(sql string, line int, normalizer 
 	if err != nil {
 		parseCtx := errorHandler.CreateContext(filename, line, nil)
 		parseCtx.StatementText = sql
-		errorHandler.HandleParseError(err, parseCtx)
+		_ = errorHandler.HandleParseError(err, parseCtx) // Log the error for tracking
 		return nil, err
 	}
 
@@ -185,7 +170,7 @@ func parseStatementWithNormalizationAndContext(sql string, line int, normalizer 
 		parseCtx := errorHandler.CreateContext(filename, line, nil)
 		parseCtx.StatementText = sql
 		err := fmt.Errorf("no statements found")
-		errorHandler.HandleValidationError(err.Error(), parseCtx)
+		_ = errorHandler.HandleValidationError(err.Error(), parseCtx) // Log the validation error
 		return nil, err
 	}
 
@@ -695,20 +680,6 @@ func mapCommentObjectType(objtype pg_query.ObjectType) ObjectType {
 	}
 }
 
-// Enhanced parsing for conditional DDL
-func hasConditionalClause(sql string) bool {
-	sqlUpper := strings.ToUpper(sql)
-	return strings.Contains(sqlUpper, "IF NOT EXISTS") ||
-		strings.Contains(sqlUpper, "IF EXISTS")
-}
-
-// Parse function bodies with dollar quoting
-func extractFunctionBody(createFuncStmt *pg_query.CreateFunctionStmt) string {
-	// This would need to handle dollar quoting properly
-	// For now, return a placeholder
-	return "function_body"
-}
-
 // Processing state to prevent duplicate analysis
 type StatementProcessingState struct {
 	StatementID      string
@@ -740,32 +711,6 @@ func extractSchemaWithNormalization(stmt *Statement, normalizer *ContextualNorma
 
 	// Default to public schema
 	return "public"
-}
-
-// extractFunctionDependencies extracts function dependencies from function definitions
-func extractFunctionDependencies(funcStmt *pg_query.CreateFunctionStmt) []string {
-	var deps []string
-
-	// This would require parsing the function body
-	// For now, return common dependencies based on function patterns
-	if funcStmt != nil {
-		// Common function dependencies could be extracted here
-		// by analyzing function parameters, return types, etc.
-	}
-
-	return deps
-}
-
-// getTableName extracts table name without normalization (for compatibility)
-func getTableName(rangeVar *pg_query.RangeVar) string {
-	if rangeVar == nil {
-		return ""
-	}
-
-	if rangeVar.Schemaname != "" {
-		return fmt.Sprintf("%s.%s", rangeVar.Schemaname, rangeVar.Relname)
-	}
-	return rangeVar.Relname
 }
 
 // validateNamingConventions checks object names against PostgreSQL naming conventions

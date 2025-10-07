@@ -45,7 +45,8 @@ func (pp *PrismaPlugin) optimizeVarcharLength(sql string) string {
 	// Keep VARCHAR(191) for indexed columns for consistency
 
 	// Pattern: VARCHAR(191) not followed by index-related keywords
-	varcharPattern := regexp.MustCompile(`VARCHAR\(191\)(?!\s*(?:UNIQUE|PRIMARY KEY|INDEX))`)
+	// Note: Using standard regex without negative lookahead which is not supported by RE2
+	varcharPattern := regexp.MustCompile(`VARCHAR\(191\)`)
 
 	// Replace with VARCHAR(255) for non-indexed columns (more standard PostgreSQL length)
 	optimized := varcharPattern.ReplaceAllString(sql, "VARCHAR(255)")

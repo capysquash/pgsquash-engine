@@ -354,7 +354,7 @@ func (ed *ExtensionDetector) generateValidationScript(extensionDetails map[strin
 			script.WriteString("BEGIN\n")
 			script.WriteString(fmt.Sprintf("  PERFORM %s\n", info.ValidationSQL))
 			script.WriteString("EXCEPTION\n")
-			script.WriteString(fmt.Sprintf("  WHEN OTHERS THEN\n"))
+			script.WriteString("  WHEN OTHERS THEN\n")
 			script.WriteString(fmt.Sprintf("    RAISE NOTICE 'Extension %s not available: %%', SQLERRM;\n", name))
 			script.WriteString("END\n")
 			script.WriteString("$$;\n\n")

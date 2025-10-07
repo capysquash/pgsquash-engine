@@ -319,7 +319,11 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 		// Get the underlying tracker
 		t = memTracker.GetTracker()
-		defer memTracker.Stop()
+		defer func() {
+			if err := memTracker.Stop(); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: Failed to stop memory tracker: %v\n", err)
+			}
+		}()
 
 		// Create empty migrations slice for reporting
 		migrations = make([]*MigrationWithContent, 0)
@@ -405,6 +409,9 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		if len(args) > 500 {
 			// For very large datasets, use high-performance settings
 			finalSQL, warnings, err = squasher.OptimizedSquashForLargeDatasets(cfg, nil, memoryLimitMB)
+			if err != nil {
+				return fmt.Errorf("optimized large dataset squash failed: %w", err)
+			}
 			migrationCount = len(args)
 		} else {
 			// Create engine with streaming configuration

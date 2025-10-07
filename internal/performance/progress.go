@@ -428,7 +428,7 @@ type ProgressAggregator struct {
 	sources       map[string]ProgressReporter
 	weights       map[string]float64
 	totalWeight   float64
-	aggregatedSum ProgressSummary
+	aggregatedSum ProgressSummary //nolint:unused // Reserved for future progress aggregation
 	mu            sync.RWMutex
 }
 

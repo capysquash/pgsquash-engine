@@ -210,7 +210,7 @@ func (b *SQLBuilder) CreateTable(table *TableDefinition) *SQLBuilder {
 		}
 	})
 
-	if table.Inherits != nil && len(table.Inherits) > 0 {
+	if len(table.Inherits) > 0 {
 		b.NL().P("INHERITS").Wrap(func(inner *SQLBuilder) {
 			for i, parent := range table.Inherits {
 				if i > 0 {

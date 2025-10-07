@@ -251,8 +251,9 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, repo, path, content, me
             var existingFile struct {
                 SHA string `json:"sha"`
             }
-            json.NewDecoder(existingResp.Body).Decode(&existingFile)
-            sha = existingFile.SHA
+            if err := json.NewDecoder(existingResp.Body).Decode(&existingFile); err == nil {
+                sha = existingFile.SHA
+            }
         }
     }
 

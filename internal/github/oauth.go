@@ -105,10 +105,12 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
     // Store token (implement your storage logic)
     // For now, just return success
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]string{
+    if err := json.NewEncoder(w).Encode(map[string]string{
         "status": "success",
         "token":  token,
-    })
+    }); err != nil {
+        http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
+    }
 }
 
 // InstallationConfig represents GitHub App installation configuration
