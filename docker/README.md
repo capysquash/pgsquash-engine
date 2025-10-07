@@ -485,8 +485,6 @@ docker buildx build --platform linux/amd64,linux/arm64 -t pgsquash:latest .
 
 - [Setup Guide](../docs/docker/DOCKER_SETUP.md)
 - [Use Cases](../docs/docker/DOCKER_USE_CASES.md)
-- [Audit Report](../docs/docker/DOCKER_USE_CASES_AUDIT.md)
-- [Critical Issues Fixed](../CRITICAL_ISSUES_FIXED.md)
 
 ## Support
 
