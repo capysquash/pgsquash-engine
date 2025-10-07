@@ -1408,7 +1408,8 @@ func (r *ConditionalSchemaRule) analyzeFinalConditionalState(lifecycle *ObjectLi
 	for _, event := range lifecycle.History {
 		sql := strings.ToUpper(event.Statement.SQL)
 
-		if event.Operation == parser.OpCreate {
+		switch event.Operation {
+		case parser.OpCreate:
 			state.ShouldExist = true
 			state.FinalSQL = event.Statement.SQL
 
@@ -1416,9 +1417,9 @@ func (r *ConditionalSchemaRule) analyzeFinalConditionalState(lifecycle *ObjectLi
 			if strings.Contains(sql, "CREATE OR REPLACE") {
 				state.UseReplace = true
 			}
-		} else if event.Operation == parser.OpDrop {
+		case parser.OpDrop:
 			state.ShouldExist = false
-		} else if event.Operation == parser.OpAlter {
+		case parser.OpAlter:
 			// ALTER operations indicate the object should exist
 			state.ShouldExist = true
 		}

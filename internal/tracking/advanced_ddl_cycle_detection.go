@@ -228,9 +228,10 @@ func (d *AdvancedDDLCycleDetector) detectTransientCycles(lifecycles map[string]*
         var operations []DDLCycleOperation
 
         for i, event := range lifecycle.History {
-            if event.Operation == "CREATE" {
+            switch event.Operation {
+            case "CREATE":
                 hasCreate = true
-            } else if event.Operation == "DROP" {
+            case "DROP":
                 hasDrop = true
             }
 

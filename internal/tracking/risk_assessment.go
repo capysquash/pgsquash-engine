@@ -277,10 +277,11 @@ func (obj *ObjectLifecycle) GetConsolidatedPermissions() []PermissionEvent {
 	for _, permEvent := range obj.Permissions {
 		key := fmt.Sprintf("%s::%s", permEvent.Grantee, permEvent.Privilege)
 
-		if permEvent.Operation == parser.OpGrant {
+		switch permEvent.Operation {
+		case parser.OpGrant:
 			// Grant the permission
 			finalPermissions[key] = permEvent
-		} else if permEvent.Operation == parser.OpRevoke {
+		case parser.OpRevoke:
 			// Revoke the permission (remove from final state)
 			delete(finalPermissions, key)
 		}

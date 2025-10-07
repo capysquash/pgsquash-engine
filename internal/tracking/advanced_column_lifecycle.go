@@ -163,7 +163,8 @@ func (r *AdvancedColumnLifecycleRule) buildColumnLifecycleMap(lifecycle *ObjectL
 
 	// Process events in chronological order
 	for i, event := range lifecycle.History {
-		if event.Operation == parser.OpCreate {
+		switch event.Operation {
+		case parser.OpCreate:
 			// Extract initial columns from CREATE statement
 			initialColumns := r.extractInitialColumns(event.Statement.SQL)
 			for pos, col := range initialColumns {
@@ -179,7 +180,7 @@ func (r *AdvancedColumnLifecycleRule) buildColumnLifecycleMap(lifecycle *ObjectL
 					Transformations: []ColumnTransformation{},
 				}
 			}
-		} else if event.Operation == parser.OpAlter {
+		case parser.OpAlter:
 			// Process ALTER operations
 			if err := r.processAlterOperation(columnStates, event.Statement.SQL, i); err != nil {
 				return nil, fmt.Errorf("failed to process ALTER operation: %w", err)
