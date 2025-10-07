@@ -725,21 +725,54 @@ func (e *Engine) applyConsolidationRules(ctx context.Context) (map[string]*track
 				continue
 			}
 
-			// For tables, check if there are ALTER statements to append
+			// For tables, check if there are ALTER statements that must remain separate
+			// Some ALTERs (like RLS) cannot be integrated into CREATE TABLE
 			if lifecycle.Type == parser.TypeTable {
-				alterStmts := lifecycle.GetAlterStatements()
-				if len(alterStmts) > 0 {
+				allAlterStmts := lifecycle.GetAlterStatements()
+
+				// Check which ALTER types must remain as separate statements
+				var separateAlters []parser.Statement
+				for _, alterStmt := range allAlterStmts {
+					alterSQL := strings.ToUpper(alterStmt.SQL)
+					// These ALTER operations cannot be integrated into CREATE TABLE
+					mustBeSeparate := strings.Contains(alterSQL, "ENABLE ROW LEVEL SECURITY") ||
+						strings.Contains(alterSQL, "DISABLE ROW LEVEL SECURITY") ||
+						strings.Contains(alterSQL, "FORCE ROW LEVEL SECURITY") ||
+						strings.Contains(alterSQL, "NO FORCE ROW LEVEL SECURITY") ||
+						strings.Contains(alterSQL, "ALTER COLUMN") || // Column modifications
+						strings.Contains(alterSQL, "DROP COLUMN") || // Column drops
+						strings.Contains(alterSQL, "RENAME COLUMN") || // Column renames
+						strings.Contains(alterSQL, "RENAME TO") || // Table renames
+						strings.Contains(alterSQL, "OWNER TO") || // Owner changes
+						strings.Contains(alterSQL, "SET SCHEMA") // Schema changes
+
+					if mustBeSeparate {
+						separateAlters = append(separateAlters, alterStmt)
+					}
+				}
+
+				if len(separateAlters) > 0 {
 					// Ensure CREATE TABLE ends with semicolon before appending ALTERs
 					result.ConsolidatedSQL = strings.TrimSpace(result.ConsolidatedSQL)
 					if !strings.HasSuffix(result.ConsolidatedSQL, ";") {
 						result.ConsolidatedSQL += ";"
 					}
-					// Append ALTER statements after the consolidated CREATE TABLE
-					for _, alterStmt := range alterStmts {
+					// Append ALTER statements that must be separate
+					for _, alterStmt := range separateAlters {
 						result.ConsolidatedSQL += "\n\n" + alterStmt.SQL
-						result.OriginalStatements = append(result.OriginalStatements, alterStmt)
+						// Only add to OriginalStatements if not already there
+						alreadyIncluded := false
+						for _, existing := range result.OriginalStatements {
+							if existing.SQL == alterStmt.SQL {
+								alreadyIncluded = true
+								break
+							}
+						}
+						if !alreadyIncluded {
+							result.OriginalStatements = append(result.OriginalStatements, alterStmt)
+						}
 					}
-					log.Printf("Added %d ALTER statements for table %s after rule application", len(alterStmts), key)
+					log.Printf("Added %d ALTER statements that must remain separate for table %s", len(separateAlters), key)
 				}
 			}
 
@@ -757,7 +790,8 @@ func (e *Engine) applyConsolidationRules(ctx context.Context) (map[string]*track
 			consolidatedSQL := finalState.SQL
 			allStatements := []parser.Statement{*finalState}
 
-			// For tables, also include ALTER statements separately
+			// For tables, include ALTER statements as separate statements (not consolidated)
+			// When no consolidation rules apply, we preserve original migration structure
 			if finalState.ObjectType == parser.TypeTable {
 				alterStmts := lifecycle.GetAlterStatements()
 				if len(alterStmts) > 0 {
@@ -766,12 +800,12 @@ func (e *Engine) applyConsolidationRules(ctx context.Context) (map[string]*track
 					if !strings.HasSuffix(consolidatedSQL, ";") {
 						consolidatedSQL += ";"
 					}
-					// Append ALTER statements after CREATE TABLE
+					// Append ALTER statements after CREATE TABLE (original migration structure)
 					for _, alterStmt := range alterStmts {
 						consolidatedSQL += "\n\n" + alterStmt.SQL
 						allStatements = append(allStatements, alterStmt)
 					}
-					log.Printf("Added %d ALTER statements for table %s", len(alterStmts), key)
+					log.Printf("Preserved %d ALTER statements for table %s (no consolidation rules applied)", len(alterStmts), key)
 				}
 			}
 

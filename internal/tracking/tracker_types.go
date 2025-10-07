@@ -1099,17 +1099,20 @@ func integrateColumnsAndConstraintsIntoCreate(createSQL string, columns []string
 	}
 
 	if len(additions) > 0 {
-		// Check if we need to add a comma before the new items
-		trimmedBefore := strings.TrimSpace(beforeParen)
-		if !strings.HasSuffix(trimmedBefore, ",") && !strings.HasSuffix(trimmedBefore, "(") {
+		// Remove any trailing whitespace and commas from beforeParen
+		beforeParen = strings.TrimRight(beforeParen, " \t\n")
+
+		// Check if we need to add a comma
+		if !strings.HasSuffix(beforeParen, ",") && !strings.HasSuffix(beforeParen, "(") {
 			beforeParen += ","
 		}
 
-		// Add the new columns and constraints
+		// Add the new columns and constraints with proper formatting
 		beforeParen += "\n" + strings.Join(additions, ",\n")
 	}
 
-	return beforeParen + "\n" + afterParen
+	// Ensure proper formatting with closing paren on its own line
+	return beforeParen + "\n" + strings.TrimLeft(afterParen, " \t")
 }
 
 // ErrorRecoveryRule provides enhanced error recovery and validation for consolidation failures

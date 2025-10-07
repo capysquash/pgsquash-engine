@@ -128,3 +128,9 @@ docs/internal/roadmap/github-integration-priority.md
 docs/internal/roadmap/PHASE_4_5_ROADMAP.md
 docs/internal/roadmap/ROADMAP.md
 docs/cross-compilation.md
+test_migrations/001_initial_schema.sql
+test_migrations/002_alter_users.sql
+test_migrations/003_add_comments.sql
+test_migrations/004_alter_posts.sql
+test_migrations/005_add_function.sql
+test_migrations/006_rls_policies.sql

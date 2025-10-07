@@ -214,30 +214,41 @@ func (ed *ExtensionDetector) detectExtensionsInContent(content string) []string 
 		}
 	}
 
-	// Pattern 2: Function calls that indicate extension usage
+	// Pattern 2: Function calls and specific patterns that indicate extension usage
+	// IMPORTANT: Use specific patterns to avoid false positives
+	// For example, "geometry" as column type doesn't mean PostGIS is used
 	extensionIndicators := map[string][]string{
 		"postgis": {
-			"ST_", "st_", "geometry", "geography", "PostGIS",
-			"ST_Point", "ST_Distance", "ST_Contains", "ST_Within",
+			// Only match actual PostGIS functions, not generic types
+			"ST_Point(", "ST_Distance(", "ST_Contains(", "ST_Within(",
+			"ST_GeomFromText(", "ST_MakePoint(", "ST_Buffer(", "ST_Intersects(",
+			"ST_AsGeoJSON(", "ST_Transform(", "ST_SetSRID(", "ST_Area(",
+			"PostGIS_version(", "ST_X(", "ST_Y(", "ST_Length(", "ST_Centroid(",
+			// Functions are case-insensitive in SQL, check lowercase
+			"st_point(", "st_distance(", "st_contains(", "st_within(",
+			"st_geomfromtext(", "st_makepoint(", "st_buffer(", "st_intersects(",
 		},
 		"uuid-ossp": {
-			"uuid_generate_v1", "uuid_generate_v4", "uuid_generate_v1mc",
-			"uuid_generate_v3", "uuid_generate_v5", "gen_random_uuid",
+			"uuid_generate_v1(", "uuid_generate_v4(", "uuid_generate_v1mc(",
+			"uuid_generate_v3(", "uuid_generate_v5(",
+			// gen_random_uuid is built-in to PostgreSQL 13+, not from uuid-ossp
 		},
 		"earthdistance": {
-			"earth_distance", "ll_to_earth", "earth_box", "earth",
+			"earth_distance(", "ll_to_earth(", "earth_box(", "earth(",
 		},
 		"pg_trgm": {
-			"similarity", "word_similarity", "show_trgm", "show_limit",
+			"similarity(", "word_similarity(", "show_trgm(", "show_limit(",
+			"set_limit(", "%>", "<%>", "<<%", "%>>",
 		},
 		"cube": {
-			"cube(", "cube_distance", "cube_dim", "cube_ll_coord",
+			"cube(", "cube_distance(", "cube_dim(", "cube_ll_coord(",
+			"cube_ur_coord(", "cube_is_point(", "cube_enlarge(",
 		},
 		"pg_stat_statements": {
-			"pg_stat_statements", "pg_stat_statements_reset",
+			"pg_stat_statements", "pg_stat_statements_reset(",
 		},
 		"btree_gin": {
-			"gin_extract_value", "gin_extract_query", "gin_consistent",
+			"gin_extract_value(", "gin_extract_query(", "gin_consistent(",
 		},
 	}
 
@@ -245,6 +256,8 @@ func (ed *ExtensionDetector) detectExtensionsInContent(content string) []string 
 
 	for extension, indicators := range extensionIndicators {
 		for _, indicator := range indicators {
+			// Use case-insensitive search but check for actual function calls
+			// This prevents false positives from column names or type names
 			if strings.Contains(contentLower, strings.ToLower(indicator)) {
 				// Avoid duplicates
 				found := false
