@@ -71,48 +71,10 @@ jobs:
           path: pgsquash
           retention-days: 7
 
-  build-multi-platform:
-    name: Build Multi-Platform
-    runs-on: ubuntu-latest
-    needs: build
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-          - goos: linux
-            goarch: arm64
-          - goos: darwin
-            goarch: amd64
-          - goos: darwin
-            goarch: arm64
-          - goos: windows
-            goarch: amd64
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.25.1'
-
-      - name: Build for ${{ matrix.goos }}-${{ matrix.goarch }}
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          OUTPUT_NAME="pgsquash-${{ matrix.goos }}-${{ matrix.goarch }}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            OUTPUT_NAME="${OUTPUT_NAME}.exe"
-          fi
-          go build -ldflags="-w -s" -o "${OUTPUT_NAME}" ./cmd/pgsquash
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: pgsquash-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: pgsquash-*
-          retention-days: 7
+  # Multi-platform builds are handled by GoReleaser with goreleaser-cross
+  # which provides proper CGO cross-compilation toolchains.
+  # See .github/workflows/release.yml for multi-platform releases.
+  #
+  # This job is disabled because pg_query_go requires CGO, and cross-compiling
+  # with CGO requires platform-specific toolchains that are not available in
+  # standard GitHub Actions runners.
