@@ -802,7 +802,7 @@ func SortValidationResults(result *ValidationResult) {
 // ValidateWithDocker validates squashed migrations using Docker containers
 func (sv *SchemaValidator) ValidateWithDocker(ctx context.Context, originalPath, squashedPath string) (*ValidationResult, error) {
 	if sv.dockerClient == nil {
-		return nil, fmt.Errorf("Docker client not initialized")
+		return nil, fmt.Errorf("docker client not initialized")
 	}
 
 	result := &ValidationResult{

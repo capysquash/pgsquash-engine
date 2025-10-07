@@ -168,11 +168,14 @@ func (bg *BackupGenerator) generateBackup(ctx context.Context, dbURL, name, desc
 	}
 
 	// Build backup file path
-	extension := ".sql"
-	if bg.config.Format == CustomFormat {
+	var extension string
+	switch bg.config.Format {
+	case CustomFormat:
 		extension = ".custom"
-	} else if bg.config.Format == TarFormat {
+	case TarFormat:
 		extension = ".tar"
+	default:
+		extension = ".sql"
 	}
 
 	if bg.config.Compression && bg.config.Format == SQLFormat {

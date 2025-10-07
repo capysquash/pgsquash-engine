@@ -208,7 +208,7 @@ func (c *ClaudeProvider) AnalyzeWithTools(ctx context.Context, req *AnalysisRequ
 
 	response, err := c.client.Messages.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("Claude API call with tools failed: %w", err)
+		return nil, fmt.Errorf("claude API call with tools failed: %w", err)
 	}
 
 	result := c.extractTextFromResponse(response)

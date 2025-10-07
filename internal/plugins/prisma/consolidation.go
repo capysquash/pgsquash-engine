@@ -85,9 +85,10 @@ func (pp *PrismaPlugin) mergePrismaTables(statements []*types.Statement) *types.
 	var alterStmts []*types.Statement
 
 	for _, stmt := range statements {
-		if stmt.Operation == types.OpCreate {
+		switch stmt.Operation {
+		case types.OpCreate:
 			createStmt = stmt
-		} else if stmt.Operation == types.OpAlter {
+		case types.OpAlter:
 			alterStmts = append(alterStmts, stmt)
 		}
 	}

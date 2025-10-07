@@ -90,12 +90,13 @@ func (b *SQLBuilder) S() *SQLBuilder {
 
 // NL adds a newline with proper indentation
 func (b *SQLBuilder) NL() *SQLBuilder {
-	if b.options.FormatStyle == FormatPretty {
+	switch b.options.FormatStyle {
+	case FormatPretty:
 		b.buf.WriteByte('\n')
 		for i := 0; i < b.indent*b.options.IndentSize; i++ {
 			b.buf.WriteByte(' ')
 		}
-	} else if b.options.FormatStyle == FormatDense {
+	case FormatDense:
 		b.buf.WriteByte(' ')
 	}
 	return b
@@ -435,10 +436,12 @@ func (b *SQLBuilder) needsQuoting(identifier string) bool {
 
 	// Check for special characters
 	for _, char := range identifier {
-		if !((char >= 'a' && char <= 'z') ||
-			(char >= 'A' && char <= 'Z') ||
-			(char >= '0' && char <= '9') ||
-			char == '_') {
+		isLowerCase := char >= 'a' && char <= 'z'
+		isUpperCase := char >= 'A' && char <= 'Z'
+		isDigit := char >= '0' && char <= '9'
+		isUnderscore := char == '_'
+
+		if !isLowerCase && !isUpperCase && !isDigit && !isUnderscore {
 			return true
 		}
 	}
