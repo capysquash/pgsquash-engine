@@ -1967,7 +1967,7 @@ func (sv *SchemaValidator) getTables(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var tables []string
 	for rows.Next() {
@@ -1985,7 +1985,7 @@ func (sv *SchemaValidator) getIndexes(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var indexes []string
 	for rows.Next() {
@@ -2058,7 +2058,7 @@ func (sv *SchemaValidator) getFunctions(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var functions []string
 	for rows.Next() {
@@ -2081,7 +2081,7 @@ func (sv *SchemaValidator) getTriggers(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var triggers []string
 	for rows.Next() {
@@ -2104,7 +2104,7 @@ func (sv *SchemaValidator) getViews(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var views []string
 	for rows.Next() {
@@ -2127,7 +2127,7 @@ func (sv *SchemaValidator) getSequences(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sequences []string
 	for rows.Next() {
@@ -2151,7 +2151,7 @@ func (sv *SchemaValidator) getCustomTypes(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var types []string
 	for rows.Next() {
@@ -2174,7 +2174,7 @@ func (sv *SchemaValidator) getExtensions(db *sql.DB) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var extensions []string
 	for rows.Next() {

@@ -60,7 +60,7 @@ func (h *OAuthHandler) ExchangeCodeForToken(ctx context.Context, code string) (s
     if err != nil {
         return "", err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     var result struct {
         AccessToken string `json:"access_token"`

@@ -235,7 +235,7 @@ func (a *AzureOpenAIProvider) Analyze(ctx context.Context, req *AnalysisRequest)
     })
 
     if err != nil {
-        return nil, fmt.Errorf("Azure OpenAI API call failed: %w", err)
+        return nil, fmt.Errorf("azure OpenAI API call failed: %w", err)
     }
 
     if len(resp.Choices) == 0 {

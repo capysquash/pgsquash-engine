@@ -22,7 +22,7 @@ type ClaudeProvider struct {
 // NewClaudeProvider creates a new Claude provider instance
 func NewClaudeProvider(config *ProviderConfig) (*ClaudeProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("Claude API key is required")
+		return nil, fmt.Errorf("claude API key is required")
 	}
 
 	client := anthropic.NewClient(option.WithAPIKey(config.APIKey))
@@ -133,7 +133,7 @@ func (c *ClaudeProvider) Analyze(ctx context.Context, req *AnalysisRequest) (*An
 
 	response, err := c.client.Messages.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("Claude API call failed: %w", err)
+		return nil, fmt.Errorf("claude API call failed: %w", err)
 	}
 
 	result := c.extractTextFromResponse(response)
