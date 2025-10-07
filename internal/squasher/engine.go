@@ -336,7 +336,7 @@ func (e *Engine) GetAuthCompatibilitySQL() string {
 // Close gracefully shuts down the engine
 func (e *Engine) Close() {
 	if e.prodDB != nil {
-		e.prodDB.Close()
+		_ = e.prodDB.Close()
 	}
 	if e.enableStreaming && e.streamingTracker != nil {
 		if err := e.streamingTracker.Stop(); err != nil {

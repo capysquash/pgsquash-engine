@@ -562,7 +562,7 @@ func (m *MetadataManager) loadSchemas(ctx context.Context) (map[string]*SchemaMe
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var schemaName string
@@ -616,7 +616,7 @@ func (m *MetadataManager) loadTablesForSchema(ctx context.Context, schemaName st
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var tableName string
@@ -659,7 +659,7 @@ func (m *MetadataManager) loadExtensions(ctx context.Context) (map[string]*Exten
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name, version string

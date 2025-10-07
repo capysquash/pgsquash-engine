@@ -574,7 +574,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		config.AuthCompatibilitySQL = extAnalysis.AuthCompatibilitySQL // Inject auth compatibility
 
 		validator := validation.NewSchemaValidator(config, nil, nil)
-		defer validator.Close()
+		defer func() { _ = validator.Close() }()
 
 		result, err := validator.ValidateWithDocker(cmd.Context(), originalDir, squashedDir)
 		if err != nil {

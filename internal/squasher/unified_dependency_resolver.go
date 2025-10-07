@@ -971,7 +971,7 @@ func (udr *UnifiedDependencyResolver) extractTableProvisions(sql string) []strin
 	// Look for CREATE SEQUENCE, CREATE VIEW, etc.
 	objectTypes := []string{"SEQUENCE", "VIEW", "MATERIALIZED VIEW", "TYPE"}
 	for _, objType := range objectTypes {
-		pattern := fmt.Sprintf(`(?i)CREATE\s+%s\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`, strings.Replace(objType, " ", `\s+`, -1))
+		pattern := fmt.Sprintf(`(?i)CREATE\s+%s\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`, strings.ReplaceAll(objType, " ", `\s+`))
 		re := regexp.MustCompile(pattern)
 		matches := re.FindAllStringSubmatch(sql, -1)
 		for _, match := range matches {

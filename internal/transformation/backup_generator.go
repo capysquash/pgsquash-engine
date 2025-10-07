@@ -507,7 +507,7 @@ func (bg *BackupGenerator) CleanupOldBackups(maxAge time.Duration, maxCount int)
 	cutoff := time.Now().Add(-maxAge)
 	for _, info := range fileInfos {
 		if info.modTime.Before(cutoff) {
-			os.Remove(info.path)
+			_ = os.Remove(info.path)
 		}
 	}
 

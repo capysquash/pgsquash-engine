@@ -468,8 +468,8 @@ func (pts *PostgreSQLTypeSystem) isPotentiallyLossyConversion(from, to string) b
 func (pts *PostgreSQLTypeSystem) checkSpecialCases(from, to string, compatibility *TypeCompatibility) *TypeCompatibility {
 	// Array type compatibility
 	if strings.Contains(from, "[]") && strings.Contains(to, "[]") {
-		fromElement := strings.Replace(from, "[]", "", -1)
-		toElement := strings.Replace(to, "[]", "", -1)
+		fromElement := strings.ReplaceAll(from, "[]", "")
+		toElement := strings.ReplaceAll(to, "[]", "")
 
 		elementCompatibility := pts.CheckTypeCompatibility(fromElement, toElement)
 		if elementCompatibility.Compatible {

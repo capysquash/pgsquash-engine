@@ -324,7 +324,7 @@ func (o *OpenAIProvider) makeAPICall(systemPrompt, userPrompt string, maxTokens 
 	if err != nil {
 		return "", Usage{}, fmt.Errorf("API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", Usage{}, fmt.Errorf("API returned status %d", resp.StatusCode)

@@ -431,7 +431,7 @@ func (r *ComprehensiveProgressReporter) notifyCallbacks(event *ProgressEvent) {
 
 func (r *ComprehensiveProgressReporter) logMessage(message string) {
     if r.colored && r.infoColor != nil {
-        r.infoColor.Println(message)
+        _, _ = r.infoColor.Println(message)
     } else {
         fmt.Println(message)
     }
@@ -442,7 +442,7 @@ func (r *ComprehensiveProgressReporter) logProgress(progress float64, message st
     fullMessage := fmt.Sprintf("%s %.1f%% - %s", progressBar, progress*100, message)
 
     if r.colored && r.infoColor != nil {
-        r.infoColor.Println(fullMessage)
+        _, _ = r.infoColor.Println(fullMessage)
     } else {
         fmt.Println(fullMessage)
     }
@@ -450,7 +450,7 @@ func (r *ComprehensiveProgressReporter) logProgress(progress float64, message st
 
 func (r *ComprehensiveProgressReporter) logSuccess(message string) {
     if r.colored && r.successColor != nil {
-        r.successColor.Println(message)
+        _, _ = r.successColor.Println(message)
     } else {
         fmt.Println(message)
     }
@@ -458,7 +458,7 @@ func (r *ComprehensiveProgressReporter) logSuccess(message string) {
 
 func (r *ComprehensiveProgressReporter) logWarning(message string) {
     if r.colored && r.warningColor != nil {
-        r.warningColor.Println(message)
+        _, _ = r.warningColor.Println(message)
     } else {
         fmt.Println(message)
     }
@@ -466,7 +466,7 @@ func (r *ComprehensiveProgressReporter) logWarning(message string) {
 
 func (r *ComprehensiveProgressReporter) logError(message string) {
     if r.colored && r.errorColor != nil {
-        r.errorColor.Println("❌ " + message)
+        _, _ = r.errorColor.Println("❌ " + message)
     } else {
         fmt.Println("❌ " + message)
     }

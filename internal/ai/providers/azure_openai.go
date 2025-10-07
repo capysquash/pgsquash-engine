@@ -23,11 +23,11 @@ type AzureOpenAIProvider struct {
 // NewAzureOpenAIProvider creates a new Azure OpenAI provider instance
 func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error) {
     if config.Endpoint == "" {
-        return nil, fmt.Errorf("Azure OpenAI endpoint is required")
+        return nil, fmt.Errorf("azure OpenAI endpoint is required")
     }
 
     if config.AzureDeployment == "" {
-        return nil, fmt.Errorf("Azure deployment name is required")
+        return nil, fmt.Errorf("azure deployment name is required")
     }
 
     timeout := 60 * time.Second
@@ -75,7 +75,7 @@ func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error
         } else {
             // Use API key authentication
             if config.APIKey == "" {
-                return nil, fmt.Errorf("Azure OpenAI API key is required when not using Azure AD")
+                return nil, fmt.Errorf("azure OpenAI API key is required when not using Azure AD")
             }
 
             client = openai.NewClient(
@@ -101,7 +101,7 @@ func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error
         } else {
             // Use API key authentication
             if config.APIKey == "" {
-                return nil, fmt.Errorf("Azure OpenAI API key is required when not using Azure AD")
+                return nil, fmt.Errorf("azure OpenAI API key is required when not using Azure AD")
             }
 
             client = openai.NewClient(

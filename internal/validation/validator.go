@@ -909,14 +909,14 @@ func (sv *SchemaValidator) validateWithTwoDatabases(ctx context.Context, origina
 		result.Error = fmt.Sprintf("failed to connect to original db: %v", err)
 		return result, err
 	}
-	defer originalDB.Close()
+	defer func() { _ = originalDB.Close() }()
 
 	squashedDB, err := sql.Open("postgres", squashedDSN)
 	if err != nil {
 		result.Error = fmt.Sprintf("failed to connect to squashed db: %v", err)
 		return result, err
 	}
-	defer squashedDB.Close()
+	defer func() { _ = squashedDB.Close() }()
 
 	differences, err := sv.compareSchemas(originalDB, squashedDB)
 	if err != nil {
@@ -976,8 +976,8 @@ func (sv *SchemaValidator) validateWithTwoContainers(ctx context.Context, origin
 	// Compare schemas between containers
 	originalDB, _ := sql.Open("postgres", originalDSN)
 	squashedDB, _ := sql.Open("postgres", squashedDSN)
-	defer originalDB.Close()
-	defer squashedDB.Close()
+	defer func() { _ = originalDB.Close() }()
+	defer func() { _ = squashedDB.Close() }()
 
 	differences, err := sv.compareSchemas(originalDB, squashedDB)
 	if err != nil {
@@ -1499,7 +1499,7 @@ func (sv *SchemaValidator) waitForPostgreSQLReady(ctx context.Context, container
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Get timeout from config (default: 60s - longer because package installation may delay startup)
 	timeoutDuration := 60 * time.Second
@@ -1536,7 +1536,7 @@ func (sv *SchemaValidator) installExtensions(ctx context.Context, containerInfo 
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var failedExtensions []string
 
@@ -1734,7 +1734,7 @@ func (sv *SchemaValidator) setupDatabases(ctx context.Context, containerInfo *Co
 	if err != nil {
 		return err
 	}
-	defer adminDB.Close()
+	defer func() { _ = adminDB.Close() }()
 
 	// Create databases
 	if _, err := adminDB.ExecContext(ctx, "CREATE DATABASE validation_original"); err != nil {
@@ -1770,7 +1770,7 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Inject auth compatibility SQL from plugins (Clerk, Supabase, Auth0, etc.)
 	// This creates mock auth functions, roles, and schemas for validation
@@ -2189,7 +2189,7 @@ func (sv *SchemaValidator) getExtensions(db *sql.DB) ([]string, error) {
 
 func (sv *SchemaValidator) logInfo(format string, args ...interface{}) {
 	if sv.config.Verbose {
-		color.New(color.FgCyan).Printf("[VALIDATOR] "+format+"\n", args...)
+		_, _ = color.New(color.FgCyan).Printf("[VALIDATOR] "+format+"\n", args...)
 	}
 }
 

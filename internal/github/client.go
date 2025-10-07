@@ -65,7 +65,7 @@ func (c *Client) GetPRFiles(ctx context.Context, repo string, prNumber int) ([]P
     if err != nil {
         return nil, err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
@@ -95,7 +95,7 @@ func (c *Client) GetPullRequest(ctx context.Context, repo string, prNumber int) 
     if err != nil {
         return nil, err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusOK {
         return nil, fmt.Errorf("GitHub API error: %d", resp.StatusCode)
@@ -124,7 +124,7 @@ func (c *Client) GetFileContent(ctx context.Context, repo, path, ref string) (st
     if err != nil {
         return "", err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusOK {
         return "", fmt.Errorf("GitHub API error: %d", resp.StatusCode)
@@ -171,7 +171,7 @@ func (c *Client) PostPRComment(ctx context.Context, repo string, prNumber int, c
     if err != nil {
         return err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusCreated {
         respBody, _ := io.ReadAll(resp.Body)
@@ -226,7 +226,7 @@ func (c *Client) CreateBranch(ctx context.Context, repo, branch, sha string) err
     if err != nil {
         return err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusCreated {
         respBody, _ := io.ReadAll(resp.Body)
@@ -246,7 +246,7 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, repo, path, content, me
     c.setHeaders(existingReq)
 
     if existingResp, err := c.httpClient.Do(existingReq); err == nil {
-        defer existingResp.Body.Close()
+        defer func() { _ = existingResp.Body.Close() }()
         if existingResp.StatusCode == http.StatusOK {
             var existingFile struct {
                 SHA string `json:"sha"`
@@ -282,7 +282,7 @@ func (c *Client) CreateOrUpdateFile(ctx context.Context, repo, path, content, me
     if err != nil {
         return err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
         respBody, _ := io.ReadAll(resp.Body)
@@ -318,7 +318,7 @@ func (c *Client) CreatePullRequest(ctx context.Context, repo, title, body, head,
     if err != nil {
         return 0, err
     }
-    defer resp.Body.Close()
+    defer func() { _ = resp.Body.Close() }()
 
     if resp.StatusCode != http.StatusCreated {
         respBody, _ := io.ReadAll(resp.Body)
