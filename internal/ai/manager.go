@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
+	"github.com/capysquash/pg-squash-engine/internal/errors"
 )
 
 // Type aliases to avoid import cycles
@@ -32,11 +33,19 @@ const (
 	ProviderAzureOpenAI = providers.ProviderAzureOpenAI
 )
 
+// HealthCache stores cached health check results for providers
+type HealthCache struct {
+	healthy   bool
+	lastCheck time.Time
+	ttl       time.Duration
+}
+
 // ProviderManager manages multiple AI providers and routes requests
 type ProviderManager struct {
 	providers    map[ProviderType]Provider
 	defaultType  ProviderType
 	fallbackType ProviderType
+	healthCache  map[ProviderType]*HealthCache
 	mutex        sync.RWMutex
 	config       *ManagerConfig
 }
@@ -81,12 +90,18 @@ func NewProviderManager(config *ManagerConfig) (*ProviderManager, error) {
 		providers:    make(map[ProviderType]Provider),
 		defaultType:  config.DefaultProvider,
 		fallbackType: config.FallbackProvider,
+		healthCache:  make(map[ProviderType]*HealthCache),
 		config:       config,
 	}
 
 	// Initialize providers based on available API keys and configuration
 	if err := manager.initializeProviders(); err != nil {
-		return nil, fmt.Errorf("failed to initialize providers: %w", err)
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"failed to initialize providers",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("ensure AI provider API keys are configured")
 	}
 
 	return manager, nil
@@ -109,7 +124,12 @@ func (pm *ProviderManager) initializeProviders() error {
 
 		provider, err := providers.NewClaudeProvider(config)
 		if err != nil {
-			return fmt.Errorf("failed to initialize Claude provider: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"failed to initialize Claude provider",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithInnerError(err).WithSuggestion("verify ANTHROPIC_API_KEY is valid")
 		}
 		pm.providers[ProviderClaude] = provider
 	}
@@ -129,7 +149,12 @@ func (pm *ProviderManager) initializeProviders() error {
 
 		provider, err := providers.NewOpenAIProvider(config)
 		if err != nil {
-			return fmt.Errorf("failed to initialize OpenAI provider: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"failed to initialize OpenAI provider",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithInnerError(err).WithSuggestion("verify OPENAI_API_KEY is valid")
 		}
 		pm.providers[ProviderOpenAI] = provider
 	}
@@ -161,7 +186,12 @@ func (pm *ProviderManager) initializeProviders() error {
 		if config.Endpoint != "" && config.AzureDeployment != "" {
 			provider, err := providers.NewAzureOpenAIProvider(config)
 			if err != nil {
-				return fmt.Errorf("failed to initialize Azure OpenAI provider: %w", err)
+				return errors.NewError(
+					errors.ErrorCodeValidationFailed,
+					"failed to initialize Azure OpenAI provider",
+					errors.SeverityError,
+					errors.CategoryValidation,
+				).WithInnerError(err).WithSuggestion("verify Azure OpenAI endpoint and deployment configuration")
 			}
 			pm.providers[ProviderAzureOpenAI] = provider
 		}
@@ -169,7 +199,12 @@ func (pm *ProviderManager) initializeProviders() error {
 
 	// Ensure we have at least one provider
 	if len(pm.providers) == 0 {
-		return fmt.Errorf("no AI providers available - please set ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT with AZURE_OPENAI_DEPLOYMENT")
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"no AI providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("set ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT with AZURE_OPENAI_DEPLOYMENT")
 	}
 
 	// Adjust default/fallback if not available
@@ -203,7 +238,12 @@ func (pm *ProviderManager) GetProvider(providerType ProviderType) (Provider, err
 
 	provider, exists := pm.providers[providerType]
 	if !exists {
-		return nil, fmt.Errorf("provider %s not available", providerType)
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			fmt.Sprintf("provider %s not available", providerType),
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check available providers with ListProviders()")
 	}
 
 	return provider, nil
@@ -226,33 +266,86 @@ func (pm *ProviderManager) ListProviders() []ProviderType {
 	return types
 }
 
-// Analyze routes the analysis request to the appropriate provider
+// Analyze routes the analysis request to the appropriate provider with multi-provider failover
 func (pm *ProviderManager) Analyze(ctx context.Context, req *AnalysisRequest) (*AnalysisResponse, error) {
-	providerType := pm.selectProvider(req)
+	// Get prioritized list of providers to try
+	providersToTry := pm.getPrioritizedProviders(req)
 
-	// Try primary provider
-	response, err := pm.analyzeWithProvider(ctx, req, providerType)
-	if err == nil {
-		return response, nil
-	}
+	var allErrors []string
+	var primaryError error
 
-	// Try fallback if enabled and available
-	if pm.config.EnableFallback && pm.fallbackType != providerType {
-		if _, exists := pm.providers[pm.fallbackType]; exists {
-			fallbackResponse, fallbackErr := pm.analyzeWithProvider(ctx, req, pm.fallbackType)
-			if fallbackErr == nil {
-				// Add metadata indicating fallback was used
-				if fallbackResponse.Metadata == nil {
-					fallbackResponse.Metadata = make(map[string]interface{})
-				}
-				fallbackResponse.Metadata["fallback_used"] = true
-				fallbackResponse.Metadata["primary_error"] = err.Error()
-				return fallbackResponse, nil
+	// Try each provider in priority order
+	for i, providerType := range providersToTry {
+		isPrimary := i == 0
+
+		// Check health cache before attempting (skip known-unhealthy providers)
+		if !pm.isProviderHealthy(ctx, providerType) {
+			fmt.Printf("⚠️  Skipping unhealthy provider: %s\n", providerType)
+			// If this was the primary provider, record that it was skipped
+			if isPrimary {
+				primaryError = fmt.Errorf("primary provider %s marked as unhealthy and skipped", providerType)
 			}
+			allErrors = append(allErrors, fmt.Sprintf("%s: skipped (unhealthy)", providerType))
+			continue
 		}
+
+		// Log attempt
+		if isPrimary {
+			fmt.Printf("🔄 Attempting primary AI provider: %s\n", providerType)
+		} else {
+			fmt.Printf("🔄 Attempting fallback provider %d: %s\n", i, providerType)
+		}
+
+		// Try the provider
+		response, err := pm.analyzeWithProvider(ctx, req, providerType)
+		if err == nil {
+			// Success!
+			if !isPrimary {
+				// Add metadata indicating fallback was used
+				if response.Metadata == nil {
+					response.Metadata = make(map[string]interface{})
+				}
+				response.Metadata["fallback_used"] = true
+				response.Metadata["provider_used"] = string(providerType)
+				// Safely add primary error message if available
+				if primaryError != nil {
+					response.Metadata["primary_error"] = primaryError.Error()
+				} else {
+					response.Metadata["primary_error"] = "primary provider was not available"
+				}
+				fmt.Printf("✓ AI provider %s succeeded (fallback)\n", providerType)
+			} else {
+				fmt.Printf("✓ AI provider %s succeeded\n", providerType)
+			}
+			return response, nil
+		}
+
+		// Provider failed - save error and continue
+		fmt.Printf("⚠️  Provider %s failed: %v\n", providerType, err)
+		if isPrimary {
+			primaryError = err
+		}
+		allErrors = append(allErrors, fmt.Sprintf("%s: %v", providerType, err))
+
+		// Mark provider as unhealthy in cache
+		pm.updateHealthCache(providerType, false)
 	}
 
-	return nil, fmt.Errorf("all providers failed: primary error: %w", err)
+	// All providers failed
+	if primaryError != nil {
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			fmt.Sprintf("all %d providers failed", len(providersToTry)),
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(primaryError).WithAdditional("all_errors", allErrors).WithSuggestion("check AI provider connectivity and credentials")
+	}
+	return nil, errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		fmt.Sprintf("all %d providers failed", len(providersToTry)),
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithAdditional("all_errors", allErrors).WithSuggestion("check AI provider connectivity and credentials")
 }
 
 // analyzeWithProvider performs analysis with a specific provider with retry logic
@@ -302,7 +395,12 @@ func (pm *ProviderManager) analyzeWithProvider(ctx context.Context, req *Analysi
 		}
 	}
 
-	return nil, fmt.Errorf("analysis failed after %d retries: %w", pm.config.RetrySettings.MaxRetries, lastErr)
+	return nil, errors.NewError(
+		errors.ErrorCodeAnalysisError,
+		fmt.Sprintf("analysis failed after %d retries", pm.config.RetrySettings.MaxRetries),
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithInnerError(lastErr).WithSuggestion("check AI provider connectivity and rate limits")
 }
 
 // selectProvider chooses the best provider for a given request
@@ -345,7 +443,12 @@ func (pm *ProviderManager) SubmitBatch(ctx context.Context, batch *BatchRequest)
 		}
 	}
 
-	return nil, fmt.Errorf("no providers support batch processing")
+	return nil, errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		"no providers support batch processing",
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithSuggestion("use a provider that supports batch processing (e.g., Claude)")
 }
 
 // GetBatchStatus retrieves batch status from all providers
@@ -360,7 +463,12 @@ func (pm *ProviderManager) GetBatchStatus(ctx context.Context, batchID string) (
 		}
 	}
 
-	return nil, fmt.Errorf("batch not found or no batch-supporting providers available")
+	return nil, errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		"batch not found or no batch-supporting providers available",
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithSuggestion("verify batch ID and ensure batch provider is available")
 }
 
 // HealthCheck performs health checks on all providers
