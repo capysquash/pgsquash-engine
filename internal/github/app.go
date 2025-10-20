@@ -2,10 +2,12 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
@@ -119,15 +121,27 @@ func NewAppClientFromEnv() (*AppClient, error) {
 		AppID: appID,
 	}
 
-	// Check for private key in environment (multiline string)
+	// Check for private key in environment (multiline string or base64)
 	if privateKey := os.Getenv("GITHUB_APP_PRIVATE_KEY"); privateKey != "" {
 		config.PrivateKey = []byte(privateKey)
+	} else if privateKeyBase64 := os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64"); privateKeyBase64 != "" {
+		// Support base64-encoded private key for environments that don't handle multiline secrets well
+		decoded, err := base64DecodePrivateKey(privateKeyBase64)
+		if err != nil {
+			return nil, errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"failed to decode base64 private key",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithInnerError(err).WithSuggestion("Ensure GITHUB_APP_PRIVATE_KEY_BASE64 is properly base64-encoded")
+		}
+		config.PrivateKey = decoded
 	} else if privateKeyPath := os.Getenv("GITHUB_APP_PRIVATE_KEY_PATH"); privateKeyPath != "" {
 		config.PrivateKeyPath = privateKeyPath
 	} else {
 		return nil, errors.NewError(
 			errors.ErrorCodeValidationFailed,
-			"GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH environment variable not set",
+			"GITHUB_APP_PRIVATE_KEY, GITHUB_APP_PRIVATE_KEY_BASE64, or GITHUB_APP_PRIVATE_KEY_PATH environment variable not set",
 			errors.SeverityError,
 			errors.CategoryValidation,
 		)
@@ -620,4 +634,21 @@ func (ic *InstallationClient) GetRateLimit(ctx context.Context) (*github.RateLim
 func (ic *InstallationClient) String() string {
 	return fmt.Sprintf("InstallationClient{installationID: %d, owner: %s, repo: %s}",
 		ic.installationID, ic.owner, ic.repo)
+}
+
+// base64DecodePrivateKey decodes a base64-encoded private key
+// Handles both standard base64 and base64 with whitespace/newlines
+func base64DecodePrivateKey(encoded string) ([]byte, error) {
+	// Remove any whitespace/newlines that might have been added
+	encoded = strings.ReplaceAll(encoded, "\n", "")
+	encoded = strings.ReplaceAll(encoded, "\r", "")
+	encoded = strings.ReplaceAll(encoded, " ", "")
+	encoded = strings.ReplaceAll(encoded, "\t", "")
+
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode base64: %w", err)
+	}
+
+	return decoded, nil
 }

@@ -73,10 +73,11 @@ type RetryConfig struct {
 // NewProviderManager creates a new provider manager
 func NewProviderManager(config *ManagerConfig) (*ProviderManager, error) {
 	if config == nil {
+		// Default provider priority: Azure OpenAI → Anthropic Claude → OpenAI
 		config = &ManagerConfig{
-			DefaultProvider:  ProviderClaude, // Default to Claude
+			DefaultProvider:  ProviderAzureOpenAI, // Default to Azure OpenAI (preferred)
 			EnableFallback:   true,
-			FallbackProvider: ProviderOpenAI,
+			FallbackProvider: ProviderClaude, // Fallback to Claude (Anthropic)
 			ProviderConfigs:  make(map[ProviderType]*ProviderConfig),
 			RetrySettings: RetryConfig{
 				MaxRetries:    3,
@@ -208,22 +209,36 @@ func (pm *ProviderManager) initializeProviders() error {
 		).WithSuggestion("set ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT with AZURE_OPENAI_DEPLOYMENT")
 	}
 
-	// Adjust default/fallback if not available
+	// Adjust default/fallback if not available, following priority order:
+	// 1. Azure OpenAI (default)
+	// 2. Anthropic Claude (fallback)
+	// 3. OpenAI (last resort)
+	providerPriority := []ProviderType{ProviderAzureOpenAI, ProviderClaude, ProviderOpenAI}
+
+	// Set default to first available provider in priority order
 	if _, exists := pm.providers[pm.defaultType]; !exists {
-		// Find the first available provider as default
-		for providerType := range pm.providers {
-			pm.defaultType = providerType
-			break
+		for _, providerType := range providerPriority {
+			if _, exists := pm.providers[providerType]; exists {
+				pm.defaultType = providerType
+				break
+			}
 		}
 	}
 
+	// Set fallback to next available provider in priority order
 	if pm.config.EnableFallback {
 		if _, exists := pm.providers[pm.fallbackType]; !exists {
-			// Find a different provider as fallback
-			for providerType := range pm.providers {
-				if providerType != pm.defaultType {
-					pm.fallbackType = providerType
-					break
+			foundDefault := false
+			for _, providerType := range providerPriority {
+				if _, exists := pm.providers[providerType]; exists {
+					if providerType == pm.defaultType {
+						foundDefault = true
+						continue
+					}
+					if foundDefault {
+						pm.fallbackType = providerType
+						break
+					}
 				}
 			}
 		}

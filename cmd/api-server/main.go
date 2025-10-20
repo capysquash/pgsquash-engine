@@ -126,21 +126,22 @@ func NewServer() *Server {
 
 	// Priority 1: Try GitHub App authentication (preferred)
 	if githubAppID != "" && (githubAppPrivateKey != "" || githubAppPrivateKeyPath != "") {
-		_, err := github.NewAppClientFromEnv()
+		appClient, err := github.NewAppClientFromEnv()
 		if err != nil {
 			logger.Info("⚠ GitHub App authentication failed: %v", err)
 			logger.Info("Falling back to personal access token if available...")
 		} else {
-			// GitHub App is configured - create webhook handler with App client
-			// Note: We'll need to modify WebhookHandler to support AppClient
 			logger.Info("✓ GitHub App authentication initialized")
 			logger.Info("  App ID: %s", githubAppID)
 
-			// For now, we'll use the app client but still need webhook handler updates
-			// Store app client for use in webhook processing
-			// TODO: Update WebhookHandler to use AppClient for multi-repo support
-			logger.Info("⚠ GitHub App webhook handler not yet fully integrated")
-			logger.Info("  Webhook processing will use fallback authentication")
+			// Create webhook handler with GitHub App client
+			if webhookSecret != "" {
+				webhookHandler = github.NewWebhookHandlerWithApp(webhookSecret, appClient, engine)
+				logger.Info("✓ GitHub App webhook handler initialized")
+				logger.Info("  Multi-repository support enabled")
+			} else {
+				logger.Info("⚠ Webhook secret not set - webhooks disabled")
+			}
 		}
 	}
 

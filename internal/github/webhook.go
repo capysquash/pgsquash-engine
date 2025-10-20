@@ -23,15 +23,25 @@ import (
 // WebhookHandler handles GitHub webhook events
 type WebhookHandler struct {
     secret          string
-    githubClient    *Client
+    githubClient    *Client      // For personal access token auth
+    appClient       *AppClient   // For GitHub App auth (multi-repo support)
     analysisEngine  *squasher.Engine
 }
 
-// NewWebhookHandler creates a new webhook handler
+// NewWebhookHandler creates a new webhook handler with personal access token
 func NewWebhookHandler(secret string, client *Client, engine *squasher.Engine) *WebhookHandler {
     return &WebhookHandler{
         secret:         secret,
         githubClient:   client,
+        analysisEngine: engine,
+    }
+}
+
+// NewWebhookHandlerWithApp creates a new webhook handler with GitHub App authentication
+func NewWebhookHandlerWithApp(secret string, appClient *AppClient, engine *squasher.Engine) *WebhookHandler {
+    return &WebhookHandler{
+        secret:         secret,
+        appClient:      appClient,
         analysisEngine: engine,
     }
 }
