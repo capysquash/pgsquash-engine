@@ -215,3 +215,5 @@ REFACTORING_STATUS.md
 capysquash-private-key.pem
 .env.github-app
 AGENTS.md
+bin/pgsquash
+bin/api-server
