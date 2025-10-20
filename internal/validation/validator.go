@@ -24,7 +24,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
-	errdefs "github.com/docker/docker/errdefs"
 	"github.com/docker/go-connections/nat"
 	"github.com/fatih/color"
 	_ "github.com/lib/pq"
@@ -1603,7 +1602,7 @@ func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, image
 	}
 
 	// Image not found locally, pull it
-	if errdefs.IsNotFound(err) {
+	if err != nil && strings.Contains(err.Error(), "No such image") {
 		sv.logInfo("📦 Docker image '%s' not found locally", imageName)
 		if sv.config.Verbose {
 			color.Cyan("   Pulling image... (this may take a few minutes on first run)\n")
@@ -1665,7 +1664,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 	// Check if container exists before trying to stop/remove
 	_, err := sv.dockerClient.ContainerInspect(ctx, containerID)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
+		if strings.Contains(err.Error(), "No such container") {
 			// Container already removed, nothing to do
 			return
 		}
@@ -1676,7 +1675,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 	// Try to stop container
 	stopTimeout := 10
 	if err := sv.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
-		if !errdefs.IsNotFound(err) {
+		if !strings.Contains(err.Error(), "No such container") {
 			sv.logInfo("⚠️  Failed to stop container %s: %v", containerID, err)
 		}
 		// Continue to removal attempt
@@ -1687,7 +1686,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 		Force:         true,
 		RemoveVolumes: true,
 	}); err != nil {
-		if !errdefs.IsNotFound(err) {
+		if !strings.Contains(err.Error(), "No such container") {
 			sv.logInfo("⚠️  Failed to remove container %s: %v", containerID, err)
 		}
 	} else {

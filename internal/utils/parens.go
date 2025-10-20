@@ -82,9 +82,6 @@ func ExtractAllBalancedParentheses(text string) []string {
 
     nextParen:
         if !found {
-        }
-
-        if !found {
             // Unbalanced, move past this paren
             currentPos = start + 1
         }

@@ -639,7 +639,7 @@ func (h *WebhookHandler) formatAnalysisCommentPlatformStyle(analysis *AnalysisRe
         comment.WriteString("### 📊 Analysis Results\n\n")
         comment.WriteString(fmt.Sprintf("- **Original files**: %d migration files\n", fileCount))
         if analysis.ShouldConsolidate {
-            comment.WriteString(fmt.Sprintf("- **Optimized**: 1 consolidated file\n"))
+            comment.WriteString("- **Optimized**: 1 consolidated file\n")
             comment.WriteString(fmt.Sprintf("- **Time saved**: ~%d seconds per deployment\n", fileCount*10)) // Rough estimate
         } else {
             comment.WriteString("- **Status**: Migrations already optimized\n")
@@ -667,7 +667,7 @@ func (h *WebhookHandler) formatAnalysisCommentPlatformStyle(analysis *AnalysisRe
         comment.WriteString("```bash\n")
         comment.WriteString("pgsquash squash migrations/*.sql --output consolidated/ --safety standard\n")
         comment.WriteString("```\n\n")
-        comment.WriteString(fmt.Sprintf("[View detailed analysis →](https://capysquash.dev/analyze)\n\n"))
+        comment.WriteString("[View detailed analysis →](https://capysquash.dev/analyze)\n\n")
     }
 
     // Footer
@@ -730,7 +730,7 @@ func (h *WebhookHandler) createCheckRun(ctx context.Context, event PullRequestEv
     title := "Migration Analysis Complete"
     summary := fmt.Sprintf("Analyzed %d migration files", analysis.OriginalCount)
     if analysis.ShouldConsolidate {
-        summary += fmt.Sprintf(", found potential for consolidation")
+        summary += ", found potential for consolidation"
     }
 
     var output strings.Builder

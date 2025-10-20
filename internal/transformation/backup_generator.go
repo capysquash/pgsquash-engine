@@ -494,7 +494,7 @@ func (bg *BackupGenerator) generateAlterTableRollback(stmt types.Statement) stri
 			columnName := matches[1]
 			return fmt.Sprintf("-- Rollback DROP COLUMN: ADD COLUMN %s (requires column definition from backup)", columnName)
 		}
-		return fmt.Sprintf("-- Rollback DROP COLUMN: requires column definition from backup")
+		return "-- Rollback DROP COLUMN: requires column definition from backup"
 	}
 
 	// Handle ADD CONSTRAINT
@@ -574,7 +574,7 @@ func (bg *BackupGenerator) generateAlterTableRollback(stmt types.Statement) stri
 
 	// Handle OWNER TO
 	if strings.Contains(sql, "OWNER TO") {
-		return fmt.Sprintf("-- Rollback OWNER TO: requires previous owner information from backup")
+		return "-- Rollback OWNER TO: requires previous owner information from backup"
 	}
 
 	// Handle ENABLE/DISABLE TRIGGER

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -338,7 +339,11 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
             s.sendError(w, fmt.Sprintf("Failed to open file %s", fileHeader.Filename), "FILE_OPEN_ERROR", http.StatusBadRequest)
             return
         }
-        defer file.Close()
+        defer func() {
+            if err := file.Close(); err != nil {
+                log.Printf("Failed to close file: %v", err)
+            }
+        }()
 
         // Check file extension
         if !strings.HasSuffix(strings.ToLower(fileHeader.Filename), ".sql") {
@@ -495,10 +500,12 @@ func (s *Server) handleSquash(w http.ResponseWriter, r *http.Request) {
 func (s *Server) sendError(w http.ResponseWriter, message, code string, status int) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(status)
-    json.NewEncoder(w).Encode(ErrorResponse{
+    if err := json.NewEncoder(w).Encode(ErrorResponse{
         Error: message,
         Code:  code,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode error response: %v", err)
+    }
 }
 
 func (s *Server) Start() error {
@@ -586,10 +593,12 @@ func (s *Server) handleGetRules(w http.ResponseWriter, r *http.Request) {
         })
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "rules": response,
         "total": len(response),
-    })
+    }); err != nil {
+        log.Printf("Failed to encode rules response: %v", err)
+    }
 }
 
 func (s *Server) handleGetRuleCategories(w http.ResponseWriter, r *http.Request) {
@@ -611,10 +620,12 @@ func (s *Server) handleGetRuleCategories(w http.ResponseWriter, r *http.Request)
         })
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "categories": categories,
         "total":      len(categories),
-    })
+    }); err != nil {
+        log.Printf("Failed to encode categories response: %v", err)
+    }
 }
 
 func (s *Server) handleGetPlugins(w http.ResponseWriter, r *http.Request) {
@@ -642,10 +653,12 @@ func (s *Server) handleGetPlugins(w http.ResponseWriter, r *http.Request) {
         })
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "plugins": response,
         "total":   len(response),
-    })
+    }); err != nil {
+        log.Printf("Failed to encode plugins response: %v", err)
+    }
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -657,7 +670,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
         cfg = config.DefaultConfig()
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "safety_level":  cfg.SafetyLevel,
         "output_format": cfg.Output.Format,
         "rules": map[string]interface{}{
@@ -676,20 +689,24 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
             "enable_generated_columns":   cfg.ModernFeatures.EnableGeneratedColumns,
             "enable_advanced_rls":        cfg.ModernFeatures.EnableAdvancedRLS,
         },
-    })
+    }); err != nil {
+        log.Printf("Failed to encode config response: %v", err)
+    }
 }
 
 func (s *Server) handleGetValidationMetrics(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
     // Return validation metrics (placeholder - would be populated from actual validation runs)
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "total_validations":   0,
         "successful":          0,
         "failed":              0,
         "avg_duration_ms":     0,
         "schema_differences":  0,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode validation metrics response: %v", err)
+    }
 }
 
 func (s *Server) handleHealthDependencies(w http.ResponseWriter, r *http.Request) {
@@ -710,10 +727,12 @@ func (s *Server) handleHealthDependencies(w http.ResponseWriter, r *http.Request
         },
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "status":       "healthy",
         "dependencies": dependencies,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode health dependencies response: %v", err)
+    }
 }
 
 // Phase 2: Mutation Handlers
@@ -748,11 +767,13 @@ func (s *Server) handleEnableRule(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "success": true,
         "rule":    ruleName,
         "enabled": req.Enabled,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode rule enable response: %v", err)
+    }
 }
 
 func (s *Server) handleBulkUpdateRules(w http.ResponseWriter, r *http.Request) {
@@ -792,12 +813,14 @@ func (s *Server) handleBulkUpdateRules(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "successful": successful,
         "failed":     failed,
         "errors":     errors,
         "total":      len(req.Rules),
-    })
+    }); err != nil {
+        log.Printf("Failed to encode bulk rules response: %v", err)
+    }
 }
 
 func (s *Server) handleDetectPlugin(w http.ResponseWriter, r *http.Request) {
@@ -826,11 +849,13 @@ func (s *Server) handleDetectPlugin(w http.ResponseWriter, r *http.Request) {
 
     // For detection, we need actual migration objects - simplified here
     detected := false
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "plugin":   pluginName,
         "detected": detected,
         "active":   registry.IsActive(pluginName),
-    })
+    }); err != nil {
+        log.Printf("Failed to encode plugin detection response: %v", err)
+    }
 }
 
 func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
@@ -860,7 +885,9 @@ func (s *Server) handleCreateOperation(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(operation)
+    if err := json.NewEncoder(w).Encode(operation); err != nil {
+        log.Printf("Failed to encode operation response: %v", err)
+    }
 }
 
 func (s *Server) handleGetOperation(w http.ResponseWriter, r *http.Request) {
@@ -875,7 +902,9 @@ func (s *Server) handleGetOperation(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(operation)
+    if err := json.NewEncoder(w).Encode(operation); err != nil {
+        log.Printf("Failed to encode get operation response: %v", err)
+    }
 }
 
 // Phase 3: Advanced Operation Handlers
@@ -902,12 +931,14 @@ func (s *Server) handleSquashPreview(w http.ResponseWriter, r *http.Request) {
     cfg.SafetyLevel = req.SafetyLevel
 
     // Simplified preview response
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "preview": true,
         "safety_level": req.SafetyLevel,
         "estimated_reduction": "35%",
         "warnings": []string{"This is a preview only"},
-    })
+    }); err != nil {
+        log.Printf("Failed to encode squash preview response: %v", err)
+    }
 }
 
 func (s *Server) handleMigrationsDiff(w http.ResponseWriter, r *http.Request) {
@@ -924,24 +955,28 @@ func (s *Server) handleMigrationsDiff(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "original_count":  len(req.Original),
         "optimized_count": len(req.Optimized),
         "reduction":       fmt.Sprintf("%.1f%%", float64(len(req.Original)-len(req.Optimized))/float64(len(req.Original))*100),
         "changes":         []string{},
-    })
+    }); err != nil {
+        log.Printf("Failed to encode migrations diff response: %v", err)
+    }
 }
 
 func (s *Server) handleTrackerMetrics(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "total_operations":    0,
         "active_operations":   0,
         "completed_today":     0,
         "failed_today":        0,
         "avg_duration_ms":     0,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode tracker metrics response: %v", err)
+    }
 }
 
 // Phase 4: AI & Streaming Handlers
@@ -960,7 +995,7 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "analysis": map[string]interface{}{
             "provider": req.Provider,
             "insights": []string{
@@ -969,13 +1004,15 @@ func (s *Server) handleAIAnalyze(w http.ResponseWriter, r *http.Request) {
             },
             "risk_level": "low",
         },
-    })
+    }); err != nil {
+        log.Printf("Failed to encode AI analyze response: %v", err)
+    }
 }
 
 func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "providers": map[string]interface{}{
             "anthropic": map[string]interface{}{
                 "available": os.Getenv("ANTHROPIC_API_KEY") != "",
@@ -986,7 +1023,9 @@ func (s *Server) handleAIStatus(w http.ResponseWriter, r *http.Request) {
                 "model": "gpt-4",
             },
         },
-    })
+    }); err != nil {
+        log.Printf("Failed to encode AI status response: %v", err)
+    }
 }
 
 func (s *Server) handlePluginCompatibility(w http.ResponseWriter, r *http.Request) {
@@ -1003,9 +1042,11 @@ func (s *Server) handlePluginCompatibility(w http.ResponseWriter, r *http.Reques
         }
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "compatibility_matrix": compatibility,
-    })
+    }); err != nil {
+        log.Printf("Failed to encode plugin compatibility response: %v", err)
+    }
 }
 
 func (s *Server) handleOperationProgress(w http.ResponseWriter, r *http.Request) {
@@ -1092,11 +1133,13 @@ func (s *Server) handleCancelOperation(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "success":      true,
         "operation_id": operationID,
         "status":       "cancelled",
-    })
+    }); err != nil {
+        log.Printf("Failed to encode cancel operation response: %v", err)
+    }
 }
 
 func getEnv(key, defaultValue string) string {
