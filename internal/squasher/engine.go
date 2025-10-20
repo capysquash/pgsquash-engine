@@ -302,7 +302,6 @@ func NewSquasherRuleEngine(safetyLevel SafetyLevel) *consolidation.Consolidation
 	// Add safety-appropriate rules based on level
 	switch safetyLevel {
 	case Conservative:
-		// Bug fix rules (critical for all levels)
 		engine.AddRule(&consolidation.DOBlockEnumTypeRule{})
 		engine.AddRule(&consolidation.EnumDeduplicationRule{})
 		engine.AddRule(&consolidation.PublicationDeduplicationRule{})
@@ -314,7 +313,6 @@ func NewSquasherRuleEngine(safetyLevel SafetyLevel) *consolidation.Consolidation
 		engine.AddRule(&consolidation.ConditionalSchemaRule{})
 		engine.AddRule(&consolidation.AdvancedColumnLifecycleRule{})
 	case Standard:
-		// Bug fix rules (critical for all levels)
 		engine.AddRule(&consolidation.DOBlockEnumTypeRule{})
 		engine.AddRule(&consolidation.EnumDeduplicationRule{})
 		engine.AddRule(&consolidation.PublicationDeduplicationRule{})
@@ -329,7 +327,6 @@ func NewSquasherRuleEngine(safetyLevel SafetyLevel) *consolidation.Consolidation
 		engine.AddRule(&consolidation.RLSConsolidationRule{})
 		engine.AddRule(&consolidation.TransactionBoundaryRule{})
 	case Aggressive:
-		// Bug fix rules (critical for all levels)
 		engine.AddRule(&consolidation.DOBlockEnumTypeRule{})
 		engine.AddRule(&consolidation.EnumDeduplicationRule{})
 		engine.AddRule(&consolidation.PublicationDeduplicationRule{})
@@ -345,7 +342,6 @@ func NewSquasherRuleEngine(safetyLevel SafetyLevel) *consolidation.Consolidation
 		engine.AddRule(&consolidation.TransactionBoundaryRule{})
 		engine.AddRule(&consolidation.FunctionDeduplicationRule{})
 	case Paranoid:
-		// Bug fix rules (critical for all levels)
 		engine.AddRule(&consolidation.DOBlockEnumTypeRule{})
 		engine.AddRule(&consolidation.EnumDeduplicationRule{})
 		engine.AddRule(&consolidation.PublicationDeduplicationRule{})
@@ -915,32 +911,32 @@ func (e *Engine) analyzeDependenciesAndRisks(ctx context.Context) error {
 							for i, op := range cycle.Operations {
 								if i < 5 { // Show first 5 operations
 									// Use loop index for sequential numbering (0, 1, 2...) instead of op.Sequence
-								e.warnings = append(e.warnings, fmt.Sprintf("    %d. %s on %s", i, op.Operation, op.Object))
+									e.warnings = append(e.warnings, fmt.Sprintf("    %d. %s on %s", i, op.Operation, op.Object))
 								}
 							}
 							if len(cycle.Operations) > 5 {
 								e.warnings = append(e.warnings, fmt.Sprintf("    ... and %d more operations", len(cycle.Operations)-5))
 							}
 
-						// Add resolution suggestions AFTER operations for better readability
-						suggestions := e.generateCycleResolutionSuggestions(cycle)
-						if len(suggestions) > 0 {
-							e.warnings = append(e.warnings, "  Suggested resolutions:")
-							for _, suggestion := range suggestions {
-								e.warnings = append(e.warnings, fmt.Sprintf("    → %s", suggestion))
+							// Add resolution suggestions AFTER operations for better readability
+							suggestions := e.generateCycleResolutionSuggestions(cycle)
+							if len(suggestions) > 0 {
+								e.warnings = append(e.warnings, "  Suggested resolutions:")
+								for _, suggestion := range suggestions {
+									e.warnings = append(e.warnings, fmt.Sprintf("    → %s", suggestion))
+								}
+							}
+						} else if len(cycle.Operations) > 10 {
+							// For large cycles, show summary only
+							e.warnings = append(e.warnings, fmt.Sprintf("  Operations involved: %d (too many to display)", len(cycle.Operations)))
+							suggestions := e.generateCycleResolutionSuggestions(cycle)
+							if len(suggestions) > 0 {
+								e.warnings = append(e.warnings, "  Suggested resolutions:")
+								for _, suggestion := range suggestions {
+									e.warnings = append(e.warnings, fmt.Sprintf("    → %s", suggestion))
+								}
 							}
 						}
-					} else if len(cycle.Operations) > 10 {
-						// For large cycles, show summary only
-						e.warnings = append(e.warnings, fmt.Sprintf("  Operations involved: %d (too many to display)", len(cycle.Operations)))
-						suggestions := e.generateCycleResolutionSuggestions(cycle)
-						if len(suggestions) > 0 {
-							e.warnings = append(e.warnings, "  Suggested resolutions:")
-							for _, suggestion := range suggestions {
-								e.warnings = append(e.warnings, fmt.Sprintf("    → %s", suggestion))
-							}
-						}
-					}
 
 						// Add optimization safety notice
 						if cycle.CanOptimize {
@@ -1124,14 +1120,14 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 
 	// Group by category for organized output - CRITICAL: Order must ensure dependencies are created first
 	categories := []types.Category{
-		types.CategoryExtensions,     // 1. Extensions first (CREATE EXTENSION)
-		types.CategoryFoundation,     // 2. Tables, views, sequences (CREATE TABLE)
-		types.CategoryConstraints,    // 3. Constraints (ALTER TABLE ADD CONSTRAINT)
-		types.CategoryFunctions,      // 4. Functions (CREATE FUNCTION)
-		types.CategoryTriggers,       // 5. Triggers (CREATE TRIGGER)
-		types.CategoryIndexes,        // 6. Indexes (CREATE INDEX)
-		types.CategorySecurity,       // 7. RLS Policies (CREATE POLICY)
-		types.CategoryData,           // 8. Data operations LAST (INSERT/UPDATE)
+		types.CategoryExtensions,  // 1. Extensions first (CREATE EXTENSION)
+		types.CategoryFoundation,  // 2. Tables, views, sequences (CREATE TABLE)
+		types.CategoryConstraints, // 3. Constraints (ALTER TABLE ADD CONSTRAINT)
+		types.CategoryFunctions,   // 4. Functions (CREATE FUNCTION)
+		types.CategoryTriggers,    // 5. Triggers (CREATE TRIGGER)
+		types.CategoryIndexes,     // 6. Indexes (CREATE INDEX)
+		types.CategorySecurity,    // 7. RLS Policies (CREATE POLICY)
+		types.CategoryData,        // 8. Data operations LAST (INSERT/UPDATE)
 	}
 
 	// Initialize unified dependency resolver
@@ -1771,7 +1767,7 @@ func fixExtensionOrder(sql string) string {
 
 	// Find all CREATE EXTENSION statements and their positions
 	lines := strings.Split(sql, "\n")
-	extensionMap := make(map[string]string) // extension name -> full line
+	extensionMap := make(map[string]string)  // extension name -> full line
 	extensionPositions := make(map[int]bool) // line numbers to remove
 
 	for i, line := range lines {
@@ -1786,7 +1782,7 @@ func fixExtensionOrder(sql string) string {
 			for j := len(parts) - 1; j >= 0; j-- {
 				part := strings.Trim(parts[j], `";`)
 				if part != "" && strings.ToUpper(part) != "EXISTS" && strings.ToUpper(part) != "NOT" &&
-				   strings.ToUpper(part) != "IF" && strings.ToUpper(part) != "EXTENSION" && strings.ToUpper(part) != "CREATE" {
+					strings.ToUpper(part) != "IF" && strings.ToUpper(part) != "EXTENSION" && strings.ToUpper(part) != "CREATE" {
 					extName = part
 					break
 				}
@@ -1861,8 +1857,9 @@ func fixExtensionOrder(sql string) string {
 }
 
 // sortExtensionsByDependency sorts extension CREATE statements by dependency order
-//nolint:unused // Reserved for future extension dependency sorting
 // Some extensions depend on others and must be created in the right order
+//
+//nolint:unused // Reserved for future extension dependency sorting
 func sortExtensionsByDependency(extensionLines []string) []string {
 	// Simple hardcoded order for known dependencies
 	// cube must come before earthdistance
@@ -1882,7 +1879,7 @@ func sortExtensionsByDependency(extensionLines []string) []string {
 	for _, line := range extensionLines {
 		parts := strings.Fields(line)
 		if len(parts) >= 5 {
-			extName := parts[4] // Position after "CREATE EXTENSION IF NOT EXISTS"
+			extName := parts[4]                   // Position after "CREATE EXTENSION IF NOT EXISTS"
 			extName = strings.Trim(extName, `";`) // Remove quotes and semicolon
 			extLineMap[extName] = line
 		}
@@ -1995,8 +1992,8 @@ func fixMalformedFunctions(sql string) string {
 
 					// Stop if we hit a previous statement end
 					if strings.HasPrefix(prevLineUpper, "$$;") || prevLine == "$$;" ||
-					   strings.HasPrefix(prevLineUpper, "CREATE ") ||
-					   strings.HasPrefix(prevLineUpper, "ALTER ") {
+						strings.HasPrefix(prevLineUpper, "CREATE ") ||
+						strings.HasPrefix(prevLineUpper, "ALTER ") {
 						break
 					}
 				}
@@ -2012,7 +2009,7 @@ func fixMalformedFunctions(sql string) string {
 					}
 					// Stop if we hit another statement
 					if strings.HasPrefix(nextLineUpper, "CREATE ") ||
-					   strings.HasPrefix(nextLineUpper, "ALTER ") {
+						strings.HasPrefix(nextLineUpper, "ALTER ") {
 						break
 					}
 				}
@@ -2216,17 +2213,19 @@ func (e *Engine) initializePlugins(ctx context.Context, migrations map[int]strin
 	return nil
 }
 
-//nolint:unused // Plugin preservation feature not yet integrated
 // shouldPreserveStatement checks if plugins want to preserve a statement
 // Preserved statements are marked as critical and skipped during consolidation
+//
+//nolint:unused // Plugin preservation feature not yet integrated
 func (e *Engine) shouldPreserveStatement(stmt *types.Statement) bool {
 	registry := plugins.GlobalRegistry()
 	return registry.ShouldPreserve(stmt)
 }
 
-//nolint:unused // Plugin consolidation rules not yet integrated
 // getPluginConsolidationRules retrieves consolidation rules from all active plugins
 // These rules are merged with standard consolidation rules
+//
+//nolint:unused // Plugin consolidation rules not yet integrated
 func (e *Engine) getPluginConsolidationRules() []plugins.ConsolidationRule {
 	registry := plugins.GlobalRegistry()
 	return registry.GetConsolidationRules()
@@ -2289,10 +2288,12 @@ func (e *Engine) fixEliminatedEnumReferences(sql string) string {
 // or where SQL transformation added volatility markers incorrectly.
 //
 // Problem Pattern (Invalid PostgreSQL syntax):
-//   CREATE FUNCTION foo() RETURNS text VOLATILE AS $$ ... $$ LANGUAGE plpgsql;
+//
+//	CREATE FUNCTION foo() RETURNS text VOLATILE AS $$ ... $$ LANGUAGE plpgsql;
 //
 // Fixed Pattern (Valid):
-//   CREATE FUNCTION foo() RETURNS text LANGUAGE plpgsql VOLATILE AS $$ ... $$;
+//
+//	CREATE FUNCTION foo() RETURNS text LANGUAGE plpgsql VOLATILE AS $$ ... $$;
 //
 // Root Cause:
 // When volatility markers (VOLATILE/STABLE/IMMUTABLE) are added before AS $$,
@@ -2337,12 +2338,12 @@ func fixFunctionLanguageConflicts(sql string) string {
 		}
 
 		// Extract parts (Groups changed because we now capture "$$ LANGUAGE" as combined Group 6)
-		signature := transformedSQL[match[0]+offset : match[1]+offset]              // Group 1: CREATE FUNCTION...RETURNS type
-		existingModifiers := transformedSQL[match[2]+offset : match[3]+offset]      // Group 2: Existing modifiers
-		volatility := transformedSQL[match[4]+offset : match[5]+offset]             // Group 3: VOLATILE/STABLE/IMMUTABLE
-		asKeyword := transformedSQL[match[6]+offset : match[7]+offset]              // Group 4: AS $$
-		body := transformedSQL[match[8]+offset : match[9]+offset]                   // Group 5: function body
-		closingLangClause := transformedSQL[match[10]+offset : match[11]+offset]    // Group 6: $$ LANGUAGE plpgsql (combined!)
+		signature := transformedSQL[match[0]+offset : match[1]+offset]           // Group 1: CREATE FUNCTION...RETURNS type
+		existingModifiers := transformedSQL[match[2]+offset : match[3]+offset]   // Group 2: Existing modifiers
+		volatility := transformedSQL[match[4]+offset : match[5]+offset]          // Group 3: VOLATILE/STABLE/IMMUTABLE
+		asKeyword := transformedSQL[match[6]+offset : match[7]+offset]           // Group 4: AS $$
+		body := transformedSQL[match[8]+offset : match[9]+offset]                // Group 5: function body
+		closingLangClause := transformedSQL[match[10]+offset : match[11]+offset] // Group 6: $$ LANGUAGE plpgsql (combined!)
 		securityAfterLang := ""
 		if match[12] >= 0 && match[13] >= 0 {
 			securityAfterLang = transformedSQL[match[12]+offset : match[13]+offset] // Group 7: SECURITY DEFINER

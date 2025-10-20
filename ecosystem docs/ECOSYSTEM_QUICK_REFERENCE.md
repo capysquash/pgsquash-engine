@@ -255,7 +255,7 @@ User → Clerk Sign In → JWT → Platform → Verification → Authorized
 ## 📂 Repository Structure
 
 ```
-pg-squash/                          # Monorepo root
+pgsquash/                          # Monorepo root
 ├── pgsquash-engine/                # Go CLI & API
 │   ├── cmd/pgsquash/               # CLI binary
 │   ├── cmd/api-server/             # HTTP API

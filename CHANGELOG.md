@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Coming Soon
+
+- PostgreSQL 18 support
+- Smart split feature (split squashed migrations into multiple organized files)
+- Additional auth plugins (Auth0, NextAuth, Firebase Auth)
+- Platform plugins (Neon, Railway, PlanetScale)
+- Comprehensive test suite (target: >60% coverage)
+- Performance benchmarks and CI enforcement
+
+---
+
+## [0.8.5-beta] - 2025-10-20
+
 ### Added - Interactive TUI (2025-10-18)
 
 #### Terminal User Interface
@@ -183,7 +196,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Created subdirectory structure for tracking domain split: `lifecycle/`, `consolidation/`, `analysis/`, `recovery/`
 
-## [0.8.5-beta] - 2025-10-06
+### Detailed Commit History (v0.8.2-beta → v0.8.5-beta)
+
+**23 commits from October 7-20, 2025** by Dominikos Pritis:
+
+1. `9d88e83` - Update to v0.8.2-beta and improve cross-compilation (Oct 7, 08:32)
+2. `ca8138c` - Use error-ignoring defer for resource cleanup (Oct 7, 08:41)
+3. `f06e537` - Improve resource cleanup and error messages (Oct 7, 12:25)
+4. `1a3f7d6` - Refactor conditional logic to use switch statements (Oct 7, 12:34)
+5. `af2716f` - Refactor event operation checks to switch statements (Oct 7, 12:46)
+6. `62dfe6c` - Disable multi-platform build job in CI workflow (Oct 7, 13:04)
+7. `d61ac94` - Add architecture documentation and update references (Oct 7, 13:14)
+8. `32e45ee` - Improve SQL consolidation and extension detection logic (Oct 7, 14:48)
+9. `5ff8cfa` - Add validation config and Supabase auth.users stub (Oct 7, 16:19)
+10. `5ccaf77` - Fix critical production-blocking bugs in AI workflows and consolidation (Oct 17, 12:18)
+11. `87e7980` - Add CAPYSQUASH/GitHub integration and refactor docs (Oct 20, 09:24)
+12. `4c7c3be` - Update .gitignore (Oct 20, 09:24)
+13. `805a72f` - Merge branch 'refactor' (Oct 20, 09:25)
+14. `93d26b8` - Update main.go (Oct 20, 09:26)
+15. `a9e8afa` - Update .gitignore and add symlink for api-server (Oct 20, 09:29)
+16. `b8d2de8` - Enable GitHub App multi-repo support and Azure OpenAI default (Oct 20, 10:24)
+17. `b5fa2e7` - Improve documentation formatting and tables (Oct 20, 10:34)
+18. `f370fbd` - Improve error handling and code robustness across modules (Oct 20, 11:26)
+19. `c5d5473` - Update schema_comparator.go (Oct 20, 11:36)
+20. `8099442` - Update circular_fk_handler.go (Oct 20, 11:38)
+21. `40bd9cb` - Update release workflow and Docker image references (Oct 20, 11:42)
+22. `b72c5c2` - Improve error handling and logging in API server (Oct 20, 11:55)
+23. `dfe2b49` - Switch to docker-container driver in CI workflow (Oct 20, 11:58)
+
+**Key themes**: Error handling consolidation, GitHub integration, Azure OpenAI support, documentation improvements, CI/CD refinements
+
+---
+
+## [0.8.2-beta] - 2025-10-07
 
 ### Added
 
@@ -340,4 +385,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CLI: `pgsquash squash --split category` or `--split hybrid`
 
 [unreleased]: https://github.com/CAPYSQUASH/pgsquash-engine/compare/v0.8.5-beta...HEAD
-[0.8.5-beta]: https://github.com/CAPYSQUASH/pgsquash-engine/releases/tag/v0.8.5-beta
+[0.8.5-beta]: https://github.com/CAPYSQUASH/pgsquash-engine/compare/v0.8.2-beta...v0.8.5-beta
+[0.8.2-beta]: https://github.com/CAPYSQUASH/pgsquash-engine/releases/tag/v0.8.2-beta

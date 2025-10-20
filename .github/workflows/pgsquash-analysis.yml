@@ -1,4 +1,4 @@
-name: PG-Squash Analysis
+name: pgsquash Analysis
 
 on:
   pull_request:
