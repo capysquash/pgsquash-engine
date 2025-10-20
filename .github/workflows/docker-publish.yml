@@ -182,6 +182,9 @@ jobs:
           driver-opts: |
             network=host
           platforms: ${{ needs.metadata.outputs.Platforms }}
+          # Use docker-container driver with manual image to avoid Docker Hub issues
+          driver: docker-container
+          install: true
 
       - name: Log in to ${{ matrix.registry_name }}
         if: needs.metadata.outputs.push == 'true'
@@ -271,6 +274,8 @@ jobs:
         with:
           driver-opts: |
             network=host
+          driver: docker-container
+          install: true
 
       - name: Build test image
         uses: docker/build-push-action@v6
@@ -329,6 +334,8 @@ jobs:
         with:
           driver-opts: |
             network=host
+          driver: docker-container
+          install: true
 
       - name: Build compose images
         run: |
