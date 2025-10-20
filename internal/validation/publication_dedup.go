@@ -16,6 +16,8 @@ import (
 // - Quoted identifiers ("my_pub", "my_table")
 // - Multiline statements
 // - Case-insensitive matching
+//
+//nolint:unused // Used by preprocessMigrationSQL (also unused but kept for future use)
 func deduplicatePublicationStatements(sql string) string {
 	lines := strings.Split(sql, "\n")
 	publicationsSeen := make(map[string]bool) // key: "publication_name::schema.table_name"
@@ -63,6 +65,8 @@ func deduplicatePublicationStatements(sql string) string {
 
 // preprocessMigrationSQL preprocesses migration SQL to fix common issues
 // before applying to the database during validation
+//
+//nolint:unused // Reserved for future SQL preprocessing feature
 func preprocessMigrationSQL(sql string, enablePublicationDedup bool) string {
 	result := sql
 

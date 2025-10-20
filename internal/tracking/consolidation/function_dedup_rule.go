@@ -126,7 +126,7 @@ func (r *FunctionDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, e
 			utils.GetDefaultLogger().WithPrefix("FUNCTION-DEDUP").Info("  All versions have same completeness (max score: %d), using latest", maxScore)
 			// DEBUG: Print SQL to understand what's missing
 			if !hasLanguage {
-				utils.GetDefaultLogger().WithPrefix("FUNCTION-DEDUP").Info("  DEBUG: latestCreate SQL preview: %s", strings.Replace(latestCreate.SQL[:min(200, len(latestCreate.SQL))], "\n", " ", -1))
+				utils.GetDefaultLogger().WithPrefix("FUNCTION-DEDUP").Info("  DEBUG: latestCreate SQL preview: %s", strings.ReplaceAll(latestCreate.SQL[:min(200, len(latestCreate.SQL))], "\n", " "))
 			}
 		}
 	}

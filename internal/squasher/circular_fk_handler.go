@@ -327,9 +327,8 @@ func (h *CircularFKHandler) RemoveCircularFKsFromTables(
 
 			if isCircular {
 				circularFKs = append(circularFKs, fk)
-			} else {
-				keepFKs = append(keepFKs, fk)
 			}
+			// Non-circular FKs remain in the original CREATE TABLE
 		}
 
 		// Generate modified CREATE TABLE statement (without circular FKs)

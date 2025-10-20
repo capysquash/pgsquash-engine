@@ -124,20 +124,22 @@ func (c *ConfigView) handleEditMode(msg tea.KeyMsg) (viewtypes.View, tea.Cmd) {
         return c, nil
 
     case "left", "h":
-        if field.Type == FieldTypeSelect {
+        switch field.Type {
+        case FieldTypeSelect:
             c.cyclePrevious(c.editingIdx)
             c.dirty = true
-        } else if field.Type == FieldTypeToggle {
+        case FieldTypeToggle:
             c.toggleField(c.editingIdx)
             c.dirty = true
         }
         return c, nil
 
     case "right", "l", "enter", " ":
-        if field.Type == FieldTypeSelect {
+        switch field.Type {
+        case FieldTypeSelect:
             c.cycleNext(c.editingIdx)
             c.dirty = true
-        } else if field.Type == FieldTypeToggle {
+        case FieldTypeToggle:
             c.toggleField(c.editingIdx)
             c.dirty = true
         }

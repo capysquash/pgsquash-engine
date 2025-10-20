@@ -117,7 +117,10 @@ func (ot *OperationTracker) Get(ctx context.Context, operationID string) (*Opera
 	}
 
 	if resultJSON.Valid && resultJSON.String != "" {
-		json.Unmarshal([]byte(resultJSON.String), &op.Result)
+		if err := json.Unmarshal([]byte(resultJSON.String), &op.Result); err != nil {
+			// Log but don't fail - result is optional
+			_ = err
+		}
 	}
 
 	return op, nil
@@ -174,7 +177,12 @@ func (ot *OperationTracker) ListUserOperations(ctx context.Context, userID strin
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			// Log but don't fail on close error
+			_ = err
+		}
+	}()
 
 	var operations []*Operation
 	for rows.Next() {

@@ -484,10 +484,8 @@ func NewCriticalError(code ErrorCode, message string, category Category) *Struct
 // New creates a new StructuredError with additional context (convenience function)
 func New(code ErrorCode, category Category, message string, additional map[string]interface{}) *StructuredError {
     err := NewError(code, message, SeverityError, category)
-    if additional != nil {
-        for k, v := range additional {
-            err.WithAdditional(k, v)
-        }
+    for k, v := range additional {
+        err = err.WithAdditional(k, v)
     }
     return err
 }

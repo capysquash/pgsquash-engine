@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
+	errdefs "github.com/docker/docker/errdefs"
 	"github.com/docker/go-connections/nat"
 	"github.com/fatih/color"
 	_ "github.com/lib/pq"
@@ -1594,7 +1595,7 @@ func (sv *SchemaValidator) isPortAvailable(port int) bool {
 // If not, it pulls the image with a progress indicator
 func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, imageName string) error {
 	// Check if image exists locally
-	_, _, err := sv.dockerClient.ImageInspectWithRaw(ctx, imageName)
+	_, err := sv.dockerClient.ImageInspect(ctx, imageName)
 	if err == nil {
 		// Image exists, no need to pull
 		sv.logInfo("✓ Docker image '%s' found locally", imageName)
@@ -1602,7 +1603,7 @@ func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, image
 	}
 
 	// Image not found locally, pull it
-	if client.IsErrNotFound(err) {
+	if errdefs.IsNotFound(err) {
 		sv.logInfo("📦 Docker image '%s' not found locally", imageName)
 		if sv.config.Verbose {
 			color.Cyan("   Pulling image... (this may take a few minutes on first run)\n")
@@ -1664,7 +1665,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 	// Check if container exists before trying to stop/remove
 	_, err := sv.dockerClient.ContainerInspect(ctx, containerID)
 	if err != nil {
-		if client.IsErrNotFound(err) {
+		if errdefs.IsNotFound(err) {
 			// Container already removed, nothing to do
 			return
 		}
@@ -1675,7 +1676,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 	// Try to stop container
 	stopTimeout := 10
 	if err := sv.dockerClient.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
-		if !client.IsErrNotFound(err) {
+		if !errdefs.IsNotFound(err) {
 			sv.logInfo("⚠️  Failed to stop container %s: %v", containerID, err)
 		}
 		// Continue to removal attempt
@@ -1686,7 +1687,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 		Force:         true,
 		RemoveVolumes: true,
 	}); err != nil {
-		if !client.IsErrNotFound(err) {
+		if !errdefs.IsNotFound(err) {
 			sv.logInfo("⚠️  Failed to remove container %s: %v", containerID, err)
 		}
 	} else {
@@ -2154,6 +2155,7 @@ func (sv *SchemaValidator) applyMigrationsToContainer(ctx context.Context, conta
 	return sv.applyMigrationsToDatabase(dsn, migrationPath)
 }
 
+//nolint:unused // Reserved for future schema comparison feature
 func (sv *SchemaValidator) dumpContainerSchema(ctx context.Context, containerInfo *ContainerInfo) (string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "exec", containerInfo.ID,
 		"pg_dump", "-U", "postgres", "-d", "postgres", "--schema-only")
@@ -2171,6 +2173,7 @@ func (sv *SchemaValidator) dumpContainerSchema(ctx context.Context, containerInf
 	return string(output), nil
 }
 
+//nolint:unused // Reserved for future schema comparison feature
 func (sv *SchemaValidator) compareFileWithSchema(filePath, schema string) (string, error) {
 	// Read file content
 	content, err := os.ReadFile(filePath)

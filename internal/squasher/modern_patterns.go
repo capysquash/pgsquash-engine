@@ -461,6 +461,8 @@ func createConsolidatedStoragePolicy(policies []*types.Statement, bucketName str
 // New consolidation functions for modern PostgreSQL patterns
 
 // consolidateAuth0Policies consolidates Auth0 authentication policies
+//
+//nolint:unused // Reserved for future Auth0 pattern consolidation
 func consolidateAuth0Policies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
@@ -645,6 +647,7 @@ func consolidateEventSourcing(statements []*types.Statement) []*types.Statement 
 
 // Helper functions for new consolidation patterns
 
+//nolint:unused // Reserved for future Auth0 pattern consolidation
 func createConsolidatedAuth0Policy(policies []*types.Statement, groupKey string) *types.Statement {
 	// Use the auth pattern from the first policy (will be vendor-specific string from plugin)
 	authPattern := types.AuthPatternJWT

@@ -512,9 +512,9 @@ func (bg *BackupGenerator) generateAlterTableRollback(stmt types.Statement) stri
 		matches := patterns.DropConstraintPattern.FindStringSubmatch(sql)
 		if len(matches) > 1 {
 			constraintName := matches[1]
-			return fmt.Sprintf("-- Rollback DROP CONSTRAINT %s: requires constraint definition from backup", constraintName)
+			return "-- Rollback DROP CONSTRAINT " + constraintName + ": requires constraint definition from backup"
 		}
-		return fmt.Sprintf("-- Rollback DROP CONSTRAINT: requires constraint definition from backup")
+		return "-- Rollback DROP CONSTRAINT: requires constraint definition from backup"
 	}
 
 	// Handle ALTER COLUMN TYPE
@@ -522,9 +522,9 @@ func (bg *BackupGenerator) generateAlterTableRollback(stmt types.Statement) stri
 		matches := patterns.AlterColumnTypePattern.FindStringSubmatch(sql)
 		if len(matches) > 2 {
 			columnName := matches[1]
-			return fmt.Sprintf("-- Rollback ALTER COLUMN TYPE for %s.%s: requires previous type from backup", tableName, columnName)
+			return "-- Rollback ALTER COLUMN TYPE for " + tableName + "." + columnName + ": requires previous type from backup"
 		}
-		return fmt.Sprintf("-- Rollback ALTER COLUMN TYPE: requires previous column type from backup")
+		return "-- Rollback ALTER COLUMN TYPE: requires previous column type from backup"
 	}
 
 	// Handle ALTER COLUMN SET/DROP NOT NULL

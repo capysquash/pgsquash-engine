@@ -318,12 +318,8 @@ func Execute() error {
 			// Quiet mode: suppress all non-error output
 			verbose = false
 			showProgress = false
-		} else if !verbose {
-			// Suppress all debug logging from the standard log package
-			// Set output to io.Discard to effectively silence debug logs
-		} else {
-			// Verbose mode: show all logs
 		}
+		// If verbose mode is enabled, all logs are shown (default behavior)
 
 		if noEmoji || quietMode {
 			color.NoColor = true
@@ -999,7 +995,12 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 				errors.CategoryValidation,
 			).WithFile(tmpOutput).WithInnerError(err).WithSuggestion("Check temp directory permissions")
 		}
-		defer os.RemoveAll(tmpOutput)
+		defer func() {
+			if err := os.RemoveAll(tmpOutput); err != nil {
+				// Log but don't fail on cleanup error
+				_ = err
+			}
+		}()
 
 		// Load and process migrations
 		migrations, err := filepath.Glob(filepath.Join(path, "*.sql"))
@@ -1020,7 +1021,12 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 		valConfig.Verbose = false        // Quiet during fixing loop
 
 		validator := validation.NewSchemaValidator(valConfig, nil, nil)
-		defer validator.Close()
+		defer func() {
+			if err := validator.Close(); err != nil {
+				// Log but don't fail on cleanup error
+				_ = err
+			}
+		}()
 
 		// Validate migrations
 		result, err := validator.ValidateWithDocker(ctx, path, path)
@@ -2185,9 +2191,10 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 		if cycleWarns := byCategory[utils.CategoryCycle]; len(cycleWarns) > 0 {
 			fmt.Print("\n" + color.YellowString("🔍 DDL Cycle Detection:") + "\n")
 			for _, w := range cycleWarns {
-				if w.Severity == utils.SeverityCritical {
+				switch w.Severity {
+				case utils.SeverityCritical:
 					fmt.Printf("  " + color.RedString("⚠ %s") + "\n", w.Message)
-				} else if w.Severity == utils.SeverityHigh {
+				case utils.SeverityHigh:
 					fmt.Printf("  " + color.YellowString("⚠ %s") + "\n", w.Message)
 				} else {
 					fmt.Printf("  ℹ %s\n", w.Message)

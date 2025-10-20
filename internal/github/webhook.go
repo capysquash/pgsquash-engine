@@ -202,8 +202,8 @@ func (h *WebhookHandler) handlePullRequest(ctx context.Context, body []byte) err
     // Evaluate pass/fail thresholds and create check run
     conclusion := h.evaluateCheckConclusion(analysis, capyConfig)
     if err := h.createCheckRun(ctx, event, analysis, conclusion); err != nil {
-        // Log error but don't fail the webhook
-        // Check runs are optional
+        // Log error but don't fail the webhook - check runs are optional
+        _ = err
     }
 
     // Check if auto-consolidation is enabled

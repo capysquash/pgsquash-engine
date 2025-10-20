@@ -260,17 +260,19 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "status":    "healthy",
         "timestamp": time.Now().Unix(),
         "service":   "pgsquash-api",
         "version":   "1.0.0",
-    })
+    }); err != nil {
+        s.logger.Info("Failed to encode health response: %v", err)
+    }
 }
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{
+    if err := json.NewEncoder(w).Encode(map[string]interface{}{
         "service":        "pgsquash-api",
         "version":        "1.0.0",
         "capabilities":   []string{"analyze", "squash"},
@@ -278,7 +280,9 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
         "max_file_size":  "100MB",
         "max_files":      1000,
         "supported_formats": []string{"sql"},
-    })
+    }); err != nil {
+        s.logger.Info("Failed to encode info response: %v", err)
+    }
 }
 
 func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
@@ -403,7 +407,9 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(response)
+    if err := json.NewEncoder(w).Encode(response); err != nil {
+        s.logger.Info("Failed to encode analysis response: %v", err)
+    }
 }
 
 func (s *Server) handleSquash(w http.ResponseWriter, r *http.Request) {
@@ -441,7 +447,11 @@ func (s *Server) handleSquash(w http.ResponseWriter, r *http.Request) {
             s.sendError(w, fmt.Sprintf("Failed to open file %s", fileHeader.Filename), "FILE_OPEN_ERROR", http.StatusBadRequest)
             return
         }
-        defer file.Close()
+        defer func() {
+            if err := file.Close(); err != nil {
+                s.logger.Info("Failed to close file: %v", err)
+            }
+        }()
 
         content, err := io.ReadAll(file)
         if err != nil {
@@ -477,7 +487,9 @@ func (s *Server) handleSquash(w http.ResponseWriter, r *http.Request) {
     // Return the consolidated SQL
     w.Header().Set("Content-Type", "application/sql")
     w.Header().Set("Content-Disposition", "attachment; filename=\"consolidated_migration.sql\"")
-    w.Write([]byte(consolidatedSQL))
+    if _, err := w.Write([]byte(consolidatedSQL)); err != nil {
+        s.logger.Info("Failed to write response: %v", err)
+    }
 }
 
 func (s *Server) sendError(w http.ResponseWriter, message, code string, status int) {
@@ -1039,7 +1051,9 @@ func (s *Server) handleOperationProgress(w http.ResponseWriter, r *http.Request)
         case <-ticker.C:
             operation, err := s.operationTracker.Get(r.Context(), operationID)
             if err != nil {
-                fmt.Fprintf(w, "event: error\ndata: {\"error\":\"Operation not found\"}\n\n")
+                if _, err := fmt.Fprintf(w, "event: error\ndata: {\"error\":\"Operation not found\"}\n\n"); err != nil {
+                    s.logger.Info("Failed to write SSE error: %v", err)
+                }
                 flusher.Flush()
                 return
             }
@@ -1048,7 +1062,9 @@ func (s *Server) handleOperationProgress(w http.ResponseWriter, r *http.Request)
                 "progress": operation.Progress,
                 "status":   operation.Status,
             })
-            fmt.Fprintf(w, "data: %s\n\n", data)
+            if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+                s.logger.Info("Failed to write SSE data: %v", err)
+            }
             flusher.Flush()
 
             // Stop streaming when operation reaches terminal state

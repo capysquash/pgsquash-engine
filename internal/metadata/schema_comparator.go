@@ -183,9 +183,8 @@ func (sc *SchemaComparator) validateStatementDependencies(ctx context.Context, s
 			schema = parts[0]
 			object = parts[1]
 		} else {
-			object = parts[0]
 			// Use default search path
-			schema, object = dbMeta.SearchObject(dbMeta.GetSearchPath(), object)
+			schema, object = dbMeta.SearchObject(dbMeta.GetSearchPath(), parts[0])
 		}
 
 		if schema == "" {
@@ -243,6 +242,8 @@ func (sc *SchemaComparator) compareTableSchemas(ctx context.Context, migration *
 // compareColumns compares column definitions
 // Note: Full column comparison requires detailed parsing of CREATE TABLE statements
 // For now, this is a placeholder for future enhancement
+//
+//nolint:unused // Reserved for future feature implementation
 func (sc *SchemaComparator) compareColumns(schema, tableName string, dbTable *TableMetadata, result *ComparisonResult) {
 	// This would require full CREATE TABLE parsing to extract column definitions
 	// For paranoid mode, we rely on dependency validation and extension checks
@@ -255,6 +256,8 @@ func (sc *SchemaComparator) compareColumns(schema, tableName string, dbTable *Ta
 // compareConstraints compares constraint definitions
 // Note: Full constraint comparison requires detailed parsing of ALTER TABLE statements
 // For now, this is a placeholder for future enhancement
+//
+//nolint:unused // Reserved for future feature implementation
 func (sc *SchemaComparator) compareConstraints(schema, tableName string, dbTable *TableMetadata, result *ComparisonResult) {
 	// This would require full ALTER TABLE parsing to extract constraint definitions
 	// For paranoid mode, we rely on dependency validation and extension checks
@@ -375,6 +378,7 @@ func extractAllObjects(migration *types.Migration) map[string]types.ObjectType {
 	return objects
 }
 
+//nolint:unused // Reserved for future feature implementation
 func areTypesCompatible(migType, dbType string) bool {
 	// Normalize types for comparison
 	migType = normalizeType(migType)
@@ -415,6 +419,7 @@ func areTypesCompatible(migType, dbType string) bool {
 	return false
 }
 
+//nolint:unused // Reserved for future feature implementation
 func normalizeType(typ string) string {
 	typ = strings.ToLower(strings.TrimSpace(typ))
 	// Remove precision/length for comparison
@@ -424,6 +429,7 @@ func normalizeType(typ string) string {
 	return typ
 }
 
+//nolint:unused // Reserved for future feature implementation
 func isBreakingTypeChange(migType, dbType string) bool {
 	// Some type changes are breaking (incompatible casts)
 	breakingChanges := map[string][]string{

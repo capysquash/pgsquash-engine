@@ -487,7 +487,7 @@ func (av *AIValidator) printSummary(result *AIValidationResult) {
 			if issue.Severity == "critical" {
 				severityColor = color.New(color.FgRed)
 			}
-			severityColor.Printf("  %d. [%s] %s\n", i+1, strings.ToUpper(issue.Severity), issue.Description)
+			_, _ = severityColor.Printf("  %d. [%s] %s\n", i+1, strings.ToUpper(issue.Severity), issue.Description)
 			if issue.Suggestion != "" {
 				color.Cyan("     💡 Suggestion: %s\n", issue.Suggestion)
 			}
@@ -515,7 +515,7 @@ func (av *AIValidator) printSummary(result *AIValidationResult) {
 		if result.QualityReport.OverallScore < 4 {
 			scoreColor = color.New(color.FgRed)
 		}
-		scoreColor.Printf("  Overall Score: %d/10\n", result.QualityReport.OverallScore)
+		_, _ = scoreColor.Printf("  Overall Score: %d/10\n", result.QualityReport.OverallScore)
 		color.Cyan("  Maintainability: %s\n", result.QualityReport.Maintainability)
 		color.Cyan("  Complexity: %d/10\n", result.QualityReport.Complexity)
 		if result.QualityReport.Summary != "" {

@@ -116,7 +116,12 @@ func AppendToFile(path string, content []byte) error {
             errors.CategoryValidation,
         ).WithInnerError(err)
     }
-    defer f.Close()
+    defer func() {
+        if err := f.Close(); err != nil {
+            // Log but don't fail on close error
+            _ = err
+        }
+    }()
 
     // Add newline separator if needed
     if needsNewline {

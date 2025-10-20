@@ -247,7 +247,7 @@ func (wm *WarningManager) categorizeRawWarning(message string) *errors.Structure
     }
 
     if objectName != "" {
-        warning.WithObject(objectName, "") // Set object name
+        warning = warning.WithObject(objectName, "") // Set object name
     }
 
     return warning

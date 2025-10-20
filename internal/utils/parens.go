@@ -75,13 +75,13 @@ func ExtractAllBalancedParentheses(text string) []string {
                     results = append(results, text[start:i+1])
                     currentPos = i + 1
                     found = true
-                    break
+                    goto nextParen
                 }
             }
+        }
 
-            if found {
-                break
-            }
+    nextParen:
+        if !found {
         }
 
         if !found {
