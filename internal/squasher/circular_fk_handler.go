@@ -313,7 +313,6 @@ func (h *CircularFKHandler) RemoveCircularFKsFromTables(
 
 		// Separate circular FKs from non-circular FKs
 		var circularFKs []*ForeignKeyConstraint
-		var keepFKs []*ForeignKeyConstraint
 
 		for _, fk := range constraints {
 			isCircular := false
