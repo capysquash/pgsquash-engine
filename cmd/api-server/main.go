@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 
 	// Internal packages
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
@@ -55,20 +56,28 @@ type File struct {
 }
 
 type AnalysisResponse struct {
-	OriginalCount        int            `json:"original_count"`
-	OptimizedCount       int            `json:"optimized_count"`
-	EstimatedTimeSavings string         `json:"estimated_time_savings"`
+	OriginalCount        int            `json:"original_count"`         // Number of SQL statements before optimization
+	OptimizedCount       int            `json:"optimized_count"`        // Number of SQL statements after consolidation
+	EstimatedTimeSavings string         `json:"estimated_time_savings"` // Human-readable description of statement reduction
 	SafetyLevel          string         `json:"safety_level"`
 	Operations           map[string]int `json:"operations"`
 	Warnings             []string       `json:"warnings"`
 	Recommendations      []string       `json:"recommendations"`
 	ProcessingTimeMs     int64          `json:"processing_time_ms"`
-	FileSizeReduction    string         `json:"file_size_reduction"`
+	FileSizeReduction    string         `json:"file_size_reduction"` // Percentage reduction in statement count
 }
 
 type ErrorResponse struct {
 	Error string `json:"error"`
 	Code  string `json:"code"`
+}
+
+// calculateReductionPercentage calculates the percentage reduction between original and optimized counts
+func calculateReductionPercentage(original, optimized int) float64 {
+	if original == 0 {
+		return 0.0
+	}
+	return (1.0 - float64(optimized)/float64(original)) * 100
 }
 
 func NewServer() *Server {
@@ -389,26 +398,48 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate metrics
-	originalLines := 0
-	for _, content := range migrationMap {
-		originalLines += strings.Count(content, "\n")
+	// Calculate metrics - get original statement count from tracker
+	tracker := engine.GetTracker()
+	stats := tracker.GetStatistics()
+	originalStatements := stats.TotalStatements
+
+	// Count optimized statements properly using SQL parser
+	optimizedStatements := 0
+	if strings.TrimSpace(consolidatedSQL) != "" {
+		stmts, err := pg_query.SplitWithScanner(consolidatedSQL, true)
+		if err != nil {
+			// Fallback to line counting if parsing fails
+			optimizedStatements = strings.Count(consolidatedSQL, "\n")
+			s.logger.Info("Warning: Failed to parse consolidated SQL for statement counting: %v", err)
+		} else {
+			// Count only non-empty statements
+			for _, stmt := range stmts {
+				if strings.TrimSpace(stmt) != "" {
+					optimizedStatements++
+				}
+			}
+		}
 	}
-	optimizedLines := strings.Count(consolidatedSQL, "\n")
+
+	// Calculate reduction
+	reduction := originalStatements - optimizedStatements
+	if reduction < 0 {
+		reduction = 0 // Safety check
+	}
 
 	// Build response
 	processingTime := time.Since(startTime).Milliseconds()
 
 	response := AnalysisResponse{
-		OriginalCount:        len(migrationMap),
-		OptimizedCount:       optimizedLines,
-		EstimatedTimeSavings: fmt.Sprintf("~%d lines reduced", originalLines-optimizedLines),
+		OriginalCount:        originalStatements,
+		OptimizedCount:       optimizedStatements,
+		EstimatedTimeSavings: fmt.Sprintf("~%d statements reduced", reduction),
 		SafetyLevel:          safetyLevel,
 		Operations:           map[string]int{"analyzed": len(migrationMap)},
 		Warnings:             warnings,
 		Recommendations:      []string{"Review consolidation results before applying"},
 		ProcessingTimeMs:     processingTime,
-		FileSizeReduction:    fmt.Sprintf("%.1f%%", (1.0-float64(optimizedLines)/float64(originalLines))*100),
+		FileSizeReduction:    fmt.Sprintf("%.1f%%", calculateReductionPercentage(originalStatements, optimizedStatements)),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

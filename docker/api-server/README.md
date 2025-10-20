@@ -91,16 +91,18 @@ Response:
 
 ```json
 {
-  "original_count": 2,
+  "original_count": 156,
   "optimized_count": 45,
-  "estimated_time_savings": "~20 lines reduced",
+  "estimated_time_savings": "~111 statements reduced",
   "safety_level": "standard",
   "warnings": [],
   "recommendations": ["Review consolidation results before applying"],
   "processing_time_ms": 123,
-  "file_size_reduction": "30.5%"
+  "file_size_reduction": "71.2%"
 }
 ```
+
+**Note**: `original_count` and `optimized_count` represent the number of SQL statements (not files or lines). The reduction percentage shows how many statements were consolidated.
 
 ### Squash Migrations
 
