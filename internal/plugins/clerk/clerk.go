@@ -1,15 +1,15 @@
-// Package clerk provides Clerk authentication integration for pg-squash.
+// Package clerk provides Clerk authentication integration for pgsquash.
 // It handles JWT v2 organization claims, user ID extraction, and RLS policy patterns.
 package clerk
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // ClerkPlugin implements Clerk authentication service integration
@@ -17,6 +17,12 @@ type ClerkPlugin struct {
     *plugins.BasePlugin
     config ClerkConfig
 }
+
+// Clerk-specific auth pattern identifiers
+const (
+    AuthPatternClerkJWTV2 = "clerk_jwt_v2"    // Clerk JWT v2 with organization claims
+    AuthPatternClerk      = "clerk_auth"       // Clerk generic patterns
+)
 
 // ClerkConfig holds Clerk-specific configuration
 type ClerkConfig struct {
@@ -131,13 +137,26 @@ func (cp *ClerkPlugin) Initialize(ctx context.Context, config interface{}) error
     return nil
 }
 
+// DetectAuthPattern analyzes a statement for Clerk authentication patterns
+func (cp *ClerkPlugin) DetectAuthPattern(stmt *types.Statement) string {
+    // Pattern 1: JWT v2 organization patterns (most specific)
+    if cp.hasJWTV2OrgPattern(stmt.SQL) {
+        return AuthPatternClerkJWTV2
+    }
+
+    // Pattern 2: Clerk helper functions
+    if cp.isClerkAuthFunction(stmt.SQL) {
+        return AuthPatternClerk
+    }
+
+    return ""
+}
+
 // EnrichStatement adds Clerk-specific metadata to parsed statements
 func (cp *ClerkPlugin) EnrichStatement(ctx context.Context, stmt *types.Statement) error {
-    // Detect JWT v2 organization patterns
-    if strings.Contains(stmt.SQL, "'o'->>'id'") {
-        stmt.AuthPattern = types.AuthPatternClerkJWTV2
-    } else if cp.isClerkAuthFunction(stmt.SQL) {
-        stmt.AuthPattern = types.AuthPatternClerk
+    // Detect and set auth pattern using plugin-specific detection
+    if authPattern := cp.DetectAuthPattern(stmt); authPattern != "" {
+        stmt.AuthPattern = types.AuthPatternType(authPattern)
     }
 
     // Mark RLS policies using Clerk auth as critical
@@ -235,7 +254,7 @@ func (cp *ClerkPlugin) ShouldPreserve(stmt *types.Statement) bool {
     }
 
     // Preserve RLS policies using Clerk JWT v2 patterns
-    if stmt.ObjectType == types.TypePolicy && stmt.AuthPattern == types.AuthPatternClerkJWTV2 {
+    if stmt.ObjectType == types.TypePolicy && stmt.AuthPattern == types.AuthPatternType(AuthPatternClerkJWTV2) {
         return true
     }
 
@@ -248,11 +267,15 @@ func (cp *ClerkPlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
     var schemaExists bool
     err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'auth')").Scan(&schemaExists)
     if err != nil {
-        return fmt.Errorf("failed to check auth schema: %w", err)
+        return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "failed to check auth schema",
+            map[string]interface{}{"operation": "check_schema"})
     }
 
     if !schemaExists {
-        return fmt.Errorf("auth schema does not exist (required for Clerk integration)")
+        return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "auth schema does not exist (required for Clerk integration)",
+            map[string]interface{}{"schema": "auth"})
     }
 
     // Verify auth.jwt() function exists
@@ -261,11 +284,15 @@ func (cp *ClerkPlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
         "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'auth' AND p.proname = 'jwt')").
         Scan(&functionExists)
     if err != nil {
-        return fmt.Errorf("failed to check auth.jwt() function: %w", err)
+        return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "failed to check auth.jwt() function",
+            map[string]interface{}{"function": "auth.jwt"})
     }
 
     if !functionExists {
-        return fmt.Errorf("auth.jwt() function does not exist (required for Clerk integration)")
+        return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "auth.jwt() function does not exist (required for Clerk integration)",
+            map[string]interface{}{"function": "auth.jwt"})
     }
 
     return nil

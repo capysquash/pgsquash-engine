@@ -1,10 +1,8 @@
 package supabase
 
 import (
-	"strings"
-
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // GetConsolidationRules returns Supabase-specific consolidation rules
@@ -14,7 +12,7 @@ func (sp *SupabasePlugin) GetConsolidationRules() []plugins.ConsolidationRule {
             Name:        "supabase_rls_policies",
             Priority:    85,
             ObjectType:  types.TypePolicy,
-            AuthPattern: types.AuthPatternRLS,
+            AuthPattern: types.AuthPatternType(AuthPatternSupabaseRLS),
             Conflicts:   []string{"general_policy_consolidation"},
             CanMerge:    sp.canMergeRLSPolicies,
             Merge:       sp.mergeRLSPolicies,
@@ -23,7 +21,7 @@ func (sp *SupabasePlugin) GetConsolidationRules() []plugins.ConsolidationRule {
             Name:        "supabase_storage_policies",
             Priority:    80,
             ObjectType:  types.TypePolicy,
-            AuthPattern: types.AuthPatternStorage,
+            AuthPattern: types.AuthPatternType(AuthPatternSupabaseStorage),
             Conflicts:   []string{"general_policy_consolidation"},
             CanMerge:    sp.canMergeStoragePolicies,
             Merge:       sp.mergeStoragePolicies,
@@ -32,7 +30,7 @@ func (sp *SupabasePlugin) GetConsolidationRules() []plugins.ConsolidationRule {
             Name:        "supabase_auth_functions",
             Priority:    90,
             ObjectType:  types.TypeFunction,
-            AuthPattern: types.AuthPatternSupabase,
+            AuthPattern: types.AuthPatternType(AuthPatternSupabase),
             Conflicts:   []string{"function_deduplication"},
             CanMerge:    sp.canMergeAuthFunctions,
             Merge:       sp.mergeAuthFunctions,
@@ -43,47 +41,23 @@ func (sp *SupabasePlugin) GetConsolidationRules() []plugins.ConsolidationRule {
 // canMergeRLSPolicies checks if Supabase RLS policies can be merged
 // Conservative approach: Only merge if policies are for same table and operation
 func (sp *SupabasePlugin) canMergeRLSPolicies(statements []*types.Statement) bool {
+    consolidator := plugins.NewPolicyConsolidator("supabase")
+
     if len(statements) < 2 {
         return false
     }
 
-    // All statements must be policies with same target table
-    firstPolicy := statements[0]
-    for _, stmt := range statements[1:] {
-        if stmt.ObjectType != types.TypePolicy {
-            return false
-        }
-        // Only merge policies on the same table
-        if !sp.sameTargetTable(firstPolicy.SQL, stmt.SQL) {
-            return false
-        }
+    // All statements must be policies
+    if !consolidator.AllSameObjectType(statements, types.TypePolicy) {
+        return false
+    }
+
+    // Only merge policies on the same table
+    if !consolidator.AllSameTargetTable(statements) {
+        return false
     }
 
     return false // Be conservative - don't merge RLS policies automatically
-}
-
-// sameTargetTable checks if two policy statements target the same table
-func (sp *SupabasePlugin) sameTargetTable(sql1, sql2 string) bool {
-    table1 := sp.extractPolicyTargetTable(sql1)
-    table2 := sp.extractPolicyTargetTable(sql2)
-    return table1 != "" && table1 == table2
-}
-
-// extractPolicyTargetTable extracts the target table from a CREATE POLICY statement
-func (sp *SupabasePlugin) extractPolicyTargetTable(sql string) string {
-    // Pattern: CREATE POLICY ... ON [schema.]table
-    onPattern := strings.Index(strings.ToUpper(sql), " ON ")
-    if onPattern == -1 {
-        return ""
-    }
-
-    afterOn := sql[onPattern+4:]
-    parts := strings.Fields(afterOn)
-    if len(parts) > 0 {
-        return strings.TrimSpace(parts[0])
-    }
-
-    return ""
 }
 
 // mergeRLSPolicies merges Supabase RLS policies (conservative - keep all)

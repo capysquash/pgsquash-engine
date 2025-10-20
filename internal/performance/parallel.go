@@ -10,7 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // ParallelDependencyResolver handles concurrent dependency resolution with topological sorting
@@ -30,7 +31,7 @@ type ParallelDependencyResolver struct {
 
 // ObjectID represents a unique object identifier
 type ObjectID struct {
-	Type   parser.ObjectType `json:"type"`
+	Type   types.ObjectType `json:"type"`
 	Schema string            `json:"schema"`
 	Name   string            `json:"name"`
 }
@@ -185,7 +186,7 @@ func (dg *DependencyGraph) TopologicalSort() ([][]ObjectID, error) {
 				cycleNodes = append(cycleNodes, id)
 			}
 		}
-		return nil, fmt.Errorf("dependency cycle detected involving: %v", cycleNodes)
+		return nil, errors.New(errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("dependency cycle detected involving: %v", cycleNodes), nil)
 	}
 
 	dg.levels = levels
@@ -398,7 +399,7 @@ func (pdr *ParallelDependencyResolver) Resolve() error {
 	cycles := pdr.graph.DetectCycles()
 	if len(cycles) > 0 {
 		pdr.stats.CyclesDetected = len(cycles)
-		return fmt.Errorf("dependency cycles detected: %v", cycles)
+		return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("dependency cycles detected: %v", cycles), nil)
 	}
 
 	// Perform topological sort
@@ -479,7 +480,7 @@ func (pdr *ParallelDependencyResolver) worker(id int) {
 			if node != nil {
 				err := pdr.processor.Process(pdr.ctx, node)
 				if err != nil {
-					pdr.errors <- fmt.Errorf("worker %d failed to process %s: %w", id, nodeID, err)
+					pdr.errors <- errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("worker %d failed to process %s", id, nodeID), nil)
 					continue
 				}
 			}

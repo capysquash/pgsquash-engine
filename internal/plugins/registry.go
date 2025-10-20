@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"sort"
 	"sync"
 
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // Registry manages the lifecycle of all plugins
@@ -38,13 +39,16 @@ func (r *Registry) Register(plugin Plugin) error {
 
     name := plugin.Name()
     if _, exists := r.pluginsByName[name]; exists {
-        return fmt.Errorf("plugin %s already registered", name)
+        return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "plugin already registered",
+            map[string]interface{}{"plugin": name})
     }
 
     r.plugins = append(r.plugins, plugin)
     r.pluginsByName[name] = plugin
 
-    log.Printf("[plugins] Registered plugin: %s (priority: %d)", name, plugin.Priority())
+    // Plugin registration logging removed to reduce noise
+    // Plugins log when discovered/initialized during actual operations
     return nil
 }
 
@@ -58,14 +62,22 @@ func (r *Registry) DiscoverAndInitialize(ctx context.Context, migrations []*type
         return nil // Already initialized
     }
 
-    log.Printf("[plugins] Discovering plugins from %d migrations...", len(migrations))
+    utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Discovering plugins from %d migrations...", len(migrations))
 
     // Phase 1: Detection - find which plugins are applicable
     var detectedPlugins []Plugin
     for _, plugin := range r.plugins {
+        pluginName := plugin.Name()
+
+        // Check if plugin is explicitly disabled in config
+        if !r.isPluginEnabled(pluginName, config) {
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Skipping %s (disabled in config)", pluginName)
+            continue
+        }
+
         if plugin.Detect(migrations) {
             detectedPlugins = append(detectedPlugins, plugin)
-            log.Printf("[plugins] Detected: %s", plugin.Name())
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Detected: %s", pluginName)
         }
     }
 
@@ -76,11 +88,11 @@ func (r *Registry) DiscoverAndInitialize(ctx context.Context, migrations []*type
     for _, plugin := range resolvedPlugins {
         pluginConfig := r.getPluginConfig(plugin.Name(), config)
         if err := plugin.Initialize(ctx, pluginConfig); err != nil {
-            log.Printf("[plugins] Warning: Failed to initialize %s: %v", plugin.Name(), err)
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Warning: Failed to initialize %s: %v", plugin.Name(), err)
             continue // Skip failed plugins but continue with others
         }
         r.activePlugins = append(r.activePlugins, plugin)
-        log.Printf("[plugins] Initialized: %s", plugin.Name())
+        utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Initialized: %s", plugin.Name())
     }
 
     // Sort by priority (highest first)
@@ -89,7 +101,7 @@ func (r *Registry) DiscoverAndInitialize(ctx context.Context, migrations []*type
     })
 
     r.initialized = true
-    log.Printf("[plugins] Activated %d plugins: %v", len(r.activePlugins), r.getPluginNames(r.activePlugins))
+    utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Activated %d plugins: %v", len(r.activePlugins), r.getPluginNames(r.activePlugins))
 
     return nil
 }
@@ -108,14 +120,14 @@ func (r *Registry) resolveConflicts(plugins []Plugin) []Plugin {
 
     for _, plugin := range sorted {
         if excluded[plugin.Name()] {
-            log.Printf("[plugins] Excluding %s due to conflict", plugin.Name())
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Excluding %s due to conflict", plugin.Name())
             continue
         }
 
         // Mark conflicting plugins as excluded
         for _, conflictName := range plugin.GetConflictingPlugins() {
             if !excluded[conflictName] {
-                log.Printf("[plugins] %s conflicts with %s (lower priority)", conflictName, plugin.Name())
+                utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] %s conflicts with %s (lower priority)", conflictName, plugin.Name())
                 excluded[conflictName] = true
             }
         }
@@ -124,6 +136,38 @@ func (r *Registry) resolveConflicts(plugins []Plugin) []Plugin {
     }
 
     return resolved
+}
+
+// isPluginEnabled checks if a plugin is enabled in the configuration
+// Checks third_party_integrations.{plugin}_integration.enabled
+// Returns true if config is nil or if enabled field is not found (default: enabled)
+func (r *Registry) isPluginEnabled(pluginName string, config map[string]interface{}) bool {
+    if config == nil {
+        return true // Default: all plugins enabled if no config
+    }
+
+    // Check third_party_integrations.{plugin}_integration.enabled
+    if integrations, ok := config["third_party_integrations"].(map[string]interface{}); ok {
+        integrationKey := pluginName + "_integration"
+        if integration, ok := integrations[integrationKey].(map[string]interface{}); ok {
+            if enabled, ok := integration["enabled"].(bool); ok {
+                return enabled
+            }
+        }
+    }
+
+    // Also check plugins.disabled_plugins list
+    if pluginSettings, ok := config["plugins"].(map[string]interface{}); ok {
+        if disabledList, ok := pluginSettings["disabled_plugins"].([]interface{}); ok {
+            for _, disabled := range disabledList {
+                if disabledName, ok := disabled.(string); ok && disabledName == pluginName {
+                    return false
+                }
+            }
+        }
+    }
+
+    return true // Default: enabled if not explicitly disabled
 }
 
 // getPluginConfig extracts plugin-specific config from global config map
@@ -188,7 +232,7 @@ func (r *Registry) IsActive(name string) bool {
 func (r *Registry) EnrichStatement(ctx context.Context, stmt *types.Statement) error {
     for _, plugin := range r.ActivePlugins() {
         if err := plugin.EnrichStatement(ctx, stmt); err != nil {
-            log.Printf("[plugins] Warning: %s.EnrichStatement failed: %v", plugin.Name(), err)
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] Warning: %s.EnrichStatement failed: %v", plugin.Name(), err)
             // Continue with other plugins even if one fails
         }
     }
@@ -204,7 +248,9 @@ func (r *Registry) TransformSQL(ctx context.Context, sql string) (string, error)
     for _, plugin := range r.ActivePlugins() {
         transformed, err = plugin.TransformSQL(ctx, transformed)
         if err != nil {
-            return sql, fmt.Errorf("plugin %s transformation failed: %w", plugin.Name(), err)
+            return sql, errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+                "plugin transformation failed",
+                map[string]interface{}{"plugin": plugin.Name()})
         }
     }
 
@@ -269,7 +315,7 @@ func (r *Registry) GetConsolidationRules() []ConsolidationRule {
 func (r *Registry) ShouldPreserve(stmt *types.Statement) bool {
     for _, plugin := range r.ActivePlugins() {
         if plugin.ShouldPreserve(stmt) {
-            log.Printf("[plugins] %s marked statement for preservation: %s", plugin.Name(), stmt.ObjectName)
+            utils.GetDefaultLogger().WithPrefix("PLUGINS").Info("[plugins] %s marked statement for preservation: %s", plugin.Name(), stmt.ObjectName)
             return true
         }
     }
@@ -280,7 +326,9 @@ func (r *Registry) ShouldPreserve(stmt *types.Statement) bool {
 func (r *Registry) ValidateSchema(ctx context.Context, db *sql.DB) error {
     for _, plugin := range r.ActivePlugins() {
         if err := plugin.ValidateSchema(ctx, db); err != nil {
-            return fmt.Errorf("plugin %s validation failed: %w", plugin.Name(), err)
+            return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+                "plugin validation failed",
+                map[string]interface{}{"plugin": plugin.Name()})
         }
     }
     return nil

@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
+	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
 // SQLBuilder provides fluent interface for PostgreSQL SQL generation
@@ -150,6 +151,17 @@ func (b *SQLBuilder) Quote(identifier string) *SQLBuilder {
 	return b
 }
 
+// QuoteQualifiedName writes a schema-qualified name, omitting schema if empty or "public"
+// This ensures generated SQL is clean and doesn't unnecessarily qualify names in public schema
+func (b *SQLBuilder) QuoteQualifiedName(schema, name string) *SQLBuilder {
+	// Omit schema if it's empty or "public" (PostgreSQL default)
+	if schema == "" || schema == "public" {
+		return b.Quote(name)
+	}
+	// Include schema qualification for non-public schemas
+	return b.Quote(schema).P(".").Quote(name)
+}
+
 // Comment adds a SQL comment
 func (b *SQLBuilder) Comment(comment string) *SQLBuilder {
 	if b.options.PreserveComments && comment != "" {
@@ -190,7 +202,7 @@ func (b *SQLBuilder) CreateTable(table *TableDefinition) *SQLBuilder {
 		b.P("IF NOT EXISTS")
 	}
 
-	b.S().Quote(table.Schema).P(".").Quote(table.Name)
+	b.S().QuoteQualifiedName(table.Schema, table.Name)
 
 	b.Wrap(func(inner *SQLBuilder) {
 		for i, col := range table.Columns {
@@ -279,7 +291,7 @@ func (b *SQLBuilder) CreateIndex(index *IndexDefinition) *SQLBuilder {
 // CreateFunction builds a CREATE FUNCTION statement
 func (b *SQLBuilder) CreateFunction(function *FunctionDefinition) *SQLBuilder {
 	b.P("CREATE OR REPLACE FUNCTION")
-	b.S().Quote(function.Schema).P(".").Quote(function.Name)
+	b.S().QuoteQualifiedName(function.Schema, function.Name)
 
 	// Parameters
 	b.Wrap(func(inner *SQLBuilder) {
@@ -573,17 +585,15 @@ func IsPostgreSQLKeyword(word string) bool {
 // Conversion from parser types
 
 // FromStatement converts a parser statement to SQL using the builder
-func (b *SQLBuilder) FromStatement(stmt parser.Statement) *SQLBuilder {
+func (b *SQLBuilder) FromStatement(stmt types.Statement) *SQLBuilder {
 	switch stmt.Operation {
-	case parser.OpCreate:
-		return b.fromCreateStatement(stmt)
-	case parser.OpAlter:
-		return b.fromAlterStatement(stmt)
-	case parser.OpDrop:
+	case types.OpCreate, types.OpAlter:
+		return b.fromASTStatement(stmt)
+	case types.OpDrop:
 		return b.fromDropStatement(stmt)
-	case parser.OpGrant:
+	case types.OpGrant:
 		return b.fromGrantStatement(stmt)
-	case parser.OpRevoke:
+	case types.OpRevoke:
 		return b.fromRevokeStatement(stmt)
 	default:
 		// Fallback to original SQL
@@ -592,20 +602,27 @@ func (b *SQLBuilder) FromStatement(stmt parser.Statement) *SQLBuilder {
 	}
 }
 
-func (b *SQLBuilder) fromCreateStatement(stmt parser.Statement) *SQLBuilder {
-	// This would be enhanced to properly convert from AST
-	// For now, preserve original SQL
+// fromASTStatement converts AST-based statements (CREATE, ALTER) back to SQL
+// using pg_query.Deparse, falling back to original SQL if conversion fails
+func (b *SQLBuilder) fromASTStatement(stmt types.Statement) *SQLBuilder {
+	// Use pg_query.Deparse to convert AST back to SQL
+	if stmt.ParseTree != nil {
+		// The ParseTree is stored as interface{}, try to cast to *pg_query.ParseResult
+		switch parseTree := stmt.ParseTree.(type) {
+		case *pg_query.ParseResult:
+			if deparsed, err := pg_query.Deparse(parseTree); err == nil {
+				b.Statement(deparsed)
+				return b
+			}
+		}
+	}
+
+	// Fallback to original SQL if AST conversion fails
 	b.Statement(stmt.SQL)
 	return b
 }
 
-func (b *SQLBuilder) fromAlterStatement(stmt parser.Statement) *SQLBuilder {
-	// This would be enhanced to properly convert from AST
-	b.Statement(stmt.SQL)
-	return b
-}
-
-func (b *SQLBuilder) fromDropStatement(stmt parser.Statement) *SQLBuilder {
+func (b *SQLBuilder) fromDropStatement(stmt types.Statement) *SQLBuilder {
 	b.P("DROP").S().P(string(stmt.ObjectType))
 	if stmt.IfNotExists {
 		b.P("IF EXISTS")
@@ -614,14 +631,14 @@ func (b *SQLBuilder) fromDropStatement(stmt parser.Statement) *SQLBuilder {
 	return b
 }
 
-func (b *SQLBuilder) fromGrantStatement(stmt parser.Statement) *SQLBuilder {
+func (b *SQLBuilder) fromGrantStatement(stmt types.Statement) *SQLBuilder {
 	b.P("GRANT").S().P(strings.Join(stmt.Privileges, ", "))
 	b.S().P("ON").S().P(string(stmt.ObjectType)).S().Quote(stmt.ObjectName)
 	b.S().P("TO").S().P(strings.Join(stmt.Grantees, ", "))
 	return b
 }
 
-func (b *SQLBuilder) fromRevokeStatement(stmt parser.Statement) *SQLBuilder {
+func (b *SQLBuilder) fromRevokeStatement(stmt types.Statement) *SQLBuilder {
 	b.P("REVOKE").S().P(strings.Join(stmt.Privileges, ", "))
 	b.S().P("ON").S().P(string(stmt.ObjectType)).S().Quote(stmt.ObjectName)
 	b.S().P("FROM").S().P(strings.Join(stmt.Grantees, ", "))

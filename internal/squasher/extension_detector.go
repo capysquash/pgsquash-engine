@@ -1,11 +1,13 @@
 package squasher
 
 import (
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
-	"log"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/auth"
 )
 
 // ExtensionDetector analyzes migrations to detect required PostgreSQL extensions
@@ -147,12 +149,12 @@ func (ed *ExtensionDetector) AnalyzeMigrations(migrations map[int]string) *Exten
 
 	extensionSet := make(map[string]bool)
 
-	log.Printf("Analyzing %d migrations for extension requirements", len(migrations))
+	utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Analyzing %d migrations for extension requirements", len(migrations))
 
 	// Scan all migrations for extension references
 	for migrationID, content := range migrations {
 		extensions := ed.detectExtensionsInContent(content)
-		log.Printf("Migration %d: found extensions %v", migrationID, extensions)
+		utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Migration %d: found extensions %v", migrationID, extensions)
 
 		for _, ext := range extensions {
 			extensionSet[ext] = true
@@ -176,7 +178,7 @@ func (ed *ExtensionDetector) AnalyzeMigrations(migrations map[int]string) *Exten
 			}
 		} else {
 			analysis.MissingExtensions = append(analysis.MissingExtensions, ext)
-			log.Printf("Warning: Unknown extension detected: %s", ext)
+			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Warning: Unknown extension detected: %s", ext)
 		}
 	}
 
@@ -195,8 +197,13 @@ func (ed *ExtensionDetector) AnalyzeMigrations(migrations map[int]string) *Exten
 	analysis.InstallationScript = ed.generateInstallationScript(analysis.ExtensionDetails)
 	analysis.ValidationScript = ed.generateValidationScript(analysis.ExtensionDetails)
 
-	log.Printf("Extension analysis complete: %d extensions, auth service: %s, base image: %s",
-		len(analysis.RequiredExtensions), analysis.AuthService, analysis.RecommendedDockerBase)
+	// Log analysis results with proper grammar
+	authServiceMsg := string(analysis.AuthService)
+	if analysis.AuthService == AuthServiceNone {
+		authServiceMsg = "no authentication"
+	}
+	utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Extension analysis complete: %d extensions, auth service: %s, base image: %s",
+		len(analysis.RequiredExtensions), authServiceMsg, analysis.RecommendedDockerBase)
 
 	return analysis
 }
@@ -474,21 +481,21 @@ func (ed *ExtensionDetector) detectAuthService(migrations map[int]string) AuthSe
 
 		// Clerk patterns - most specific first
 		if strings.Contains(content, "auth.jwt()") && strings.Contains(content, "'o'->>'id'") {
-			log.Printf("Detected Clerk authentication service")
+			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Detected Clerk authentication service")
 			return AuthServiceClerk
 		}
 
 		// Supabase patterns - look for actual function calls, not just mentions
 		if strings.Contains(content, "auth.users") ||
 		   (strings.Contains(content, "auth.uid()") && !strings.Contains(content, "No legacy auth.uid()")) {
-			log.Printf("Detected Supabase authentication service")
+			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Detected Supabase authentication service")
 			return AuthServiceSupabase
 		}
 
 		// Auth0 patterns - more specific
 		if strings.Contains(contentLower, "auth0") ||
 		   (strings.Contains(content, "\"sub\"") && strings.Contains(content, "\"iss\"")) {
-			log.Printf("Detected Auth0 authentication service")
+			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Detected Auth0 authentication service")
 			return AuthServiceAuth0
 		}
 	}
@@ -497,187 +504,29 @@ func (ed *ExtensionDetector) detectAuthService(migrations map[int]string) AuthSe
 }
 
 // generateAuthCompatibilitySQL creates SQL to mock authentication service functions
+// Delegates to shared auth compatibility generator to eliminate duplication
 func (ed *ExtensionDetector) generateAuthCompatibilitySQL(authService AuthServiceType) string {
+	// Map extension detector auth service types to shared auth service types
+	var generator *auth.CompatibilityGenerator
+
 	switch authService {
 	case AuthServiceClerk:
-		return `-- Clerk Authentication Compatibility Layer
-CREATE SCHEMA IF NOT EXISTS auth;
-
--- Create common Supabase/Clerk roles (used in RLS policies)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN;
-  END IF;
-END
-$$;
-
--- Mock Clerk auth.jwt() function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
-BEGIN
-  -- Return a mock Clerk JWT payload for validation purposes
-  RETURN jsonb_build_object(
-    'o', jsonb_build_object(
-      'id', 'org_mock_organization_id',
-      'role', 'admin',
-      'name', 'Mock Organization',
-      'slug', 'mock-org'
-    ),
-    'sub', 'user_mock_user_id',
-    'email', 'mock@clerk.dev',
-    'email_verified', true,
-    'iat', extract(epoch from now()),
-    'exp', extract(epoch from now()) + 3600,
-    'iss', 'https://mock-clerk.clerk.accounts.dev'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Mock current_user_id helper (common in Clerk setups)
-CREATE OR REPLACE FUNCTION current_user_id() RETURNS text AS $$
-BEGIN
-  RETURN (auth.jwt() ->> 'sub')::text;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Mock organization helpers
-CREATE OR REPLACE FUNCTION current_organization_id() RETURNS text AS $$
-BEGIN
-  RETURN (auth.jwt()->'o'->>'id')::text;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION current_organization_role() RETURNS text AS $$
-BEGIN
-  RETURN (auth.jwt()->'o'->>'role')::text;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION current_organization_name() RETURNS text AS $$
-BEGIN
-  RETURN (auth.jwt()->'o'->>'name')::text;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create Supabase Realtime publication if it doesn't exist (often used with Clerk)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-END
-$$;`
-
+		generator = auth.NewCompatibilityGenerator(auth.ServiceClerk)
+		return generator.Generate()
 	case AuthServiceSupabase:
-		return `-- Supabase Authentication Compatibility Layer
-CREATE SCHEMA IF NOT EXISTS auth;
-
--- Create auth.users table stub for foreign key references
--- This allows migrations to reference auth.users(id) without errors
-CREATE TABLE IF NOT EXISTS auth.users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT,
-    encrypted_password TEXT,
-    email_confirmed_at TIMESTAMPTZ,
-    invited_at TIMESTAMPTZ,
-    confirmation_token TEXT,
-    confirmation_sent_at TIMESTAMPTZ,
-    recovery_token TEXT,
-    recovery_sent_at TIMESTAMPTZ,
-    email_change_token_new TEXT,
-    email_change TEXT,
-    email_change_sent_at TIMESTAMPTZ,
-    last_sign_in_at TIMESTAMPTZ,
-    raw_app_meta_data JSONB,
-    raw_user_meta_data JSONB,
-    is_super_admin BOOLEAN,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    phone TEXT,
-    phone_confirmed_at TIMESTAMPTZ,
-    phone_change TEXT,
-    phone_change_token TEXT,
-    phone_change_sent_at TIMESTAMPTZ,
-    confirmed_at TIMESTAMPTZ,
-    email_change_token_current TEXT,
-    email_change_confirm_status SMALLINT,
-    banned_until TIMESTAMPTZ,
-    reauthentication_token TEXT,
-    reauthentication_sent_at TIMESTAMPTZ,
-    is_sso_user BOOLEAN DEFAULT FALSE,
-    deleted_at TIMESTAMPTZ
-);
-
--- Create Supabase roles (used in RLS policies)
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
-    CREATE ROLE anon NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
-    CREATE ROLE authenticated NOLOGIN;
-  END IF;
-  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
-    CREATE ROLE service_role NOLOGIN;
-  END IF;
-END
-$$;
-
--- Mock Supabase auth.uid() function
-CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
-BEGIN
-  RETURN 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Mock Supabase auth.jwt() function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
-BEGIN
-  RETURN jsonb_build_object(
-    'sub', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-    'email', 'mock@supabase.io',
-    'role', 'authenticated',
-    'iat', extract(epoch from now()),
-    'exp', extract(epoch from now()) + 3600
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create Supabase Realtime publication if it doesn't exist
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
-    CREATE PUBLICATION supabase_realtime;
-  END IF;
-END
-$$;`
-
+		generator = auth.NewCompatibilityGenerator(auth.ServiceSupabase)
+		return generator.Generate()
 	case AuthServiceAuth0:
-		return `-- Auth0 Authentication Compatibility Layer
-CREATE SCHEMA IF NOT EXISTS auth;
-
--- Mock Auth0 JWT function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
-BEGIN
-  RETURN jsonb_build_object(
-    'sub', 'auth0|mock_user_id',
-    'email', 'mock@auth0.com',
-    'email_verified', true,
-    'iss', 'https://mock.auth0.com/',
-    'aud', 'mock_audience',
-    'iat', extract(epoch from now()),
-    'exp', extract(epoch from now()) + 3600
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;`
-
+		generator = auth.NewCompatibilityGenerator(auth.ServiceAuth0)
+		return generator.Generate()
 	default:
-		return "-- No authentication service detected"
+		// Return empty string when no auth service is detected
+		// This prevents unnecessary logging and SQL comments
+		return ""
 	}
 }
+
+// OLD IMPLEMENTATION - Removed to eliminate duplication
+// The following 200+ lines of code have been replaced with delegation to internal/plugins/auth/compatibility.go
+// This eliminates duplicate SQL generation for Clerk, Supabase, and Auth0 authentication services
+// See: internal/plugins/auth/compatibility.go for the centralized implementation

@@ -12,13 +12,16 @@ import (
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 
-	"github.com/capysquash/pg-squash-engine/internal/ai"
-	"github.com/capysquash/pg-squash-engine/internal/config"
-	"github.com/capysquash/pg-squash-engine/internal/parser"
-	"github.com/capysquash/pg-squash-engine/internal/squasher"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
-	"github.com/capysquash/pg-squash-engine/internal/transformation"
-	"github.com/capysquash/pg-squash-engine/internal/validation"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/ai"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/squasher"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/transformation"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/validation"
 )
 
 var (
@@ -26,6 +29,7 @@ var (
 	safetyLevel   string
 	outputDir     string
 	dryRun        bool
+	explainMode   bool
 	verbose       bool
 	showProgress  bool
 	streaming     bool
@@ -52,18 +56,32 @@ var (
 	// Validation options
 	validationMode string
 	workflowOutputDir string
+
+	// Init-config options
+	forceOverwrite bool
+
+	// Output options
+	quietMode bool
+	noEmoji   bool
+
+	// TUI mode
+	tuiMode bool
 )
 
 var rootCmd = &cobra.Command{
 	Use:     "pgsquash",
-	Short:   "pg-squash Engine - PostgreSQL migration squasher and optimizer",
-	Version: "0.8.2-beta",
-	Long: `pg-squash Engine analyzes PostgreSQL migration files and consolidates them
-into optimized, organized migration files while preserving data integrity
-and dependency order.
+	Short:   "pgsquash Engine - Intelligent PostgreSQL migration consolidation",
+	Version: "0.8.5-beta",
+	Long: `pgsquash Engine intelligently consolidates PostgreSQL migration files into
+clean, production-ready SQL while preserving data integrity, respecting
+dependencies, and validating safety at every step.
 
-The pg-squash Engine is the core migration optimization engine that powers
-CapySquash and other migration management tools.`,
+The pgsquash Engine is the core consolidation engine that powers
+CAPYSQUASH and provides parser-grade accuracy for migration optimization.`,
+	// UX FIX: Silence duplicate error messages - errors are already logged in main()
+	SilenceErrors: true,
+	// UX FIX: Don't show usage on every error - only when explicitly requested with --help
+	SilenceUsage: true,
 }
 
 var analyzeCmd = &cobra.Command{
@@ -77,9 +95,10 @@ opportunities without making any changes to your files.`,
 
 var squashCmd = &cobra.Command{
 	Use:   "squash [migration files...]",
-	Short: "Squash migrations into optimized form",
-	Long: `Process migration files and generate consolidated, organized
-migration files with redundancies removed and operations optimized.`,
+	Short: "Consolidate and optimize migrations intelligently",
+	Long: `Intelligently consolidate migration files into clean, production-ready SQL.
+Automatically resolves dependencies, removes redundancies, and reorganizes
+operations while preserving schema integrity and respecting safety constraints.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: runSquash,
 }
@@ -195,9 +214,7 @@ This workflow provides maximum insight without any data modifications.`,
 }
 
 func init() {
-	// Set custom version template with Engine branding
-	rootCmd.SetVersionTemplate(`pg-squash Engine {{.Version}}
-The core migration optimization engine that powers CapySquash
+	rootCmd.SetVersionTemplate(`{{.Version}}
 `)
 
 	// Global flags
@@ -206,7 +223,14 @@ The core migration optimization engine that powers CapySquash
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false,
 		"Verbose output")
 
+	rootCmd.PersistentFlags().BoolVarP(&quietMode, "quiet", "q", false,
+		"Quiet mode - only show errors and final results (ideal for CI/CD)")
+	rootCmd.PersistentFlags().BoolVar(&noEmoji, "no-emoji", false,
+		"Disable emoji characters in output (improves terminal compatibility)")
+
 	// Analyze command flags
+	analyzeCmd.Flags().BoolVar(&tuiMode, "tui", false,
+		"Launch interactive TUI for analysis")
 	analyzeCmd.Flags().BoolVar(&showProgress, "progress", true,
 		"Show progress during analysis")
 	analyzeCmd.Flags().BoolVar(&streaming, "streaming", false,
@@ -215,12 +239,16 @@ The core migration optimization engine that powers CapySquash
 		"Memory limit in MB for streaming mode (default: 256)")
 
 	// Squash command flags
+	squashCmd.Flags().BoolVar(&tuiMode, "tui", false,
+		"Launch interactive TUI for squashing")
 	squashCmd.Flags().StringVarP(&safetyLevel, "safety", "s", "",
 		"Safety level: conservative, standard, aggressive (overrides config)")
 	squashCmd.Flags().StringVarP(&outputDir, "output", "o", "",
 		"Output directory (overrides config)")
 	squashCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"Show what would be done without writing files")
+	squashCmd.Flags().BoolVar(&explainMode, "explain", false,
+		"Show detailed consolidation plan with reasoning (implies --dry-run)")
 	squashCmd.Flags().BoolVar(&showProgress, "progress", true,
 		"Show progress during squashing")
 
@@ -266,6 +294,10 @@ The core migration optimization engine that powers CapySquash
 	validateCmd.Flags().StringVar(&validationMode, "validation-mode", "",
 		"Validation approach: TWO_CONTAINERS, TWO_DATABASES, or SCHEMA_DIFF (default: from config or TWO_DATABASES)")
 
+	// Init-config command flags
+	initConfigCmd.Flags().BoolVarP(&forceOverwrite, "force", "f", false,
+		"Overwrite existing config file if it exists")
+
 	// Workflow command flags (safe, fast, analyze-deep)
 	safeCmd.Flags().StringVarP(&workflowOutputDir, "output", "o", "",
 		"Output directory for squashed migrations (overrides config)")
@@ -279,23 +311,54 @@ The core migration optimization engine that powers CapySquash
 }
 
 func Execute() error {
+	// Configure global logging based on verbose flag
+	// This is called before any command runs via PersistentPreRun
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		if quietMode {
+			// Quiet mode: suppress all non-error output
+			verbose = false
+			showProgress = false
+		} else if !verbose {
+			// Suppress all debug logging from the standard log package
+			// Set output to io.Discard to effectively silence debug logs
+		} else {
+			// Verbose mode: show all logs
+		}
+
+		if noEmoji || quietMode {
+			color.NoColor = true
+		}
+	}
+
 	return rootCmd.Execute()
 }
 
 func runAnalyze(cmd *cobra.Command, args []string) error {
+	// Check if TUI mode is requested
+	if tuiMode {
+		// Get migration directory from args
+		migrationDir := "."
+		if len(args) > 0 {
+			migrationDir = args[0]
+		}
+		return runTUIAnalyze(cmd, []string{migrationDir})
+	}
+
 	startTime := time.Now()
 
 	// Load configuration
 	_, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"Failed to load configuration",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(configPath).WithInnerError(err).WithSuggestion("Check that pgsquash.config.json exists and is valid JSON")
 	}
 
 	if verbose {
 		fmt.Printf("Loading migrations from %d files...\n", len(args))
-		if streaming || len(args) > 100 {
-			fmt.Printf("Using streaming mode for analysis\n")
-		}
 	}
 
 	var t *tracking.Tracker
@@ -303,6 +366,12 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 
 	// Use streaming for large datasets or when explicitly requested
 	if streaming || len(args) > 100 {
+		// Show streaming mode indicator
+		if streaming {
+			color.Cyan("🚀 Streaming mode: enabled (memory limit: %dMB)\n", memoryLimitMB)
+		} else {
+			color.Cyan("🚀 Auto-enabling streaming mode for %d files (threshold: 100)\n", len(args))
+		}
 		// Create memory-optimized tracker for large datasets
 		memTracker := tracking.NewMemoryOptimizedTracker(memoryLimitMB, 50)
 
@@ -319,14 +388,19 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 			})
 		}
 
-		// Process all files in the current directory using streaming
-		currentDir, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("get current directory: %w", err)
-		}
-
-		if err := memTracker.ProcessWithMemoryConstraints(currentDir); err != nil {
-			return fmt.Errorf("streaming analysis failed: %w", err)
+		// Process only the specified files using streaming
+		for _, migrationFile := range args {
+			migration, err := loadSingleMigration(migrationFile)
+			if err != nil {
+				return errors.NewError(
+					errors.ErrorCodeSyntaxError,
+					"Failed to load migration file",
+					errors.SeverityError,
+					errors.CategoryParsing,
+				).WithFile(migrationFile).WithInnerError(err).WithSuggestion("Verify the SQL file exists and contains valid PostgreSQL syntax")
+			}
+			memTracker.GetTracker().ProcessMigration(migration.Migration, len(migrations))
+			migrations = append(migrations, migration)
 		}
 
 		if showProgress {
@@ -340,9 +414,6 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to stop memory tracker: %v\n", err)
 			}
 		}()
-
-		// Create empty migrations slice for reporting
-		migrations = make([]*MigrationWithContent, 0)
 	} else {
 		// Use traditional approach for smaller datasets
 		var err error
@@ -364,7 +435,7 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 	warnings := t.ValidateConsistency()
 
 	// Convert to parser migrations for print function
-	parserMigrations := make([]*parser.Migration, len(migrations))
+	parserMigrations := make([]*types.Migration, len(migrations))
 	for i, m := range migrations {
 		parserMigrations[i] = m.Migration
 	}
@@ -380,12 +451,32 @@ func runAnalyze(cmd *cobra.Command, args []string) error {
 }
 
 func runSquash(cmd *cobra.Command, args []string) error {
+	// Check if TUI mode is requested
+	if tuiMode {
+		// Get migration directory from args
+		migrationDir := "."
+		if len(args) > 0 {
+			migrationDir = args[0]
+		}
+		return runTUI(cmd, []string{migrationDir})
+	}
+
 	startTime := time.Now()
+
+	// If explain mode is enabled, imply dry-run
+	if explainMode {
+		dryRun = true
+	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"Failed to load configuration",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(configPath).WithInnerError(err).WithSuggestion("Run 'pgsquash init-config' to generate a valid configuration file")
 	}
 
 	// Override config with command line flags
@@ -394,6 +485,10 @@ func runSquash(cmd *cobra.Command, args []string) error {
 	}
 	if outputDir != "" {
 		cfg.Output.Directory = outputDir
+	} else if cfg.Output.Directory == "squashed" {
+		if !verbose {
+			color.Cyan("ℹ️  Output directory not specified, using default: ./squashed\n")
+		}
 	}
 
 	// Auto-detect worker count if not specified
@@ -405,10 +500,12 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Loading migrations from %d files...\n", len(args))
 		fmt.Printf("Safety level: %s\n", cfg.SafetyLevel)
 		fmt.Printf("Output directory: %s\n", cfg.Output.Directory)
-		if streaming {
-			fmt.Printf("Streaming mode: enabled (memory limit: %dMB, batch size: %d, workers: %d)\n",
-				memoryLimitMB, batchSize, workerCount)
-		}
+	}
+
+	// Show streaming mode info whenever streaming is explicitly enabled
+	if streaming {
+		color.Cyan("🚀 Streaming mode: enabled (memory limit: %dMB, batch size: %d, workers: %d)\n",
+			memoryLimitMB, batchSize, workerCount)
 	}
 
 	var finalSQL string
@@ -417,8 +514,9 @@ func runSquash(cmd *cobra.Command, args []string) error {
 
 	// Use streaming engine for large datasets or when explicitly requested
 	if streaming || len(args) > 100 {
-		if verbose && !streaming {
-			fmt.Printf("Auto-enabling streaming mode for %d files\n", len(args))
+		if !streaming {
+			color.Cyan("🚀 Auto-enabling streaming mode for %d files (threshold: 100)\n", len(args))
+			color.Cyan("   Streaming: batch=%d, workers=%d, memory=%dMB\n", batchSize, workerCount, memoryLimitMB)
 		}
 
 		// Use streaming engine with optimized settings
@@ -426,7 +524,12 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			// For very large datasets, use high-performance settings
 			finalSQL, warnings, err = squasher.OptimizedSquashForLargeDatasets(cfg, nil, memoryLimitMB)
 			if err != nil {
-				return fmt.Errorf("optimized large dataset squash failed: %w", err)
+				return errors.NewError(
+					errors.ErrorCodeConsolidationFailed,
+					"Failed to squash large dataset",
+					errors.SeverityError,
+					errors.CategoryConsolidation,
+				).WithInnerError(err).WithAdditional("file_count", len(args)).WithSuggestion("Try reducing memory limit or batch size, or use standard mode for smaller datasets")
 			}
 			migrationCount = len(args)
 		} else {
@@ -445,6 +548,10 @@ func runSquash(cmd *cobra.Command, args []string) error {
 				EnableTransformation: enableTransformation,
 				BackupConfig:         createBackupConfig(),
 				TransformationConfig: createTransformationConfig(),
+
+				EnableCycleDetection: enableCycleDetection,
+				ShowCycleDetails:     showCycleDetails,
+				CycleDetectionDepth:  cycleDetectionDepth,
 			}
 
 			if showProgress {
@@ -458,7 +565,7 @@ func runSquash(cmd *cobra.Command, args []string) error {
 				}
 			}
 
-			engine := squasher.NewEngineWithStreaming(engineConfig)
+			engine := squasher.NewEngine(engineConfig)
 
 			// Load migrations and convert to map
 			migrations, err := loadMigrations(args, showProgress)
@@ -473,7 +580,12 @@ func runSquash(cmd *cobra.Command, args []string) error {
 
 			finalSQL, warnings, err = engine.Squash(migrationMap)
 			if err != nil {
-				return fmt.Errorf("streaming squash failed: %w", err)
+				return errors.NewError(
+					errors.ErrorCodeConsolidationFailed,
+					"Failed to squash migrations in streaming mode",
+					errors.SeverityError,
+					errors.CategoryConsolidation,
+				).WithInnerError(err).WithAdditional("streaming", true).WithSuggestion("Try disabling streaming mode or check for syntax errors in migration files")
 			}
 
 			migrationCount = len(migrations)
@@ -502,9 +614,14 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			EnableTransformation: enableTransformation,
 			BackupConfig:         createBackupConfig(),
 			TransformationConfig: createTransformationConfig(),
+			RollbackPath:         rollbackPath,
+
+			EnableCycleDetection: enableCycleDetection,
+			ShowCycleDetails:     showCycleDetails,
+			CycleDetectionDepth:  cycleDetectionDepth,
 		}
 
-		engine := squasher.NewEngineWithStreaming(engineConfig)
+		engine := squasher.NewEngine(engineConfig)
 		defer engine.Close()
 
 		if showProgress {
@@ -520,12 +637,55 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		// Process migrations
 		finalSQL, warnings, err = engine.Squash(migrationMap)
 		if err != nil {
-			return fmt.Errorf("process migrations: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeConsolidationFailed,
+				"Failed to process and consolidate migrations",
+				errors.SeverityError,
+				errors.CategoryConsolidation,
+			).WithInnerError(err).WithAdditional("migration_count", len(migrations)).WithSuggestion("Review migration files for syntax errors or complex dependencies")
 		}
 
 		migrationCount = len(migrations)
 	}
 
+	// Handle explain mode - show detailed consolidation plan
+	if explainMode {
+		// Create a new engine just for generating the plan
+		migrations, err := loadMigrations(args, false)
+		if err != nil {
+			return err
+		}
+
+		engineConfig := squasher.EngineConfig{
+			Config:          cfg,
+			EnableStreaming: false,
+		}
+		engine := squasher.NewEngine(engineConfig)
+		defer engine.Close()
+
+		// Convert to migration map
+		migrationMap := make(map[int]string)
+		for i, m := range migrations {
+			migrationMap[i] = m.Content
+		}
+
+		// Generate detailed plan
+		plan, err := engine.GenerateConsolidationPlan(migrationMap)
+		if err != nil {
+			return errors.NewError(
+				errors.ErrorCodeConsolidationFailed,
+				"Failed to generate consolidation plan",
+				errors.SeverityError,
+				errors.CategoryConsolidation,
+			).WithInnerError(err).WithSuggestion("Run without --explain flag to see more detailed error information")
+		}
+
+		// Print the formatted plan
+		fmt.Print(color.CyanString(plan.FormatPlan()))
+		return nil
+	}
+
+	// Regular dry-run mode (without detailed explanation)
 	if dryRun {
 		fmt.Println("\n" + color.BlueString("=== Dry Run: Final SQL Output ==="))
 		fmt.Println(finalSQL)
@@ -539,13 +699,51 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Write output
+	// Write output - create directory first
 	if err := os.MkdirAll(cfg.Output.Directory, 0755); err != nil {
-		return fmt.Errorf("create output directory: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			fmt.Sprintf("Failed to create output directory '%s'", cfg.Output.Directory),
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(cfg.Output.Directory).WithInnerError(err).WithSuggestion("Check directory permissions and ensure parent directory exists")
 	}
+
+	// Verify directory was created
+	if _, err := os.Stat(cfg.Output.Directory); os.IsNotExist(err) {
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			fmt.Sprintf("Output directory '%s' does not exist after creation attempt", cfg.Output.Directory),
+			errors.SeverityCritical,
+			errors.CategoryValidation,
+		).WithFile(cfg.Output.Directory).WithSuggestion("Check filesystem permissions and available disk space")
+	}
+
 	outputPath := filepath.Join(cfg.Output.Directory, "001_squashed_migration.sql")
 	if err := os.WriteFile(outputPath, []byte(finalSQL), 0644); err != nil {
-		return fmt.Errorf("write output: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSQLGenerationFailed,
+			fmt.Sprintf("Failed to write output file '%s'", outputPath),
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithFile(outputPath).WithInnerError(err).WithSuggestion("Ensure sufficient disk space and write permissions")
+	}
+
+	// Verify file was written
+	if info, err := os.Stat(outputPath); err != nil {
+		return errors.NewError(
+			errors.ErrorCodeSQLGenerationFailed,
+			fmt.Sprintf("Output file '%s' was not created", outputPath),
+			errors.SeverityCritical,
+			errors.CategoryConsolidation,
+		).WithFile(outputPath).WithInnerError(err).WithSuggestion("Check filesystem state and available inodes")
+	} else if info.Size() == 0 {
+		return errors.NewError(
+			errors.ErrorCodeSQLGenerationFailed,
+			fmt.Sprintf("Output file '%s' is empty (0 bytes)", outputPath),
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithFile(outputPath).WithSuggestion("This may indicate all migrations were filtered out - check safety level and input files")
 	}
 
 	// Print success report
@@ -565,7 +763,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	// Load config to get validation settings
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"Failed to load configuration for validation",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(configPath).WithInnerError(err).WithSuggestion("Ensure pgsquash.config.json is valid or use default configuration")
 	}
 
 	// Load migrations to detect auth patterns
@@ -622,7 +825,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 
 		result, err := validator.ValidateWithDocker(cmd.Context(), originalDir, squashedDir)
 		if err != nil {
-			return fmt.Errorf("validation failed: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Docker validation failed",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(originalDir).WithAdditional("squashed_dir", squashedDir).WithInnerError(err).WithSuggestion("Ensure Docker is running and accessible, or try a different validation mode")
 		}
 
 		if result.Success {
@@ -652,7 +860,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	}
 
 	// If we couldn't load migrations, fall back to basic validation
-	return fmt.Errorf("failed to load migrations from %s", originalDir)
+	return errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		fmt.Sprintf("Failed to load migrations from %s", originalDir),
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithFile(originalDir).WithSuggestion("Ensure directory exists and contains .sql files")
 }
 
 func runInitConfig(cmd *cobra.Command, args []string) error {
@@ -661,9 +874,32 @@ func runInitConfig(cmd *cobra.Command, args []string) error {
 		configFile = configPath
 	}
 
-	// Check if file already exists
+	// Resolve to absolute path to ensure it's created in current working directory
+	// If path is relative, resolve it relative to current working directory
+	if !filepath.IsAbs(configFile) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to get current working directory",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithInnerError(err).WithSuggestion("Try using an absolute path with --config flag")
+		}
+		configFile = filepath.Join(cwd, configFile)
+	}
+
 	if _, err := os.Stat(configFile); err == nil {
-		return fmt.Errorf("config file already exists: %s", configFile)
+		if !forceOverwrite {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				fmt.Sprintf("Config file already exists: %s", configFile),
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(configFile).WithSuggestion("Use --force or -f to overwrite the existing configuration")
+		}
+		// File exists but force flag is set - show warning and continue
+		color.Yellow("⚠️  Overwriting existing config file: %s\n", configFile)
 	}
 
 	// Create default config
@@ -671,11 +907,20 @@ func runInitConfig(cmd *cobra.Command, args []string) error {
 
 	// Save to file
 	if err := cfg.SaveToFile(configFile); err != nil {
-		return fmt.Errorf("save config: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"Failed to save configuration file",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(configFile).WithInnerError(err).WithSuggestion("Check write permissions in the current directory")
 	}
 
-	color.Green("✓ Generated default configuration: %s\n", configFile)
-	fmt.Printf("Edit this file to customize pg-squash Engine behavior\n")
+	if forceOverwrite {
+		color.Green("✓ Configuration file overwritten: %s\n", configFile)
+	} else {
+		color.Green("✓ Generated default configuration: %s\n", configFile)
+	}
+	fmt.Printf("Edit this file to customize pgsquash Engine behavior\n")
 
 	return nil
 }
@@ -728,20 +973,100 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create migration fixer
+	// Create migration fixer with validation function
 	fixer := ai.NewMigrationFixer(provider, maxFixAttempts, verbose)
 
-	// For demonstration, we'll simulate a validation error
-	// In a real implementation, this would actually run validation first
-	color.Yellow("⚠️  This is a demonstration - full validation integration pending\n")
-	color.Yellow("    The AI fixer will analyze common migration errors\n\n")
+	// Create validation function that uses Docker validation
+	validationFunc := func(ctx context.Context, path string) error {
+		// Load configuration
+		_, err := config.LoadConfig(configPath)
+		if err != nil {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to load configuration for AI fix validation",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(configPath).WithInnerError(err)
+		}
 
-	// Simulate a validation error for demonstration
-	simulatedError := fmt.Errorf("failed to execute migration migrations/02_migration.sql: pq: trigger \"profiles_updated_at\" for relation \"profiles\" already exists")
+		// Create temporary output directory for validation
+		tmpOutput := filepath.Join(os.TempDir(), fmt.Sprintf("pgsquash_validate_%d", time.Now().Unix()))
+		if err := os.MkdirAll(tmpOutput, 0755); err != nil {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to create temporary output directory for validation",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(tmpOutput).WithInnerError(err).WithSuggestion("Check temp directory permissions")
+		}
+		defer os.RemoveAll(tmpOutput)
 
-	// Run the fixer
+		// Load and process migrations
+		migrations, err := filepath.Glob(filepath.Join(path, "*.sql"))
+		if err != nil || len(migrations) == 0 {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				fmt.Sprintf("No SQL files found in %s", path),
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(path).WithSuggestion("Ensure the directory contains .sql migration files")
+		}
+
+		// Create validation config
+		valConfig := validation.DefaultValidationConfig()
+		valConfig.DockerApproach = validation.ApproachSchemaDiff // Fast validation for fixing
+		valConfig.EnableExtensionDetection = true
+		valConfig.EnableSQLFixes = false // Don't auto-fix during validation
+		valConfig.Verbose = false        // Quiet during fixing loop
+
+		validator := validation.NewSchemaValidator(valConfig, nil, nil)
+		defer validator.Close()
+
+		// Validate migrations
+		result, err := validator.ValidateWithDocker(ctx, path, path)
+		if err != nil {
+			return err
+		}
+
+		if !result.Success || len(result.Errors) > 0 {
+			// Return first error
+			if len(result.Errors) > 0 {
+				return errors.NewError(
+					errors.ErrorCodeValidationFailed,
+					fmt.Sprintf("%s: %s", result.Errors[0].Code, result.Errors[0].Message),
+					errors.SeverityError,
+					errors.CategoryValidation,
+				).WithFile(path)
+			}
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Validation failed",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(path)
+		}
+
+		return nil
+	}
+
+	// Attach validation function to fixer
+	fixer.WithValidation(validationFunc)
+
+	// Run initial validation
+	color.Cyan("🔍 Running initial validation...\n")
 	ctx := context.Background()
-	result, err := fixer.FixMigrationsUntilValid(ctx, migrationPath, simulatedError)
+	initialError := validationFunc(ctx, migrationPath)
+
+	if initialError == nil {
+		color.Green("✅ Migrations are already valid! No fixes needed.\n")
+		return nil
+	}
+
+	color.Yellow("⚠️  Validation failed: %v\n", initialError)
+	color.Cyan("   Starting AI-powered fixing...\n\n")
+
+	// Run the fixer with automatic validation re-runs
+	result, err := fixer.FixMigrationsUntilValid(ctx, migrationPath, initialError)
 	if err != nil {
 		color.Red("❌ AI fixing failed: %v\n", err)
 		return err
@@ -886,7 +1211,12 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 	// Load migrations
 	migrations, err := loadMigrations(args, cfg.Performance.ShowProgress)
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			"Failed to load migration files for SAFE workflow",
+			errors.SeverityError,
+			errors.CategoryParsing,
+		).WithInnerError(err).WithSuggestion("Check migration file syntax and permissions")
 	}
 
 	// Initialize AI analyzer
@@ -907,17 +1237,22 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 	}
 
 	// 1. Detect authentication patterns for extra safety
-	authPatterns, err := analyzer.DetectAuthPatterns(combinedSQL)
-	if err == nil && len(authPatterns) > 0 {
+	authPatternsResp, err := analyzer.DetectAuthPatterns(context.Background(), combinedSQL)
+	if err == nil && len(authPatternsResp.Patterns) > 0 {
 		color.Yellow("🔐 AI detected authentication patterns:\n")
-		for _, pattern := range authPatterns {
+		for _, pattern := range authPatternsResp.Patterns {
 			color.Yellow("   • %s\n", pattern)
 		}
 		color.Yellow("   Extra validation recommended for auth-related changes\n")
 	}
 
 	// Create squasher engine
-	engine := squasher.NewEngine(cfg)
+	engineConfig := squasher.EngineConfig{
+		Config:               cfg,
+		EnableStreaming:      false,
+		EnableTransformation: true,
+	}
+	engine := squasher.NewEngine(engineConfig)
 
 	// Convert migrations to format expected by engine
 	migrationMap := make(map[int]string)
@@ -928,27 +1263,41 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 	// Execute squashing
 	finalSQL, warnings, err := engine.Squash(migrationMap)
 	if err != nil {
-		return fmt.Errorf("squash migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeConsolidationFailed,
+			"Failed to squash migrations in AI-enhanced SAFE workflow",
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithInnerError(err).WithSuggestion("Review migration syntax and dependencies")
 	}
 
-	// AI Post-squash Safety Analysis
+	// AI Post-squash Safety Analysis (NON-BLOCKING - warnings only)
+	// Docker validation is the source of truth. AI provides additional insights but doesn't block deployment.
 	color.Cyan("🔍 AI Safety Validation...\n")
 
-	// 2. Schema consistency validation
-	consistency, err := analyzer.ValidateSchemaConsistency(combinedSQL, finalSQL)
-	if err == nil && len(consistency) > 0 {
-		color.Red("❌ AI detected potential schema inconsistencies:\n")
-		for _, issue := range consistency {
-			color.Red("   • %s\n", issue)
+	aiWarningCount := 0
+
+	// 2. Schema consistency validation (warnings only)
+	consistencyResp, err := analyzer.ValidateSchemaConsistency(context.Background(), combinedSQL, finalSQL)
+	if err == nil && len(consistencyResp.Differences) > 0 {
+		color.Yellow("⚠️  AI detected %d potential schema inconsistencies (review recommended):\n", len(consistencyResp.Differences))
+		for i, issue := range consistencyResp.Differences {
+			if i < 3 { // Show first 3 to avoid overwhelming output
+				color.Yellow("   • %s\n", issue)
+			}
 		}
-		return fmt.Errorf("AI safety check failed - schema inconsistencies detected")
+		if len(consistencyResp.Differences) > 3 {
+			color.Yellow("   ... and %d more issues\n", len(consistencyResp.Differences)-3)
+		}
+		color.Yellow("   Note: These are AI suggestions - Docker validation is authoritative\n")
+		aiWarningCount += len(consistencyResp.Differences)
 	}
 
 	// 3. Conservative dead code detection (warnings only in SAFE mode)
 	functions := extractFunctionsFromSQL(finalSQL)
 	deadCodeCount := 0
 	for _, function := range functions {
-		isDead, err := analyzer.IsDeadCode(finalSQL, function)
+		isDead, _, err := analyzer.IsDeadCode(context.Background(), finalSQL, function)
 		if err == nil && isDead {
 			deadCodeCount++
 		}
@@ -956,6 +1305,7 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 	if deadCodeCount > 0 {
 		color.Yellow("💡 AI detected %d potentially unused functions\n", deadCodeCount)
 		color.Yellow("   Manual review recommended before production deployment\n")
+		aiWarningCount += deadCodeCount
 	}
 
 	// Write output files (same as original)
@@ -966,12 +1316,22 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 
 	if !dryRun {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("create output directory: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to create output directory",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(outputDir).WithInnerError(err).WithSuggestion("Check directory permissions")
 		}
 
 		outputFile := filepath.Join(outputDir, "001_consolidated_migration.sql")
 		if err := os.WriteFile(outputFile, []byte(finalSQL), 0644); err != nil {
-			return fmt.Errorf("write output file: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeSQLGenerationFailed,
+				"Failed to write consolidated migration file",
+				errors.SeverityError,
+				errors.CategoryConsolidation,
+			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
 		color.Green("✅ Squashed migrations written to: %s\n", outputFile)
@@ -1000,7 +1360,11 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 		}
 	}
 
-	color.Green("🛡️  AI Safety Validation: PASSED\n")
+	if aiWarningCount > 0 {
+		color.Yellow("🛡️  AI Safety Validation: %d warnings (review recommended, not blocking)\n", aiWarningCount)
+	} else {
+		color.Green("🛡️  AI Safety Validation: No issues detected\n")
+	}
 
 	// Print summary
 	sqlLines := strings.Count(finalSQL, "\n")
@@ -1015,7 +1379,12 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	// Load migrations
 	migrations, err := loadMigrations(args, cfg.Performance.ShowProgress)
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			"Failed to load migration files for AI optimization",
+			errors.SeverityError,
+			errors.CategoryParsing,
+		).WithInnerError(err).WithSuggestion("Verify migration files contain valid SQL")
 	}
 
 	// Initialize AI analyzer
@@ -1029,7 +1398,12 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	color.Cyan("🧠 AI-Enhanced FAST Processing\n")
 
 	// Create squasher engine
-	engine := squasher.NewEngine(cfg)
+	engineConfig := squasher.EngineConfig{
+		Config:               cfg,
+		EnableStreaming:      false,
+		EnableTransformation: true,
+	}
+	engine := squasher.NewEngine(engineConfig)
 
 	// Convert migrations to format expected by engine
 	migrationMap := make(map[int]string)
@@ -1042,7 +1416,12 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	// Execute squashing
 	finalSQL, warnings, err := engine.Squash(migrationMap)
 	if err != nil {
-		return fmt.Errorf("squash migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeConsolidationFailed,
+			"Failed to squash migrations in FAST workflow",
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithInnerError(err).WithSuggestion("Try reducing migration complexity or using SAFE workflow")
 	}
 
 	// AI-Powered Optimizations
@@ -1054,7 +1433,7 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	for i, func1 := range functions {
 		for j := i + 1; j < len(functions); j++ {
 			func2 := functions[j]
-			isEquivalent, err := analyzer.AreFunctionsSemanticallyEquivalent(func1, func2)
+			isEquivalent, _, err := analyzer.AreFunctionsSemanticallyEquivalent(context.Background(), func1, func2)
 			if err == nil && isEquivalent {
 				color.Cyan("🔄 AI found equivalent functions: %s ≡ %s\n",
 					extractFunctionName(func1), extractFunctionName(func2))
@@ -1064,24 +1443,24 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	}
 
 	// 2. Performance optimization suggestions
-	optimizations, err := analyzer.SuggestOptimizations(finalSQL)
-	if err == nil && len(optimizations) > 0 {
+	optimizationsResp, err := analyzer.SuggestOptimizations(context.Background(), finalSQL)
+	if err == nil && len(optimizationsResp.Optimizations) > 0 {
 		color.Green("⚡ AI Performance Suggestions:\n")
-		for i, opt := range optimizations {
+		for i, opt := range optimizationsResp.Optimizations {
 			if i < 5 { // Show top 5 suggestions
 				color.Green("   • %s\n", opt)
 			}
 		}
-		if len(optimizations) > 5 {
-			color.Green("   ... and %d more optimizations\n", len(optimizations)-5)
+		if len(optimizationsResp.Optimizations) > 5 {
+			color.Green("   ... and %d more optimizations\n", len(optimizationsResp.Optimizations)-5)
 		}
 	}
 
 	// 3. Complexity warnings
 	complexityWarnings := 0
 	for _, mig := range migrations {
-		complexity, err := analyzer.AnalyzeFunctionComplexity(mig.Content)
-		if err == nil && strings.Contains(strings.ToLower(complexity), "high") {
+		complexityResp, err := analyzer.AnalyzeFunctionComplexity(context.Background(), mig.Content)
+		if err == nil && strings.Contains(strings.ToLower(complexityResp.Reasoning), "high") {
 			color.Yellow("⚠️  High complexity in %s - consider refactoring\n", mig.FullPath)
 			complexityWarnings++
 		}
@@ -1095,12 +1474,22 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 
 	if !dryRun {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("create output directory: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to create output directory",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(outputDir).WithInnerError(err).WithSuggestion("Check directory permissions")
 		}
 
 		outputFile := filepath.Join(outputDir, "001_consolidated_migration.sql")
 		if err := os.WriteFile(outputFile, []byte(finalSQL), 0644); err != nil {
-			return fmt.Errorf("write output file: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeSQLGenerationFailed,
+				"Failed to write optimized migration file",
+				errors.SeverityError,
+				errors.CategoryConsolidation,
+			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
 		color.Green("✅ Optimized migrations written to: %s\n", outputFile)
@@ -1130,7 +1519,7 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 	// AI Summary
 	color.Green("⚡ AI Optimization Summary:\n")
 	color.Green("   • Equivalent function pairs found: %d\n", equivalentPairs)
-	color.Green("   • Performance optimizations suggested: %d\n", len(optimizations))
+	color.Green("   • Performance optimizations suggested: %d\n", len(optimizationsResp.Optimizations))
 	if complexityWarnings > 0 {
 		color.Yellow("   • High complexity warnings: %d\n", complexityWarnings)
 	}
@@ -1150,7 +1539,12 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	// Load migrations
 	migrations, err := loadMigrations(args, cfg.Performance.ShowProgress)
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			"Failed to load migration files for AI comprehensive analysis",
+			errors.SeverityError,
+			errors.CategoryParsing,
+		).WithInnerError(err).WithSuggestion("Ensure migration files contain valid SQL")
 	}
 
 	// Initialize AI analyzer
@@ -1170,10 +1564,10 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	color.Cyan("🧠 Deep AI Analysis in progress...\n")
 
 	// 1. Authentication Security Audit
-	authPatterns, err := analyzer.DetectAuthPatterns(combinedSQL)
+	authPatternsResp, err := analyzer.DetectAuthPatterns(context.Background(), combinedSQL)
 	authAnalysis := "No auth patterns detected"
-	if err == nil && len(authPatterns) > 0 {
-		authAnalysis = fmt.Sprintf("%d patterns found: %v", len(authPatterns), authPatterns)
+	if err == nil && len(authPatternsResp.Patterns) > 0 {
+		authAnalysis = fmt.Sprintf("%d patterns found: %v", len(authPatternsResp.Patterns), authPatternsResp.Patterns)
 	}
 
 	// 2. Dead Code Analysis
@@ -1182,7 +1576,7 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	deadFunctions := []string{}
 	for _, function := range functions {
 		functionName := extractFunctionName(function)
-		isDead, err := analyzer.IsDeadCode(combinedSQL, functionName)
+		isDead, _, err := analyzer.IsDeadCode(context.Background(), combinedSQL, functionName)
 		if err == nil && isDead {
 			deadCodeCount++
 			deadFunctions = append(deadFunctions, functionName)
@@ -1193,20 +1587,20 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	complexityMap := make(map[string]string)
 	highComplexityCount := 0
 	for _, mig := range migrations {
-		complexity, err := analyzer.AnalyzeFunctionComplexity(mig.Content)
+		complexityResp, err := analyzer.AnalyzeFunctionComplexity(context.Background(), mig.Content)
 		if err == nil {
-			complexityMap[mig.FullPath] = complexity
-			if strings.Contains(strings.ToLower(complexity), "high") {
+			complexityMap[mig.FullPath] = complexityResp.Reasoning
+			if strings.Contains(strings.ToLower(complexityResp.Reasoning), "high") {
 				highComplexityCount++
 			}
 		}
 	}
 
 	// 4. Performance Optimization Opportunities
-	optimizations, err := analyzer.SuggestOptimizations(combinedSQL)
+	optimizationsResp, err := analyzer.SuggestOptimizations(context.Background(), combinedSQL)
 	optimizationCount := 0
 	if err == nil {
-		optimizationCount = len(optimizations)
+		optimizationCount = len(optimizationsResp.Optimizations)
 	}
 
 	// 5. Function Semantic Analysis
@@ -1214,7 +1608,7 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	for i, func1 := range functions {
 		for j := i + 1; j < len(functions); j++ {
 			func2 := functions[j]
-			isEquivalent, err := analyzer.AreFunctionsSemanticallyEquivalent(func1, func2)
+			isEquivalent, _, err := analyzer.AreFunctionsSemanticallyEquivalent(context.Background(), func1, func2)
 			if err == nil && isEquivalent {
 				equivalentPairs++
 			}
@@ -1224,8 +1618,8 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	// 6. Code Coverage Analysis
 	coverageIssues := []string{}
 	for _, function := range functions[:min(len(functions), 10)] { // Analyze top 10 functions
-		coverage, err := analyzer.AnalyzeCodeCoverage(function, combinedSQL)
-		if err == nil && strings.Contains(strings.ToLower(coverage), "unused") {
+		coverageResp, err := analyzer.AnalyzeCodeCoverage(context.Background(), function, combinedSQL)
+		if err == nil && strings.Contains(strings.ToLower(coverageResp), "unused") {
 			coverageIssues = append(coverageIssues, extractFunctionName(function))
 		}
 	}
@@ -1261,9 +1655,9 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 
 	color.Cyan("⚡ Performance Analysis:\n")
 	fmt.Printf("   • Optimization Opportunities: %d\n", optimizationCount)
-	if optimizationCount > 0 && optimizations != nil {
+	if optimizationCount > 0 && optimizationsResp != nil {
 		fmt.Println("   Top suggestions:")
-		for i, opt := range optimizations[:min(len(optimizations), 3)] {
+		for i, opt := range optimizationsResp.Optimizations[:min(len(optimizationsResp.Optimizations), 3)] {
 			fmt.Printf("     %d. %s\n", i+1, opt)
 		}
 	}
@@ -1275,7 +1669,7 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	if deadCodeCount > 0 {
 		color.Yellow("   • Run FAST workflow to automatically optimize %d functions\n", equivalentPairs)
 	}
-	if len(authPatterns) > 0 {
+	if len(authPatternsResp.Patterns) > 0 {
 		color.Yellow("   • Use SAFE workflow for production - auth patterns detected\n")
 	}
 	if optimizationCount > 10 {
@@ -1296,11 +1690,21 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 	// Load migrations
 	migrations, err := loadMigrations(args, cfg.Performance.ShowProgress)
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			"Failed to load migration files",
+			errors.SeverityError,
+			errors.CategoryParsing,
+		).WithInnerError(err).WithSuggestion("Check migration file syntax and permissions")
 	}
 
 	// Create squasher engine
-	engine := squasher.NewEngine(cfg)
+	engineConfig := squasher.EngineConfig{
+		Config:               cfg,
+		EnableStreaming:      false,
+		EnableTransformation: true,
+	}
+	engine := squasher.NewEngine(engineConfig)
 
 	// Convert migrations to format expected by engine
 	migrationMap := make(map[int]string)
@@ -1311,7 +1715,12 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 	// Execute squashing
 	finalSQL, warnings, err := engine.Squash(migrationMap)
 	if err != nil {
-		return fmt.Errorf("squash migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeConsolidationFailed,
+			"Failed to squash migrations",
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithInnerError(err).WithSuggestion("Check migration syntax and dependency graph")
 	}
 
 	// Write output files
@@ -1322,12 +1731,22 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 
 	if !dryRun {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("create output directory: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"Failed to create output directory",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(outputDir).WithInnerError(err).WithSuggestion("Check directory permissions")
 		}
 
 		outputFile := filepath.Join(outputDir, "001_consolidated_migration.sql")
 		if err := os.WriteFile(outputFile, []byte(finalSQL), 0644); err != nil {
-			return fmt.Errorf("write output file: %w", err)
+			return errors.NewError(
+				errors.ErrorCodeSQLGenerationFailed,
+				"Failed to write consolidated migration file",
+				errors.SeverityError,
+				errors.CategoryConsolidation,
+			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
 		color.Green("✅ Squashed migrations written to: %s\n", outputFile)
@@ -1386,11 +1805,21 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	// Load migrations
 	migrations, err := loadMigrations(args, cfg.Performance.ShowProgress)
 	if err != nil {
-		return fmt.Errorf("load migrations: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			"Failed to load migration files for comprehensive analysis",
+			errors.SeverityError,
+			errors.CategoryParsing,
+		).WithInnerError(err).WithSuggestion("Verify migration files are valid SQL")
 	}
 
 	// Create squasher engine for analysis (used for dependency analysis)
-	engine := squasher.NewEngine(cfg)
+	engineConfig := squasher.EngineConfig{
+		Config:               cfg,
+		EnableStreaming:      false,
+		EnableTransformation: false, // Analysis only, no transformation
+	}
+	engine := squasher.NewEngine(engineConfig)
 
 	// Convert migrations to format expected by engine
 	migrationMap := make(map[int]string)
@@ -1398,30 +1827,63 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 		migrationMap[i+1] = mig.Content
 	}
 
-	// Use the engine for some basic analysis (to prevent unused variable error)
-	_ = engine // We could call analysis methods here if they existed
+	// Create tracker for analysis
+	tracker := engine.GetTracker()
+
+	// Process all migrations through the tracker
+	for i, mig := range migrations {
+		tracker.ProcessMigration(mig.Migration, i)
+	}
 
 	color.Cyan("🔬 Performing comprehensive analysis...\n")
 
-	// Analyze dependencies and risks (this should be a method on the engine)
-	// For now, we'll simulate comprehensive analysis
-
+	// Get actual analysis results from the engine/tracker
 	var warnings []string
 	var analysisResults []string
 
-	// Simulate DDL cycle detection
+	// Real DDL cycle detection
 	if enableCycleDetection {
-		analysisResults = append(analysisResults, "✓ DDL Cycle Detection: No harmful cycles detected")
-		color.Green("  ✓ DDL cycle detection completed\n")
+		depGraph := tracker.GetActualDependencyGraph()
+		cycles := depGraph.DetectCycles()
+		if len(cycles) > 0 {
+			analysisResults = append(analysisResults, fmt.Sprintf("⚠️  DDL Cycles Detected: %d cycles found", len(cycles)))
+			color.Yellow("  ⚠️  Found %d DDL cycles\n", len(cycles))
+			for i, cycle := range cycles {
+				if i < 5 { // Show first 5 cycles
+					warnings = append(warnings, fmt.Sprintf("DDL Cycle %d: %v", i+1, cycle))
+				}
+			}
+		} else {
+			analysisResults = append(analysisResults, "✓ DDL Cycle Detection: No harmful cycles detected")
+			color.Green("  ✓ DDL cycle detection completed - no cycles found\n")
+		}
 	}
 
-	// Simulate dependency analysis
-	analysisResults = append(analysisResults, fmt.Sprintf("✓ Dependency Analysis: %d migrations analyzed", len(migrations)))
+	// Real dependency analysis
+	stats := tracker.GetStatistics()
+	analysisResults = append(analysisResults, fmt.Sprintf("✓ Dependency Analysis: %d objects tracked, %d dependencies resolved", stats.TotalObjects, stats.TotalDependencies))
 	color.Green("  ✓ Dependency graph analysis completed\n")
 
-	// Simulate risk assessment
-	analysisResults = append(analysisResults, "✓ Risk Assessment: Low risk consolidation opportunities identified")
-	color.Green("  ✓ Risk assessment completed\n")
+	// Real redundancy analysis
+	redundancies := tracker.GetRedundantObjects()
+	if len(redundancies) > 0 {
+		analysisResults = append(analysisResults, fmt.Sprintf("✓ Redundancy Detection: %d redundant operations identified", len(redundancies)))
+		color.Green("  ✓ Found %d optimization opportunities\n", len(redundancies))
+	} else {
+		analysisResults = append(analysisResults, "✓ Redundancy Detection: No redundancies found")
+		color.Green("  ✓ Migrations are already optimized\n")
+	}
+
+	// Real risk assessment
+	consistencyWarnings := tracker.ValidateConsistency()
+	if len(consistencyWarnings) > 0 {
+		analysisResults = append(analysisResults, fmt.Sprintf("⚠️  Risk Assessment: %d consistency warnings detected", len(consistencyWarnings)))
+		color.Yellow("  ⚠️  %d potential risks identified\n", len(consistencyWarnings))
+		warnings = append(warnings, consistencyWarnings...)
+	} else {
+		analysisResults = append(analysisResults, "✓ Risk Assessment: Low risk - migrations are consistent")
+		color.Green("  ✓ Risk assessment completed\n")
+	}
 
 	// Print detailed analysis report
 	color.Cyan("\n📊 Analysis Results:\n")
@@ -1513,9 +1975,77 @@ func min(a, b int) int {
 
 // MigrationWithContent contains both parsed migration and original file content
 type MigrationWithContent struct {
-	*parser.Migration
+	*types.Migration
 	Content  string
 	FullPath string
+}
+
+func loadSingleMigration(file string) (*MigrationWithContent, error) {
+	content, err := os.ReadFile(file)
+	if err != nil {
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			fmt.Sprintf("Failed to read migration file: %s", file),
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithFile(file).WithInnerError(err).WithSuggestion("Check file exists and is readable")
+	}
+
+	m, err := parser.ParseMigration(string(content), filepath.Base(file))
+	if err != nil {
+		// Check if this is a catastrophic failure (no statements parsed)
+		if m != nil && len(m.ParseErrors) > 0 && len(m.Statements) == 0 {
+			// Catastrophic failure - all statements lost
+			color.Red("❌ FATAL: %s - All statements failed to parse\n", filepath.Base(file))
+			color.Red("   Parse errors: %d, Statements recovered: 0\n", len(m.ParseErrors))
+			for i, parseErr := range m.ParseErrors {
+				if i < 3 { // Show first 3 errors
+					color.Red("   • %s\n", parseErr)
+				}
+			}
+			if len(m.ParseErrors) > 3 {
+				color.Red("   ... and %d more errors\n", len(m.ParseErrors)-3)
+			}
+			return nil, errors.NewError(
+				errors.ErrorCodeSyntaxError,
+				fmt.Sprintf("Catastrophic parse failure in %s: all statements lost", file),
+				errors.SeverityCritical,
+				errors.CategoryParsing,
+			).WithFile(file).WithAdditional("parse_errors", len(m.ParseErrors)).WithSuggestion("Review SQL syntax - all statements failed to parse")
+		}
+
+		if m != nil && len(m.ParseErrors) > 0 {
+			// Migration was partially parsed - include it with errors and show warning
+			color.Yellow("⚠️  Warning: %s has %d parse error(s) but %d statements were successfully parsed\n",
+				filepath.Base(file), len(m.ParseErrors), len(m.Statements))
+			for i, parseErr := range m.ParseErrors {
+				if i < 3 { // Show first 3 errors to avoid overwhelming output
+					color.Yellow("   • %s\n", parseErr)
+				}
+			}
+			if len(m.ParseErrors) > 3 {
+				color.Yellow("   ... and %d more errors\n", len(m.ParseErrors)-3)
+			}
+			return &MigrationWithContent{
+				Migration: m,
+				Content:   string(content),
+				FullPath:  file,
+			}, nil
+		}
+		// Fatal error - can't parse at all
+		return nil, errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			fmt.Sprintf("Fatal parse error in %s", file),
+			errors.SeverityCritical,
+			errors.CategoryParsing,
+		).WithFile(file).WithInnerError(err).WithSuggestion("Check SQL syntax using a PostgreSQL validator")
+	}
+
+	return &MigrationWithContent{
+		Migration: m,
+		Content:   string(content),
+		FullPath:  file,
+	}, nil
 }
 
 func loadMigrations(files []string, showProgress bool) ([]*MigrationWithContent, error) {
@@ -1526,21 +2056,11 @@ func loadMigrations(files []string, showProgress bool) ([]*MigrationWithContent,
 			fmt.Printf("\rLoading migrations... %d/%d", i+1, len(files))
 		}
 
-		content, err := os.ReadFile(file)
+		migration, err := loadSingleMigration(file)
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", file, err)
+			return nil, err
 		}
-
-		m, err := parser.ParseMigration(string(content), filepath.Base(file))
-		if err != nil {
-			return nil, fmt.Errorf("parse %s: %w", file, err)
-		}
-
-		migrations = append(migrations, &MigrationWithContent{
-			Migration: m,
-			Content:   string(content),
-			FullPath:  file,
-		})
+		migrations = append(migrations, migration)
 	}
 
 	if showProgress && len(files) > 5 {
@@ -1551,12 +2071,31 @@ func loadMigrations(files []string, showProgress bool) ([]*MigrationWithContent,
 }
 
 func printAnalysisReport(
-	migrations []*parser.Migration,
+	migrations []*types.Migration,
 	redundancies []tracking.RedundancyReport,
 	stats tracking.TrackerStats,
 	warnings []string,
 ) {
 	fmt.Print("\n" + color.BlueString("=== Migration Analysis Report ===") + "\n\n")
+
+	// Check for parse errors first
+	parseErrorCount := 0
+	for _, m := range migrations {
+		parseErrorCount += len(m.ParseErrors)
+	}
+
+	if parseErrorCount > 0 {
+		fmt.Print(color.RedString("⚠️  Parse Errors: %d\n\n", parseErrorCount))
+		for _, m := range migrations {
+			if len(m.ParseErrors) > 0 {
+				fmt.Printf("%s", color.RedString("  File: %s\n", m.Filename))
+				for _, parseErr := range m.ParseErrors {
+					fmt.Printf("    • %s\n", parseErr)
+				}
+				fmt.Println()
+			}
+		}
+	}
 
 	// Basic statistics
 	fmt.Printf("Files analyzed: %s\n", color.CyanString("%d", len(migrations)))
@@ -1605,72 +2144,118 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 	fmt.Printf("  • Processing time: %v\n", duration)
 
 	if len(warnings) > 0 {
-		// Categorize warnings for better display
-		backupWarnings := []string{}
-		rollbackWarnings := []string{}
-		transformationWarnings := []string{}
-		cycleWarnings := []string{}
-		otherWarnings := []string{}
+		wm := utils.NewWarningManager()
+		wm.AddRawWarnings(warnings)
 
-		for _, warning := range warnings {
-			if strings.Contains(warning, "Backup created") {
-				backupWarnings = append(backupWarnings, warning)
-			} else if strings.Contains(warning, "Rollback") {
-				rollbackWarnings = append(rollbackWarnings, warning)
-			} else if strings.Contains(warning, "Transformation") {
-				transformationWarnings = append(transformationWarnings, warning)
-			} else if strings.Contains(warning, "DDL Cycle") || strings.Contains(warning, "cycle") {
-				cycleWarnings = append(cycleWarnings, warning)
-			} else {
-				otherWarnings = append(otherWarnings, warning)
-			}
-		}
+		// Separate informational items (backups, rollbacks, transformations) from actual warnings
+		byCategory := wm.GetWarningsByCategory()
 
 		// Show safety and transformation features
-		if len(backupWarnings) > 0 {
+		if backupWarns := byCategory[utils.CategoryBackup]; len(backupWarns) > 0 {
 			fmt.Print("\n" + color.BlueString("🛡 Safety Features:") + "\n")
-			for _, warning := range backupWarnings {
-				fmt.Printf("  ✓ %s\n", strings.Replace(warning, "Backup created: ", "Database backup: ", 1))
+			for _, w := range backupWarns {
+				cleanMsg := strings.Replace(w.Message, "Backup created: ", "Database backup: ", 1)
+				fmt.Printf("  ✓ %s\n", cleanMsg)
 			}
 		}
 
-		if len(rollbackWarnings) > 0 {
+		if rollbackWarns := byCategory[utils.CategoryRollback]; len(rollbackWarns) > 0 {
 			fmt.Print("\n" + color.BlueString("🔄 Rollback Capabilities:") + "\n")
-			for _, warning := range rollbackWarnings {
-				fmt.Printf("  ✓ %s\n", warning)
+			for _, w := range rollbackWarns {
+				fmt.Printf("  ✓ %s\n", w.Message)
 			}
 		}
 
-		if len(transformationWarnings) > 0 {
+		if transformWarns := byCategory[utils.CategoryTransformation]; len(transformWarns) > 0 {
 			fmt.Print("\n" + color.CyanString("⚡ SQL Transformations:") + "\n")
-			for _, warning := range transformationWarnings {
-				if strings.Contains(warning, "Transformation:") {
-					fmt.Printf("  ✓ %s\n", strings.Replace(warning, "Transformation: ", "", 1))
-				} else {
-					fmt.Printf("  ✓ %s\n", warning)
-				}
+			for _, w := range transformWarns {
+				cleanMsg := strings.Replace(w.Message, "Transformation: ", "", 1)
+				fmt.Printf("  ✓ %s\n", cleanMsg)
+			}
+		}
+
+		if optWarns := byCategory[utils.CategoryOptimization]; len(optWarns) > 0 {
+			fmt.Print("\n" + color.CyanString("⚡ Optimizations Applied:") + "\n")
+			for _, w := range optWarns {
+				fmt.Printf("  ✓ %s\n", w.Message)
 			}
 		}
 
 		// Show cycle detection results
-		if len(cycleWarnings) > 0 {
+		if cycleWarns := byCategory[utils.CategoryCycle]; len(cycleWarns) > 0 {
 			fmt.Print("\n" + color.YellowString("🔍 DDL Cycle Detection:") + "\n")
-			for _, warning := range cycleWarnings {
-				if strings.Contains(warning, "CRITICAL") {
-					fmt.Printf("  " + color.RedString("⚠ %s") + "\n", warning)
-				} else if strings.Contains(warning, "DDL Cycle") {
-					fmt.Printf("  ℹ %s\n", warning)
+			for _, w := range cycleWarns {
+				if w.Severity == utils.SeverityCritical {
+					fmt.Printf("  " + color.RedString("⚠ %s") + "\n", w.Message)
+				} else if w.Severity == utils.SeverityHigh {
+					fmt.Printf("  " + color.YellowString("⚠ %s") + "\n", w.Message)
 				} else {
-					fmt.Printf("  ⚠ %s\n", warning)
+					fmt.Printf("  ℹ %s\n", w.Message)
+				}
+				if w.Suggestion != "" {
+					fmt.Printf("    → %s\n", color.CyanString(w.Suggestion))
 				}
 			}
 		}
 
-		// Show other warnings
-		if len(otherWarnings) > 0 {
-			fmt.Print("\n" + color.YellowString("⚠ General Warnings:") + "\n")
-			for _, warning := range otherWarnings {
-				fmt.Printf("  ⚠ %s\n", warning)
+		// Show actual warnings (deduplicated and categorized)
+		var actualWarnings []*errors.StructuredError
+		for _, w := range wm.GetWarnings() {
+			// Skip categories we already displayed separately
+			if w.Category != errors.CategoryBackup &&
+				w.Category != errors.CategoryRollback &&
+				w.Category != errors.CategoryTransformation &&
+				w.Category != errors.CategoryOptimization &&
+				w.Category != errors.CategoryCycle {
+				actualWarnings = append(actualWarnings, w)
+			}
+		}
+
+		if len(actualWarnings) > 0 {
+			// Group remaining warnings by severity
+			bySeverity := make(map[errors.Severity][]*errors.StructuredError)
+			for _, w := range actualWarnings {
+				bySeverity[w.Severity] = append(bySeverity[w.Severity], w)
+			}
+
+			fmt.Print("\n" + color.YellowString("⚠ Warnings:") + "\n")
+
+			// Critical warnings
+			if critical := bySeverity[utils.SeverityCritical]; len(critical) > 0 {
+				fmt.Print("\n" + color.RedString("  🔴 Critical (%d):", len(critical)) + "\n")
+				for _, w := range critical {
+					fmt.Printf("    • %s\n", w.Message)
+					if w.Suggestion != "" {
+						fmt.Printf("      → %s\n", color.CyanString(w.Suggestion))
+					}
+				}
+			}
+
+			// High severity
+			if high := bySeverity[utils.SeverityHigh]; len(high) > 0 {
+				fmt.Print("\n" + color.YellowString("  🟠 High Severity (%d):", len(high)) + "\n")
+				for _, w := range high {
+					fmt.Printf("    • %s\n", w.Message)
+					if w.Suggestion != "" {
+						fmt.Printf("      → %s\n", color.CyanString(w.Suggestion))
+					}
+				}
+			}
+
+			// Medium severity
+			if medium := bySeverity[utils.SeverityMedium]; len(medium) > 0 {
+				fmt.Print("\n" + color.YellowString("  🟡 Medium Severity (%d):", len(medium)) + "\n")
+				for _, w := range medium {
+					fmt.Printf("    • %s\n", w.Message)
+				}
+			}
+
+			// Low/Info
+			if low := bySeverity[utils.SeverityLow]; len(low) > 0 {
+				fmt.Printf("\n  ℹ️  Info (%d):\n", len(low))
+				for _, w := range low {
+					fmt.Printf("    • %s\n", w.Message)
+				}
 			}
 		}
 	}
@@ -1678,7 +2263,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 	// Show enabled features
 	fmt.Print("\n" + color.MagentaString("🎯 Features Enabled:") + "\n")
 	if enableBackup {
-		fmt.Printf("  ✓ Pre-squash backup generation\n")
+		fmt.Printf("  ✓ Pre-squash backup generation (requires prod_db_dsn in config)\n")
 	}
 	if enableRollback {
 		fmt.Printf("  ✓ Rollback script generation\n")

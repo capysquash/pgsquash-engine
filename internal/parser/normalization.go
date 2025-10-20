@@ -3,6 +3,8 @@ package parser
 import (
 	"strings"
 	"unicode"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // NormalizationContext provides context for PostgreSQL identifier normalization
@@ -452,24 +454,15 @@ func (ckc *ContextualKeywordChecker) isConstraintKeyword(word string) bool {
 	return constraintKeywords[word]
 }
 
-// NormalizationError represents an error during normalization
-type NormalizationError struct {
-	Message string
-	Index   int
-}
-
-func (ne *NormalizationError) Error() string {
-	if ne.Index >= 0 {
-		return ne.Message + " at index " + string(rune(ne.Index))
-	}
-	return ne.Message
-}
+// NormalizationError is now an alias to errors.StructuredError
+// This maintains backward compatibility
+type NormalizationError = ParseError
 
 // NewNormalizationError creates a new normalization error
 func NewNormalizationError(message string, index int) *NormalizationError {
-	return &NormalizationError{
-		Message: message,
-		Index:   index,
+	return &ParseError{
+		StructuredError: errors.NewParseError(errors.ErrorCodeNormalizationFailed, message).
+			WithAdditional("index", index),
 	}
 }
 

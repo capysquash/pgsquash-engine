@@ -1,5 +1,5 @@
 #!/bin/bash
-# Unified Validation Script for pg-squash
+# Unified Validation Script for pgsquash
 # Consolidates: validate.sh, quick-validate.sh, schema-diff.sh, setup-validation.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -343,9 +343,9 @@ mode_setup_validation() {
 
   log_info "Analyzing migrations for extension requirements..."
 
-  # Build pg-squash if needed
+  # Build pgsquash if needed
   if [ ! -f "pgsquash" ]; then
-    log_info "Building pg-squash..."
+    log_info "Building pgsquash..."
     go build -o pgsquash cmd/pgsquash/main.go
   fi
 

@@ -1,10 +1,10 @@
 # Engine: Containerized CLI Application
 
-Run pg-squash CLI tool (the engine) inside a Docker container for portability and consistency.
+Run pgsquash CLI tool (the engine) inside a Docker container for portability and consistency.
 
 ## Purpose
 
-- Run pg-squash without installing Go
+- Run pgsquash without installing Go
 - Consistent environment across teams
 - Easy CI/CD integration
 - Isolated from host system
@@ -50,24 +50,27 @@ View all usage examples:
 ## Resource Limits
 
 Default limits:
+
 - Memory: 512MB (limit), 256MB (reservation)
 - CPU: 1.0 core (limit), 0.5 core (reservation)
 
 ## Use Cases
 
 ✅ **Good for**:
+
 - CI/CD pipelines
 - Team consistency
 - No Go installation required
 - Reproducible builds
 
 ❌ **Not suitable for**:
+
 - Validation workflows (use Validation)
-- Web application (use Web App)
+- API/webhook integration (use API Server)
 - Heavy parallel processing
 
 ## Next Steps
 
 - **For validation**: See [Validation](../validation/)
-- **For web app**: See [Web App](../web-app/)
+- **For API server**: See [API Server](../api-server/)
 - **For development**: See [dev-environment](../dev-environment/)

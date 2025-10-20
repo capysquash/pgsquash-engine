@@ -1,11 +1,11 @@
 # =============================================================================
-# pg-squash API Server Dockerfile
+# pgsquash API Server Dockerfile
 # =============================================================================
-# Multi-stage build for pg-squash API server
+# Multi-stage build for pgsquash API server
 # =============================================================================
 
 # Build arguments
-ARG GO_VERSION=1.25.1
+ARG GO_VERSION=1.25.3
 ARG BUILD_VERSION=dev
 ARG BUILD_DATE
 ARG GIT_COMMIT
@@ -54,17 +54,16 @@ RUN go mod download && go mod verify
 # Copy entire project (API server imports internal packages)
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-COPY docker/api-server/ ./docker/api-server/
 
 # Build the API server with version info
 # NOTE: CGO_ENABLED=1 required for pg_query_go dependency
-WORKDIR /app/docker/api-server
+WORKDIR /app
 RUN CGO_ENABLED=1 go build \
     -ldflags="-w -s \
     -X 'main.version=${BUILD_VERSION}' \
     -X 'main.buildDate=${BUILD_DATE}' \
     -X 'main.gitCommit=${GIT_COMMIT}'" \
-    -o api-server .
+    -o api-server ./cmd/api-server
 
 # Production stage - Ubuntu for reliability
 FROM ubuntu:noble AS runtime
@@ -80,29 +79,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user matching main Dockerfile (for consistency)
-RUN groupadd -g 1000 pgsquash && \
-    useradd -u 1000 -g pgsquash -s /bin/bash -m pgsquash
+# Create non-root user with high UID to avoid conflicts
+RUN groupadd -g 10001 pgsquash && \
+    useradd -u 10001 -g pgsquash -s /bin/bash -m pgsquash
 
 # Create app directory
 WORKDIR /app
 
-# Copy binary from builder stage
-COPY --from=builder /app/docker/api-server/api-server .
-
-# Set ownership
-RUN chown -R pgsquash:pgsquash /app
+# Copy binary from builder stage and set ownership in one step
+COPY --from=builder --chown=10001:10001 /app/api-server .
 
 # Add OCI labels
-LABEL org.opencontainers.image.title="pg-squash API Server" \
-      org.opencontainers.image.description="API server for pg-squash migration squasher" \
+LABEL org.opencontainers.image.title="pgsquash API Server" \
+      org.opencontainers.image.description="API server for pgsquash migration squasher" \
       org.opencontainers.image.version="${BUILD_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.vendor="capysquash" \
+      org.opencontainers.image.vendor="CAPYSQUASH" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/capysquash/pg-squash-engine" \
-      org.opencontainers.image.documentation="https://github.com/capysquash/pg-squash-engine/blob/main/docker/api-server/README.md"
+      org.opencontainers.image.source="https://github.com/CAPYSQUASH/pgsquash-engine" \
+      org.opencontainers.image.documentation="https://github.com/CAPYSQUASH/pgsquash-engine/blob/main/docker/api-server/README.md"
 
 # Switch to non-root user
 USER pgsquash

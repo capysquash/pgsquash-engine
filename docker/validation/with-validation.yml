@@ -39,7 +39,7 @@ networks:
   validation-net:
     driver: bridge
     labels:
-      - "pg-squash.network=validation"
+      - "pgsquash.network=validation"
 
 # Usage Examples:
 #

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "Building pg-squash..."
+echo "Building pgsquash..."
 
 # Check if Go is available
 if ! command -v go &> /dev/null; then

@@ -1,5 +1,5 @@
 #!/bin/bash
-# pg-squash Docker Run Examples with Best Practices
+# pgsquash Docker Run Examples with Best Practices
 # This file provides example docker run commands with proper resource limits and security settings
 
 set -euo pipefail

@@ -7,11 +7,20 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/spf13/cobra"
 )
 
-// HealthStatus represents the health check response
+// HealthStatus represents the simple health check response (API contract)
 type HealthStatus struct {
+	Status    string    `json:"status"`
+	Version   string    `json:"version"`
+	Docker    bool      `json:"docker"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// DetailedHealthStatus represents the detailed health check response
+type DetailedHealthStatus struct {
 	Status    string    `json:"status"`
 	Version   string    `json:"version"`
 	Timestamp time.Time `json:"timestamp"`
@@ -29,7 +38,8 @@ type HealthStatus struct {
 }
 
 var (
-	healthJSON bool
+	healthText     bool // JSON is now default, text is opt-in
+	healthDetailed bool // Detailed output with system info
 )
 
 var healthCmd = &cobra.Command{
@@ -41,39 +51,60 @@ Kubernetes liveness/readiness probes, and other orchestration tools.
 Returns exit code 0 if healthy, non-zero otherwise.
 Output format can be plain text or JSON.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		status := HealthStatus{
-			Status:    "healthy",
-			Version:   getVersion(),
-			Timestamp: time.Now().UTC(),
-		}
-
-		// System info
-		status.System.OS = runtime.GOOS
-		status.System.Arch = runtime.GOARCH
-		status.System.GoVer = runtime.Version()
-		status.System.NumCPU = runtime.NumCPU()
-		status.System.NumGo = runtime.NumGoroutine()
-
-		// Docker availability check
+		// Check Docker availability
+		dockerAvailable := false
+		dockerReason := ""
 		if _, err := os.Stat("/var/run/docker.sock"); err == nil {
-			status.Docker.Available = true
+			dockerAvailable = true
 		} else {
-			status.Docker.Available = false
-			status.Docker.Reason = "docker socket not found"
+			dockerReason = "docker socket not found"
 		}
 
-		// Output format
-		if healthJSON {
+		// Output format: JSON is default, plain text is opt-in
+		if healthText {
+			// Plain text output (opt-in via --text flag)
+			fmt.Printf("Status: healthy\n")
+			fmt.Printf("Version: %s\n", getVersion())
+			fmt.Printf("Docker: %v\n", dockerAvailable)
+			fmt.Printf("Timestamp: %s\n", time.Now().UTC().Format(time.RFC3339))
+		} else if healthDetailed {
+			// Detailed JSON output with system info
+			detailedStatus := DetailedHealthStatus{
+				Status:    "healthy",
+				Version:   getVersion(),
+				Timestamp: time.Now().UTC(),
+			}
+
+			// System info
+			detailedStatus.System.OS = runtime.GOOS
+			detailedStatus.System.Arch = runtime.GOARCH
+			detailedStatus.System.GoVer = runtime.Version()
+			detailedStatus.System.NumCPU = runtime.NumCPU()
+			detailedStatus.System.NumGo = runtime.NumGoroutine()
+
+			// Docker info
+			detailedStatus.Docker.Available = dockerAvailable
+			detailedStatus.Docker.Reason = dockerReason
+
+			encoder := json.NewEncoder(os.Stdout)
+			encoder.SetIndent("", "  ")
+			if err := encoder.Encode(detailedStatus); err != nil {
+				return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, "failed to encode health status", nil)
+			}
+		} else {
+			// Simple JSON output (default - matches documented API contract)
+			status := HealthStatus{
+				Status:    "healthy",
+				Version:   getVersion(),
+				Docker:    dockerAvailable,
+				Timestamp: time.Now().UTC(),
+			}
+
 			encoder := json.NewEncoder(os.Stdout)
 			encoder.SetIndent("", "  ")
 			if err := encoder.Encode(status); err != nil {
-				return fmt.Errorf("failed to encode health status: %w", err)
+				return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, "failed to encode health status", nil)
 			}
-		} else {
-			fmt.Printf("Status: %s\n", status.Status)
-			fmt.Printf("Version: %s\n", status.Version)
-			fmt.Printf("Docker: %v\n", status.Docker.Available)
-			fmt.Printf("Timestamp: %s\n", status.Timestamp.Format(time.RFC3339))
 		}
 
 		return nil
@@ -81,15 +112,40 @@ Output format can be plain text or JSON.`,
 }
 
 func init() {
-	healthCmd.Flags().BoolVar(&healthJSON, "json", false, "Output in JSON format")
+	healthCmd.Flags().BoolVar(&healthText, "text", false, "Output in plain text format (default is JSON)")
+	healthCmd.Flags().BoolVar(&healthDetailed, "detailed", false, "Include detailed system information in JSON output")
 	rootCmd.AddCommand(healthCmd)
 }
 
-func getVersion() string {
-	// This would be set via ldflags during build
-	// For now, return a default
-	if version := os.Getenv("PGSQUASH_VERSION"); version != "" {
-		return version
+// SetVersionInfo sets the version information from build-time ldflags
+var versionInfo = struct {
+	version   string
+	buildDate string
+	gitCommit string
+}{
+	version:   "0.8.5-beta", // Default fallback
+	buildDate: "unknown",
+	gitCommit: "unknown",
+}
+
+// SetVersionInfo updates version information (called from main package)
+func SetVersionInfo(version, buildDate, gitCommit string) {
+	if version != "" {
+		versionInfo.version = version
+		rootCmd.Version = version
 	}
-	return "0.8.2-beta"
+	if buildDate != "" {
+		versionInfo.buildDate = buildDate
+	}
+	if gitCommit != "" {
+		versionInfo.gitCommit = gitCommit
+	}
+}
+
+func getVersion() string {
+	// Check environment variable override first (for testing/debugging)
+	if envVersion := os.Getenv("PGSQUASH_VERSION"); envVersion != "" {
+		return envVersion
+	}
+	return versionInfo.version
 }

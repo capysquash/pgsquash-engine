@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# pg-squash Deployment Script
+# pgsquash Deployment Script
 # This script handles the complete deployment of the integrated system
 
 set -e

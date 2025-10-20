@@ -9,11 +9,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
-	"github.com/capysquash/pg-squash-engine/internal/squasher"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/squasher"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // WebhookHandler handles GitHub webhook events
@@ -53,12 +57,6 @@ type IssueCommentEvent struct {
         Body string `json:"body"`
     } `json:"comment"`
     Repository Repository `json:"repository"`
-}
-
-// Branch represents a git branch
-type Branch struct {
-    Ref string `json:"ref"`
-    SHA string `json:"sha"`
 }
 
 // Repository represents a GitHub repository
@@ -116,7 +114,12 @@ func (h *WebhookHandler) HandleWebhook(w http.ResponseWriter, r *http.Request) {
 func (h *WebhookHandler) handlePullRequest(ctx context.Context, body []byte) error {
     var event PullRequestEvent
     if err := json.Unmarshal(body, &event); err != nil {
-        return fmt.Errorf("parse PR event: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to parse pull request event",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithSuggestion("Ensure webhook payload is valid JSON")
     }
 
     // Only process opened and synchronized events
@@ -124,35 +127,85 @@ func (h *WebhookHandler) handlePullRequest(ctx context.Context, body []byte) err
         return nil
     }
 
-    // Get changed migration files
-    files, err := h.githubClient.GetPRFiles(ctx, event.Repository.FullName, event.PullRequest.Number)
+    // Load repository-specific .capysquash.yml configuration
+    capyConfig, err := h.loadCapySquashConfig(ctx, event.Repository.FullName, event.PullRequest.Head.SHA)
     if err != nil {
-        return fmt.Errorf("get PR files: %w", err)
+        // Log error but continue with defaults
+        capyConfig = config.DefaultCapySquashConfig()
     }
 
-    migrationFiles := h.filterMigrationFiles(files)
+    // Check if analysis is enabled for this repository
+    if !capyConfig.Enabled {
+        return nil
+    }
+
+    // Get changed files
+    files, err := h.githubClient.GetPRFiles(ctx, event.Repository.FullName, event.PullRequest.Number)
+    if err != nil {
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to retrieve pull request files",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithAdditional("pr_number", event.PullRequest.Number).WithAdditional("repo", event.Repository.FullName)
+    }
+
+    // Filter for migration files using .capysquash.yml patterns
+    migrationFiles := h.filterMigrationFilesWithConfig(files, capyConfig)
     if len(migrationFiles) == 0 {
         return nil // No migration files changed
     }
 
+    // Check if we should analyze based on .capysquash.yml settings
+    filePaths := make([]string, len(migrationFiles))
+    for i, f := range migrationFiles {
+        filePaths[i] = f.Filename
+    }
+    if !capyConfig.ShouldAnalyze(filePaths) {
+        return nil
+    }
+
     // Analyze migrations
-    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles)
+    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles, capyConfig)
     if err != nil {
-        return fmt.Errorf("analyze migrations: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeAnalysisError,
+            "failed to analyze migrations",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithAdditional("file_count", len(migrationFiles))
     }
 
-    // Post analysis as PR comment
-    comment := h.formatAnalysisComment(analysis, len(migrationFiles))
-    if err := h.githubClient.PostPRComment(ctx, event.Repository.FullName, event.PullRequest.Number, comment); err != nil {
-        return fmt.Errorf("post comment: %w", err)
+    // Post analysis as PR comment (if enabled)
+    if capyConfig.PRComment.Enabled {
+        comment := h.formatAnalysisCommentPlatformStyle(analysis, len(migrationFiles), capyConfig)
+        if err := h.githubClient.PostPRComment(ctx, event.Repository.FullName, event.PullRequest.Number, comment); err != nil {
+            return errors.NewError(
+                errors.ErrorCodeValidationFailed,
+                "failed to post analysis comment",
+                errors.SeverityError,
+                errors.CategoryValidation,
+            ).WithInnerError(err).WithAdditional("pr_number", event.PullRequest.Number)
+        }
     }
 
-    // Check if auto-consolidation is enabled via repo config
-    config, err := h.githubClient.GetRepoConfig(ctx, event.Repository.FullName, event.PullRequest.Head.SHA)
-    if err == nil && config.AutoPR && analysis.ShouldConsolidate {
+    // Evaluate pass/fail thresholds and create check run
+    conclusion := h.evaluateCheckConclusion(analysis, capyConfig)
+    if err := h.createCheckRun(ctx, event, analysis, conclusion); err != nil {
+        // Log error but don't fail the webhook
+        // Check runs are optional
+    }
+
+    // Check if auto-consolidation is enabled
+    if capyConfig.ShouldAutoApply(event.PullRequest.Head.Ref) && analysis.ShouldConsolidate {
         // Create consolidation PR
         if err := h.createConsolidationPR(ctx, event, analysis); err != nil {
-            return fmt.Errorf("create consolidation PR: %w", err)
+            return errors.NewError(
+                errors.ErrorCodeValidationFailed,
+                "failed to create consolidation pull request",
+                errors.SeverityError,
+                errors.CategoryValidation,
+            ).WithInnerError(err)
         }
     }
 
@@ -163,7 +216,12 @@ func (h *WebhookHandler) handlePullRequest(ctx context.Context, body []byte) err
 func (h *WebhookHandler) handleIssueComment(ctx context.Context, body []byte) error {
     var event IssueCommentEvent
     if err := json.Unmarshal(body, &event); err != nil {
-        return fmt.Errorf("parse comment event: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to parse issue comment event",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithSuggestion("Ensure webhook payload is valid JSON")
     }
 
     // Only process comments on PRs
@@ -210,16 +268,24 @@ func (h *WebhookHandler) handleAnalyzeCommand(ctx context.Context, event IssueCo
         return err
     }
 
+    // Load config for command-triggered analysis
+    capyConfig := config.DefaultCapySquashConfig()
+
     migrationFiles := h.filterMigrationFiles(files)
     if len(migrationFiles) == 0 {
         if err := h.githubClient.PostPRComment(ctx, event.Repository.FullName, event.Issue.Number,
             "No migration files found in this PR."); err != nil {
-            return fmt.Errorf("failed to post PR comment: %w", err)
+            return errors.NewError(
+                errors.ErrorCodeValidationFailed,
+                "failed to post PR comment",
+                errors.SeverityError,
+                errors.CategoryValidation,
+            ).WithInnerError(err).WithAdditional("issue_number", event.Issue.Number)
         }
         return nil
     }
 
-    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles)
+    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles, capyConfig)
     if err != nil {
         return err
     }
@@ -241,8 +307,11 @@ func (h *WebhookHandler) handleConsolidateCommand(ctx context.Context, event Iss
         return err
     }
 
+    // Load config for command-triggered consolidation
+    capyConfig := config.DefaultCapySquashConfig()
+
     migrationFiles := h.filterMigrationFiles(files)
-    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles)
+    analysis, err := h.analyzeMigrations(ctx, event.Repository.FullName, migrationFiles, capyConfig)
     if err != nil {
         return err
     }
@@ -263,7 +332,7 @@ func (h *WebhookHandler) handleConsolidateCommand(ctx context.Context, event Iss
     }, analysis)
 }
 
-// filterMigrationFiles filters for SQL migration files
+// filterMigrationFiles filters for SQL migration files (legacy, uses basic logic)
 func (h *WebhookHandler) filterMigrationFiles(files []PRFile) []PRFile {
     migrations := []PRFile{}
     for _, file := range files {
@@ -274,31 +343,164 @@ func (h *WebhookHandler) filterMigrationFiles(files []PRFile) []PRFile {
     return migrations
 }
 
+// filterMigrationFilesWithConfig filters migration files based on .capysquash.yml patterns
+func (h *WebhookHandler) filterMigrationFilesWithConfig(files []PRFile, capyConfig *config.CapySquashConfig) []PRFile {
+    migrations := []PRFile{}
+
+    // Standard migration paths (platform defaults)
+    standardPaths := []string{
+        "migrations/",
+        "db/migrations/",
+        "db/migrate/",
+        "supabase/migrations/",
+        "prisma/migrations/",
+    }
+
+    for _, file := range files {
+        // Must be a SQL file
+        if !strings.HasSuffix(strings.ToLower(file.Filename), ".sql") {
+            continue
+        }
+
+        // Check if file matches include patterns
+        included := false
+
+        // Check against .capysquash.yml include patterns
+        for _, pattern := range capyConfig.Include {
+            if matchPattern(file.Filename, pattern) {
+                included = true
+                break
+            }
+        }
+
+        // Also check standard paths if no explicit include patterns matched
+        if !included && len(capyConfig.Include) == 0 {
+            for _, path := range standardPaths {
+                if strings.HasPrefix(file.Filename, path) {
+                    included = true
+                    break
+                }
+            }
+        }
+
+        if !included {
+            continue
+        }
+
+        // Check if file matches exclude patterns
+        excluded := false
+        for _, pattern := range capyConfig.Exclude {
+            if matchPattern(file.Filename, pattern) {
+                excluded = true
+                break
+            }
+        }
+
+        if included && !excluded {
+            migrations = append(migrations, file)
+        }
+    }
+
+    return migrations
+}
+
+// matchPattern matches a file path against a glob pattern
+func matchPattern(path, pattern string) bool {
+    // Support ** for recursive matching
+    if strings.Contains(pattern, "**") {
+        // Convert ** pattern to simple prefix/suffix matching
+        parts := strings.Split(pattern, "**")
+        if len(parts) == 2 {
+            prefix := strings.TrimSuffix(parts[0], "/")
+            suffix := strings.TrimPrefix(parts[1], "/")
+
+            if prefix != "" && !strings.HasPrefix(path, prefix) {
+                return false
+            }
+            if suffix != "" && !strings.HasSuffix(path, suffix) {
+                return false
+            }
+            return true
+        }
+    }
+
+    // Use filepath.Match for simple patterns
+    matched, _ := filepath.Match(pattern, path)
+    if matched {
+        return true
+    }
+
+    // Also try matching against the basename
+    matched, _ = filepath.Match(pattern, filepath.Base(path))
+    return matched
+}
+
+// loadCapySquashConfig loads .capysquash.yml from repository
+func (h *WebhookHandler) loadCapySquashConfig(ctx context.Context, repo, sha string) (*config.CapySquashConfig, error) {
+    // Try to load .capysquash.yml from various locations
+    possiblePaths := []string{
+        ".capysquash.yml",
+        ".capysquash.yaml",
+        ".github/.capysquash.yml",
+        ".github/.capysquash.yaml",
+    }
+
+    for _, path := range possiblePaths {
+        content, err := h.githubClient.GetFileContent(ctx, repo, path, sha)
+        if err != nil {
+            continue // File doesn't exist, try next
+        }
+
+        // Parse YAML content
+        var capyConfig config.CapySquashConfig
+        if err := config.ParseCapySquashYAML([]byte(content), &capyConfig); err != nil {
+            continue // Invalid YAML, try next file
+        }
+
+        return &capyConfig, nil
+    }
+
+    // No config found, return default
+    return config.DefaultCapySquashConfig(), nil
+}
+
 // AnalysisResult contains migration analysis results
 type AnalysisResult struct {
-    OriginalCount      int
-    OptimizedCount     int
-    ConsolidationRatio float64
-    ShouldConsolidate  bool
-    Redundancies       []tracking.RedundancyReport
-    Warnings           []string
-    ConsolidatedSQL    string
+    OriginalCount        int
+    OptimizedCount       int
+    ConsolidationRatio   float64
+    ShouldConsolidate    bool
+    Redundancies         []tracking.RedundancyReport
+    Warnings             []string
+    ConsolidatedSQL      string
+    HasCriticalWarnings  bool   // True if any critical warnings found
+    HasDataLoss          bool   // True if data loss operations detected
 }
 
 // analyzeMigrations performs analysis on migration files
-func (h *WebhookHandler) analyzeMigrations(ctx context.Context, repo string, files []PRFile) (*AnalysisResult, error) {
+func (h *WebhookHandler) analyzeMigrations(ctx context.Context, repo string, files []PRFile, capyConfig *config.CapySquashConfig) (*AnalysisResult, error) {
     // Download file contents
-    migrations := make([]parser.Migration, 0, len(files))
+    migrations := make([]types.Migration, 0, len(files))
 
     for i, file := range files {
         content, err := h.githubClient.GetFileContent(ctx, repo, file.Filename, file.SHA)
         if err != nil {
-            return nil, fmt.Errorf("get file %s: %w", file.Filename, err)
+            return nil, errors.NewError(
+                errors.ErrorCodeValidationFailed,
+                "failed to retrieve file content",
+                errors.SeverityError,
+                errors.CategoryValidation,
+            ).WithInnerError(err).WithFile(file.Filename).WithAdditional("sha", file.SHA)
         }
 
         m, err := parser.ParseMigration(content, file.Filename)
         if err != nil {
-            return nil, fmt.Errorf("parse %s: %w", file.Filename, err)
+            return nil, errors.NewError(
+                errors.ErrorCodeSyntaxError,
+                "failed to parse migration file",
+                errors.SeverityError,
+                errors.CategoryParsing,
+            ).WithInnerError(err).WithFile(file.Filename)
         }
         m.Sequence = i + 1
         migrations = append(migrations, *m)
@@ -322,7 +524,12 @@ func (h *WebhookHandler) analyzeMigrations(ctx context.Context, repo string, fil
 
     consolidatedSQL, warnings, err := h.analysisEngine.Squash(migrationMap)
     if err != nil {
-        return nil, fmt.Errorf("squash analysis: %w", err)
+        return nil, errors.NewError(
+            errors.ErrorCodeConsolidationFailed,
+            "failed to squash migrations",
+            errors.SeverityError,
+            errors.CategoryConsolidation,
+        ).WithInnerError(err).WithAdditional("migration_count", len(migrationMap))
     }
 
     // Calculate consolidation ratio
@@ -344,11 +551,11 @@ func (h *WebhookHandler) analyzeMigrations(ctx context.Context, repo string, fil
     }, nil
 }
 
-// formatAnalysisComment formats analysis results as a PR comment
+// formatAnalysisComment formats analysis results as a PR comment (legacy format)
 func (h *WebhookHandler) formatAnalysisComment(analysis *AnalysisResult, fileCount int) string {
     var comment strings.Builder
 
-    comment.WriteString("## 🔍 pg-squash Migration Analysis\n\n")
+    comment.WriteString("## 🔍 pgsquash Migration Analysis\n\n")
     comment.WriteString(fmt.Sprintf("**Migration Files:** %d\n", fileCount))
     comment.WriteString(fmt.Sprintf("**Consolidation Ratio:** %.1f%%\n\n", analysis.ConsolidationRatio*100))
 
@@ -387,22 +594,188 @@ func (h *WebhookHandler) formatAnalysisComment(analysis *AnalysisResult, fileCou
     return comment.String()
 }
 
+// formatAnalysisCommentPlatformStyle formats analysis results matching CAPYSQUASH platform style
+func (h *WebhookHandler) formatAnalysisCommentPlatformStyle(analysis *AnalysisResult, fileCount int, capyConfig *config.CapySquashConfig) string {
+    var comment strings.Builder
+
+    // Determine status emoji based on warnings and thresholds
+    statusEmoji := "✅"
+    statusText := "Analysis Successful"
+    if len(analysis.Warnings) > 0 {
+        if len(analysis.Warnings) > capyConfig.Checks.MaxWarnings || analysis.HasCriticalWarnings {
+            statusEmoji = "❌"
+            statusText = "Analysis Failed"
+        } else {
+            statusEmoji = "⚠️"
+            statusText = "Analysis Completed with Warnings"
+        }
+    }
+
+    // Header matching platform style
+    comment.WriteString(fmt.Sprintf("## %s CAPYSQUASH Migration Analysis\n\n", statusEmoji))
+    comment.WriteString(fmt.Sprintf("**Status**: %s\n", statusText))
+    comment.WriteString(fmt.Sprintf("**Migration Files**: %d\n", fileCount))
+
+    // Calculate consolidation percentage
+    reductionPercent := 0.0
+    if fileCount > 0 {
+        reductionPercent = float64(fileCount-1) / float64(fileCount) * 100
+    }
+    comment.WriteString(fmt.Sprintf("**Potential Consolidation**: %d → %d files (%.0f%% reduction)\n\n",
+        fileCount, 1, reductionPercent))
+
+    // Analysis output section (if configured)
+    if capyConfig.PRComment.IncludeStats {
+        comment.WriteString("### 📊 Analysis Results\n\n")
+        comment.WriteString(fmt.Sprintf("- **Original files**: %d migration files\n", fileCount))
+        if analysis.ShouldConsolidate {
+            comment.WriteString(fmt.Sprintf("- **Optimized**: 1 consolidated file\n"))
+            comment.WriteString(fmt.Sprintf("- **Time saved**: ~%d seconds per deployment\n", fileCount*10)) // Rough estimate
+        } else {
+            comment.WriteString("- **Status**: Migrations already optimized\n")
+        }
+        comment.WriteString("\n")
+    }
+
+    // Warnings section (if configured and warnings exist)
+    if capyConfig.PRComment.IncludeWarnings && len(analysis.Warnings) > 0 {
+        comment.WriteString("### ⚠️ Warnings\n\n")
+        for i, w := range analysis.Warnings {
+            if i >= 10 {
+                comment.WriteString(fmt.Sprintf("_...and %d more warnings_\n", len(analysis.Warnings)-10))
+                break
+            }
+            comment.WriteString(fmt.Sprintf("%d. %s\n", i+1, w))
+        }
+        comment.WriteString("\n")
+    }
+
+    // Recommendations section (if configured)
+    if capyConfig.PRComment.IncludeRecommendations && fileCount >= capyConfig.MigrationThreshold {
+        comment.WriteString("### 💡 Recommendation\n\n")
+        comment.WriteString(fmt.Sprintf("You have %d migration files. Consider using `pgsquash squash` to consolidate them.\n\n", fileCount))
+        comment.WriteString("```bash\n")
+        comment.WriteString("pgsquash squash migrations/*.sql --output consolidated/ --safety standard\n")
+        comment.WriteString("```\n\n")
+        comment.WriteString(fmt.Sprintf("[View detailed analysis →](https://capysquash.dev/analyze)\n\n"))
+    }
+
+    // Footer
+    comment.WriteString("---\n")
+    comment.WriteString("_Powered by [CAPYSQUASH](https://capysquash.dev) 🦫_\n")
+
+    return comment.String()
+}
+
+// evaluateCheckConclusion determines the check run conclusion based on thresholds
+func (h *WebhookHandler) evaluateCheckConclusion(analysis *AnalysisResult, capyConfig *config.CapySquashConfig) string {
+    checks := capyConfig.Checks
+
+    // Check for critical warnings
+    if checks.FailOnCritical && analysis.HasCriticalWarnings {
+        return "failure"
+    }
+
+    // Check warning count threshold
+    if checks.MaxWarnings > 0 && len(analysis.Warnings) > checks.MaxWarnings {
+        return "failure"
+    }
+
+    // Check if any warnings exist (strict mode)
+    if checks.FailOnWarnings && len(analysis.Warnings) > 0 {
+        return "failure"
+    }
+
+    // Check for data loss operations
+    if checks.FailOnDataLoss && analysis.HasDataLoss {
+        return "failure"
+    }
+
+    // Check minimum reduction percentage
+    if checks.MinReductionPercent > 0 {
+        reductionPercent := 0.0
+        if analysis.OriginalCount > 0 {
+            reductionPercent = float64(analysis.OriginalCount-analysis.OptimizedCount) / float64(analysis.OriginalCount) * 100
+        }
+        if reductionPercent < float64(checks.MinReductionPercent) {
+            return "neutral"
+        }
+    }
+
+    // Check if optimization is required
+    if checks.RequireOptimization && !analysis.ShouldConsolidate {
+        return "neutral"
+    }
+
+    // All checks passed
+    if len(analysis.Warnings) > 0 {
+        return "neutral" // Has warnings but within thresholds
+    }
+    return "success"
+}
+
+// createCheckRun creates a GitHub check run for the analysis
+func (h *WebhookHandler) createCheckRun(ctx context.Context, event PullRequestEvent, analysis *AnalysisResult, conclusion string) error {
+    // Create check run output
+    title := "Migration Analysis Complete"
+    summary := fmt.Sprintf("Analyzed %d migration files", analysis.OriginalCount)
+    if analysis.ShouldConsolidate {
+        summary += fmt.Sprintf(", found potential for consolidation")
+    }
+
+    var output strings.Builder
+    output.WriteString(fmt.Sprintf("**Files analyzed**: %d\n", analysis.OriginalCount))
+    output.WriteString(fmt.Sprintf("**Warnings**: %d\n", len(analysis.Warnings)))
+    output.WriteString(fmt.Sprintf("**Consolidation potential**: %s\n", func() string {
+        if analysis.ShouldConsolidate {
+            return "Yes"
+        }
+        return "No"
+    }()))
+
+    checkRun := &CheckRun{
+        Name:       "pgsquash/migration-analysis",
+        HeadSHA:    event.PullRequest.Head.SHA,
+        Status:     "completed",
+        Conclusion: conclusion,
+        Output: &CheckRunOutput{
+            Title:   title,
+            Summary: summary,
+            Text:    output.String(),
+        },
+    }
+
+    repo := fmt.Sprintf("%s/%s", event.Repository.Owner.Login, event.Repository.Name)
+    _, err := h.githubClient.CreateCheckRun(ctx, repo, checkRun)
+    return err
+}
+
 // createConsolidationPR creates a new PR with consolidated migrations
 func (h *WebhookHandler) createConsolidationPR(ctx context.Context, event PullRequestEvent, analysis *AnalysisResult) error {
     // Create a new branch
     baseBranch := event.PullRequest.Base.Ref
-    newBranch := fmt.Sprintf("pg-squash/consolidate-pr-%d", event.PullRequest.Number)
+    newBranch := fmt.Sprintf("pgsquash/consolidate-pr-%d", event.PullRequest.Number)
 
     if err := h.githubClient.CreateBranch(ctx, event.Repository.FullName, newBranch, event.PullRequest.Head.SHA); err != nil {
-        return fmt.Errorf("create branch: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to create consolidation branch",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithAdditional("branch", newBranch).WithAdditional("sha", event.PullRequest.Head.SHA)
     }
 
     // Commit consolidated migration
-    commitMsg := fmt.Sprintf("Consolidate migrations from PR #%d\n\nAutomatic consolidation by pg-squash bot", event.PullRequest.Number)
+    commitMsg := fmt.Sprintf("Consolidate migrations from PR #%d\n\nAutomatic consolidation by pgsquash bot", event.PullRequest.Number)
     filename := "migrations/001_consolidated.sql"
 
     if err := h.githubClient.CreateOrUpdateFile(ctx, event.Repository.FullName, filename, analysis.ConsolidatedSQL, commitMsg, newBranch); err != nil {
-        return fmt.Errorf("commit file: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to commit consolidated file",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithFile(filename).WithAdditional("branch", newBranch)
     }
 
     // Create PR
@@ -422,12 +795,17 @@ This PR consolidates migrations from #%d.
 - Preserved data integrity
 
 ---
-*Generated by [pg-squash](https://github.com/capysquash/pg-squash)*
+*Generated by [pgsquash](https://github.com/CAPYSQUASH/pgsquash)*
 `, event.PullRequest.Number, analysis.OriginalCount, analysis.OriginalCount, analysis.OptimizedCount)
 
     prNumber, err := h.githubClient.CreatePullRequest(ctx, event.Repository.FullName, prTitle, prBody, newBranch, baseBranch)
     if err != nil {
-        return fmt.Errorf("create PR: %w", err)
+        return errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to create consolidation pull request",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithAdditional("head_branch", newBranch).WithAdditional("base_branch", baseBranch)
     }
 
     // Comment on original PR

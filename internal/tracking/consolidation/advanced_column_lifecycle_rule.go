@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // AdvancedColumnLifecycleRule handles complex column evolution patterns with edge cases

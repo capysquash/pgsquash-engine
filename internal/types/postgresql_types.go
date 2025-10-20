@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // PostgreSQLTypeSystem handles PostgreSQL-specific type operations and conversions
@@ -244,7 +246,7 @@ func (pts *PostgreSQLTypeSystem) ParseArrayType(typeSpec string) (*ArrayType, er
 	matches := arrayPattern.FindStringSubmatch(typeSpec)
 
 	if len(matches) < 3 {
-		return nil, NewTypeError(ErrorCodeArraySpecError, "invalid array type specification", typeSpec)
+		return nil, errors.NewTypeError(errors.ErrorCodeArraySpecError, "invalid array type specification", typeSpec)
 	}
 
 	elementType := strings.TrimSpace(matches[1])
@@ -552,7 +554,7 @@ func (pts *PostgreSQLTypeSystem) GetTypeSize(typeName string) (int, error) {
 		}
 	}
 
-	return -1, NewTypeError(ErrorCodeTypeNotFound, "unknown type", typeName)
+	return -1, errors.NewTypeError(errors.ErrorCodeTypeNotFound, "unknown type", typeName)
 }
 
 // extractSizeFromSpec extracts size information from type specification
@@ -569,14 +571,14 @@ func (pts *PostgreSQLTypeSystem) extractSizeFromSpec(typeSpec string) (int, erro
 		return size, nil
 	}
 
-	return -1, NewTypeError(ErrorCodeSizeExtractionError, "cannot extract size from type specification", typeSpec)
+	return -1, errors.NewTypeError(errors.ErrorCodeSizeExtractionError, "cannot extract size from type specification", typeSpec)
 }
 
 // ValidateEnumValue validates that a value is valid for an enum type
 func (pts *PostgreSQLTypeSystem) ValidateEnumValue(enumTypeName, value string) error {
 	enumType, exists := pts.enumTypes[enumTypeName]
 	if !exists {
-		return NewTypeError(ErrorCodeTypeNotFound, "enum type not found", enumTypeName)
+		return errors.NewTypeError(errors.ErrorCodeTypeNotFound, "enum type not found", enumTypeName)
 	}
 
 	for _, validValue := range enumType.Values {
@@ -585,14 +587,14 @@ func (pts *PostgreSQLTypeSystem) ValidateEnumValue(enumTypeName, value string) e
 		}
 	}
 
-	return NewTypeError(ErrorCodeEnumValidationError, "value is not valid for enum type", enumTypeName).WithContext("value", value).WithContext("valid_values", enumType.Values)
+	return errors.NewTypeError(errors.ErrorCodeEnumValidationError, "value is not valid for enum type", enumTypeName).WithAdditional("value", value).WithAdditional("valid_values", enumType.Values)
 }
 
 // GetCompositeTypeAttributes returns the attributes of a composite type
 func (pts *PostgreSQLTypeSystem) GetCompositeTypeAttributes(typeName string) ([]Attribute, error) {
 	compositeType, exists := pts.compositeTypes[typeName]
 	if !exists {
-		return nil, NewTypeError(ErrorCodeCompositeTypeError, "composite type not found", typeName)
+		return nil, errors.NewTypeError(errors.ErrorCodeCompositeTypeError, "composite type not found", typeName)
 	}
 
 	return compositeType.Attributes, nil

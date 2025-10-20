@@ -17,8 +17,8 @@ on:
         required: false
         default: false
         type: boolean
-      platforms:
-        description: 'Target platforms'
+      Platforms:
+        description: 'Target Platforms'
         required: false
         default: 'linux/amd64,linux/arm64'
         type: string
@@ -30,8 +30,8 @@ env:
   IMAGE_NAME: pgsquash
 
   # Build configuration
-  PLATFORMS: linux/amd64,linux/arm64
-  GO_VERSION: '1.25.1'
+  PlatformS: linux/amd64,linux/arm64
+  GO_VERSION: '1.25.3'
 
 jobs:
   # ============================================
@@ -47,7 +47,7 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tags: ${{ steps.meta.outputs.tags }}
       labels: ${{ steps.meta.outputs.labels }}
-      platforms: ${{ steps.setup.outputs.platforms }}
+      Platforms: ${{ steps.setup.outputs.Platforms }}
       push: ${{ steps.setup.outputs.push }}
       ghcr-tags: ${{ steps.meta-ghcr.outputs.tags }}
       dockerhub-tags: ${{ steps.meta-dockerhub.outputs.tags }}
@@ -60,13 +60,13 @@ jobs:
       - name: Setup build parameters
         id: setup
         run: |
-          # Determine platforms
-          if [[ "${{ github.event.inputs.platforms }}" != "" ]]; then
-            PLATFORMS="${{ github.event.inputs.platforms }}"
+          # Determine Platforms
+          if [[ "${{ github.event.inputs.Platforms }}" != "" ]]; then
+            PlatformS="${{ github.event.inputs.Platforms }}"
           else
-            PLATFORMS="${{ env.PLATFORMS }}"
+            PlatformS="${{ env.PlatformS }}"
           fi
-          echo "platforms=$PLATFORMS" >> $GITHUB_OUTPUT
+          echo "Platforms=$PlatformS" >> $GITHUB_OUTPUT
 
           # Determine if we should push
           PUSH="false"
@@ -94,20 +94,20 @@ jobs:
             type=edge,branch=main
             type=sha
           labels: |
-            org.opencontainers.image.title=pg-squash
+            org.opencontainers.image.title=pgsquash
             org.opencontainers.image.description=PostgreSQL Migration Squasher and Optimizer
-            org.opencontainers.image.vendor=pg-squash
+            org.opencontainers.image.vendor=pgsquash
             org.opencontainers.image.licenses=MIT
-            pg-squash.version=${{ github.ref_name }}
-            pg-squash.commit=${{ github.sha }}
-            pg-squash.build-date=${{ github.run_id }}
+            pgsquash.version=${{ github.ref_name }}
+            pgsquash.commit=${{ github.sha }}
+            pgsquash.build-date=${{ github.run_id }}
 
       - name: Extract metadata (GHCR)
         id: meta-ghcr
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.GHCR_REGISTRY }}/capysquash/${{ env.IMAGE_NAME }}
+            ${{ env.GHCR_REGISTRY }}/CAPYSQUASH/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -164,7 +164,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@releases/v5
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -179,7 +179,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: ${{ needs.metadata.outputs.platforms }}
+          platforms: ${{ needs.metadata.outputs.Platforms }}
 
       - name: Log in to ${{ matrix.registry_name }}
         if: needs.metadata.outputs.push == 'true'
@@ -193,7 +193,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: ${{ needs.metadata.outputs.push == 'true' && needs.metadata.outputs.platforms || 'linux/amd64' }}
+          platforms: ${{ needs.metadata.outputs.push == 'true' && needs.metadata.outputs.Platforms || 'linux/amd64' }}
           push: ${{ needs.metadata.outputs.push }}
           load: ${{ needs.metadata.outputs.push != 'true' }}
           tags: ${{ matrix.tags }}
@@ -338,7 +338,7 @@ jobs:
           # Wait for services to be healthy
           timeout 60s bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 2; done'
 
-          # Test pg-squash functionality
+          # Test pgsquash functionality
           docker-compose exec -T pgsquash pgsquash --version
 
       - name: Cleanup

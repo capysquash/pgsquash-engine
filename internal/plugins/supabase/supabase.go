@@ -1,18 +1,25 @@
-// Package supabase provides Supabase platform integration for pg-squash.
+// Package supabase provides Supabase Platform integration for pgsquash.
 // It handles auth.uid(), RLS policies, Storage bucket policies, and Realtime publications.
 package supabase
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
-// SupabasePlugin implements Supabase platform integration
+// Supabase-specific auth pattern identifiers
+const (
+    AuthPatternSupabase = "supabase_auth"       // Supabase auth.uid() patterns
+    AuthPatternSupabaseRLS = "supabase_rls"     // RLS policies with auth.uid()
+    AuthPatternSupabaseStorage = "supabase_storage" // Storage bucket policies
+)
+
+// SupabasePlugin implements Supabase Platform integration
 type SupabasePlugin struct {
     *plugins.BasePlugin
     config SupabaseConfig
@@ -122,30 +129,43 @@ func (sp *SupabasePlugin) Initialize(ctx context.Context, config interface{}) er
     return nil
 }
 
-// EnrichStatement adds Supabase-specific metadata to parsed statements
-func (sp *SupabasePlugin) EnrichStatement(ctx context.Context, stmt *types.Statement) error {
+// DetectAuthPattern analyzes a statement for Supabase authentication patterns
+func (sp *SupabasePlugin) DetectAuthPattern(stmt *types.Statement) string {
     sql := stmt.SQL
 
-    // Detect Supabase auth patterns
-    if strings.Contains(sql, "auth.uid()") {
-        stmt.AuthPattern = types.AuthPatternSupabase
-    }
-
-    // Detect RLS policies
+    // Pattern 1: RLS policies with auth.uid() (most specific)
     if stmt.ObjectType == types.TypePolicy && strings.Contains(sql, "auth.uid()") {
-        stmt.AuthPattern = types.AuthPatternRLS
-        stmt.Category = types.CategoryCritical
+        return AuthPatternSupabaseRLS
     }
 
-    // Detect Storage policies
+    // Pattern 2: Storage policies
     if stmt.ObjectType == types.TypePolicy &&
        (strings.Contains(sql, "storage.objects") || strings.Contains(sql, "storage.buckets")) {
-        stmt.AuthPattern = types.AuthPatternStorage
-        stmt.Category = types.CategoryCritical
+        return AuthPatternSupabaseStorage
+    }
+
+    // Pattern 3: Generic Supabase auth patterns
+    if strings.Contains(sql, "auth.uid()") {
+        return AuthPatternSupabase
+    }
+
+    return ""
+}
+
+// EnrichStatement adds Supabase-specific metadata to parsed statements
+func (sp *SupabasePlugin) EnrichStatement(ctx context.Context, stmt *types.Statement) error {
+    // Detect and set auth pattern using plugin-specific detection
+    if authPattern := sp.DetectAuthPattern(stmt); authPattern != "" {
+        stmt.AuthPattern = types.AuthPatternType(authPattern)
+
+        // Mark policies with auth patterns as critical
+        if stmt.ObjectType == types.TypePolicy {
+            stmt.Category = types.CategoryCritical
+        }
     }
 
     // Detect Realtime publications
-    if stmt.ObjectType == types.TypePublication && strings.Contains(sql, "supabase_realtime") {
+    if stmt.ObjectType == types.TypePublication && strings.Contains(stmt.SQL, "supabase_realtime") {
         stmt.Category = types.CategoryCritical
     }
 
@@ -210,12 +230,13 @@ func (sp *SupabasePlugin) GetRequiredExtensions() []string {
 // ShouldPreserve determines if a statement should never be consolidated
 func (sp *SupabasePlugin) ShouldPreserve(stmt *types.Statement) bool {
     // Preserve RLS policies using auth.uid()
-    if stmt.ObjectType == types.TypePolicy && stmt.AuthPattern == types.AuthPatternSupabase {
+    if stmt.ObjectType == types.TypePolicy && (stmt.AuthPattern == types.AuthPatternType(AuthPatternSupabase) ||
+       stmt.AuthPattern == types.AuthPatternType(AuthPatternSupabaseRLS)) {
         return true
     }
 
     // Preserve Storage policies
-    if stmt.ObjectType == types.TypePolicy && stmt.AuthPattern == types.AuthPatternStorage {
+    if stmt.ObjectType == types.TypePolicy && stmt.AuthPattern == types.AuthPatternType(AuthPatternSupabaseStorage) {
         return true
     }
 
@@ -226,6 +247,16 @@ func (sp *SupabasePlugin) ShouldPreserve(stmt *types.Statement) bool {
 
     // Preserve auth schema functions
     if stmt.ObjectType == types.TypeFunction && sp.isSupabaseAuthFunction(stmt.SQL) {
+        return true
+    }
+
+    // These are Supabase-managed tables that should not be modified during squashing
+    if stmt.Schema == "storage" && stmt.ObjectType == types.TypeTable {
+        return true
+    }
+
+    // Also preserve auth schema tables (auth.users, auth.sessions, etc.)
+    if stmt.Schema == "auth" && stmt.ObjectType == types.TypeTable {
         return true
     }
 
@@ -258,11 +289,15 @@ func (sp *SupabasePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error 
     var schemaExists bool
     err := db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'auth')").Scan(&schemaExists)
     if err != nil {
-        return fmt.Errorf("failed to check auth schema: %w", err)
+        return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "failed to check auth schema",
+            map[string]interface{}{"schema": "auth"})
     }
 
     if !schemaExists {
-        return fmt.Errorf("auth schema does not exist (required for Supabase integration)")
+        return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "auth schema does not exist (required for Supabase integration)",
+            map[string]interface{}{"schema": "auth"})
     }
 
     // Verify auth.uid() function exists
@@ -271,11 +306,15 @@ func (sp *SupabasePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error 
         "SELECT EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'auth' AND p.proname = 'uid')").
         Scan(&functionExists)
     if err != nil {
-        return fmt.Errorf("failed to check auth.uid() function: %w", err)
+        return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "failed to check auth.uid() function",
+            map[string]interface{}{"function": "auth.uid"})
     }
 
     if !functionExists {
-        return fmt.Errorf("auth.uid() function does not exist (required for Supabase integration)")
+        return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+            "auth.uid() function does not exist (required for Supabase integration)",
+            map[string]interface{}{"function": "auth.uid"})
     }
 
     // If storage integration is enabled, verify storage schema
@@ -283,11 +322,15 @@ func (sp *SupabasePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error 
         var storageExists bool
         err = db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname = 'storage')").Scan(&storageExists)
         if err != nil {
-            return fmt.Errorf("failed to check storage schema: %w", err)
+            return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+                "failed to check storage schema",
+                map[string]interface{}{"schema": "storage"})
         }
 
         if !storageExists {
-            return fmt.Errorf("storage schema does not exist (required for Supabase Storage integration)")
+            return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+                "storage schema does not exist (required for Supabase Storage integration)",
+                map[string]interface{}{"schema": "storage"})
         }
     }
 

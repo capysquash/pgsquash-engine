@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# pg-squash Universal Initialization Script
-# This script sets up a complete pg-squash environment
+# pgsquash Universal Initialization Script
+# This script sets up a complete pgsquash environment
 
 # Colors for output
 RED='\033[0;31m'
@@ -85,9 +85,9 @@ USAGE:
     $0 [OPTIONS] [COMMAND]
 
 COMMANDS:
-    install     Install pg-squash (default)
+    install     Install pgsquash (default)
     update      Update existing installation
-    uninstall   Remove pg-squash
+    uninstall   Remove pgsquash
     dev         Set up development environment
     test        Run setup tests
 
@@ -279,12 +279,12 @@ setup_docker_compose() {
 
     # Download docker-compose.yml
     log_substep "Downloading docker-compose.yml..."
-    curl -sSL "https://raw.githubusercontent.com/capysquash/pg-squash/main/docker-compose.yml" \
+    curl -sSL "https://raw.githubusercontent.com/CAPYSQUASH/pgsquash/main/docker-compose.yml" \
         -o "$CONFIG_DIR/docker-compose.yml"
 
     # Download .env.example and create .env
     log_substep "Setting up environment configuration..."
-    curl -sSL "https://raw.githubusercontent.com/capysquash/pg-squash/main/.env.example" \
+    curl -sSL "https://raw.githubusercontent.com/CAPYSQUASH/pgsquash/main/.env.example" \
         -o "$CONFIG_DIR/.env.example"
 
     if [[ ! -f "$CONFIG_DIR/.env" ]]; then
@@ -329,7 +329,7 @@ pull_docker_images() {
         "postgres:17"
         "postgres:15"
         "redis:7"
-        "ghcr.io/capysquash/pg-squash:latest"
+        "ghcr.io/CAPYSQUASH/pgsquash:latest"
     )
 
     for image in "${images[@]}"; do
@@ -361,7 +361,7 @@ install_native() {
         git pull origin main
     else
         log_substep "Cloning repository..."
-        git clone https://github.com/capysquash/pg-squash-engine.git "$repo_dir"
+        git clone https://github.com/CAPYSQUASH/pgsquash-engine.git "$repo_dir"
         cd "$repo_dir"
     fi
 
@@ -380,7 +380,7 @@ setup_development() {
     log_step "Setting up development environment..."
 
     if [[ ! -f "$PROJECT_ROOT/go.mod" ]]; then
-        log_error "Not in a pg-squash development directory"
+        log_error "Not in a pgsquash development directory"
     fi
 
     cd "$PROJECT_ROOT"
@@ -419,7 +419,7 @@ DATA_DIR="${DATA_DIR:-$HOME/.local/share/pgsquash}"
 # Change to config directory
 cd "$CONFIG_DIR"
 
-# Run pg-squash via Docker Compose
+# Run pgsquash via Docker Compose
 exec docker-compose run --rm \
     -v "$PWD:/app/migrations" \
     -v "$DATA_DIR/output:/app/output" \
@@ -449,7 +449,7 @@ if [[ -f "$INSTALL_DIR/pgsquash-native" ]] && [[ -x "$INSTALL_DIR/pgsquash-nativ
 elif [[ -f "$INSTALL_DIR/pgsquash-docker" ]] && [[ -x "$INSTALL_DIR/pgsquash-docker" ]]; then
     exec "$INSTALL_DIR/pgsquash-docker" "$@"
 else
-    echo "ERROR: No pg-squash installation found" >&2
+    echo "ERROR: No pgsquash installation found" >&2
     exit 1
 fi
 EOF
@@ -471,7 +471,7 @@ generate_sample_data() {
     local sample_script="$DATA_DIR/create-samples.sh"
 
     # Download sample generator
-    curl -sSL "https://raw.githubusercontent.com/capysquash/pg-squash/main/docker/init-scripts/create-sample-migrations.sh" \
+    curl -sSL "https://raw.githubusercontent.com/CAPYSQUASH/pgsquash/main/docker/init-scripts/create-sample-migrations.sh" \
         -o "$sample_script"
     chmod +x "$sample_script"
 
@@ -524,7 +524,7 @@ start_services() {
         return 0
     fi
 
-    log_step "Starting pg-squash services..."
+    log_step "Starting pgsquash services..."
 
     cd "$CONFIG_DIR"
 
@@ -588,7 +588,7 @@ run_verification() {
 
 # Show installation summary
 show_summary() {
-    log_success "🎉 pg-squash installation completed!"
+    log_success "🎉 pgsquash installation completed!"
     echo
     log_info "📁 Installation Details:"
     log_info "  • Install Directory: $INSTALL_DIR"
@@ -626,8 +626,8 @@ show_summary() {
     fi
 
     echo
-    log_info "📚 Documentation: https://github.com/capysquash/pg-squash-engine"
-    log_info "💬 Support: https://github.com/capysquash/pg-squash-engine/issues"
+    log_info "📚 Documentation: https://github.com/CAPYSQUASH/pgsquash-engine"
+    log_info "💬 Support: https://github.com/CAPYSQUASH/pgsquash-engine/issues"
 
     if [[ "$INTERACTIVE_MODE" == "true" ]]; then
         echo
@@ -689,7 +689,7 @@ interactive_config() {
 
 # Uninstall function
 uninstall_pgsquash() {
-    log_step "Uninstalling pg-squash..."
+    log_step "Uninstalling pgsquash..."
 
     # Stop Docker services
     if [[ -f "$CONFIG_DIR/docker-compose.yml" ]]; then
@@ -710,7 +710,7 @@ uninstall_pgsquash() {
         esac
     fi
 
-    log_success "pg-squash uninstalled"
+    log_success "pgsquash uninstalled"
 }
 
 # Main execution

@@ -4,20 +4,21 @@
 package tracking
 
 import (
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/metadata"
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/metadata"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // UnifiedTracker provides comprehensive object lifecycle tracking with advanced metadata integration
 type UnifiedTracker struct {
 	objects         map[string]*ObjectLifecycle
-	migrations      []*parser.Migration
+	migrations      []*types.Migration
 	dependencies    map[string][]ObjectDependency
 	metadataManager *metadata.MetadataManager
 	dependencyGraph *DependencyGraph
@@ -34,6 +35,8 @@ type UnifiedTracker struct {
 	streamingMode    bool
 	migrationCounter int64
 	processedCount   int64
+	statementCounter int64  // Track total statements even in streaming mode
+	dataOpCounter    int64  // Track data operations even in streaming mode
 }
 
 // ObjectLifecycle tracks complete database object lifecycle with advanced metadata integration
@@ -41,11 +44,11 @@ type ObjectLifecycle struct {
 	Key          string // schema.name.type
 	Name         string
 	Schema       string
-	Type         parser.ObjectType
+	Type         types.ObjectType
 	History      []LifecycleEvent
 	Permissions  []PermissionEvent
 	Dependencies []ObjectDependency
-	Category     parser.Category
+	Category     types.Category
 	WasDropped   bool
 
 	// Analysis results
@@ -74,8 +77,8 @@ type LifecycleEvent struct {
 	ID           string // Unique event identifier
 	Migration    string
 	Sequence     int
-	Operation    parser.Operation
-	Statement    parser.Statement
+	Operation    types.Operation
+	Statement    types.Statement
 	Timestamp    time.Time        // When this event occurred
 	Context      OperationContext // Enhanced context
 	HasDataOps   bool
@@ -86,10 +89,10 @@ type LifecycleEvent struct {
 
 // PermissionEvent tracks GRANT/REVOKE operations
 type PermissionEvent struct {
-	Operation parser.Operation // GRANT or REVOKE
+	Operation types.Operation // GRANT or REVOKE
 	Grantee   string
 	Privilege string
-	Statement parser.Statement
+	Statement types.Statement
 }
 
 // ObjectDependency provides enhanced dependency tracking
@@ -103,7 +106,7 @@ type ObjectDependency struct {
 
 // ObjectID provides comprehensive object identification
 type ObjectID struct {
-	Type   parser.ObjectType `json:"type"`
+	Type   types.ObjectType `json:"type"`
 	Schema string            `json:"schema"`
 	Name   string            `json:"name"`
 }
@@ -121,6 +124,7 @@ const (
 	DependencyTypeSequence    DependencyType = "SEQUENCE"
 	DependencyTypeExtension   DependencyType = "EXTENSION"
 	DependencyTypeCrossSchema DependencyType = "CROSS_SCHEMA"
+	DependencyTypeColumn      DependencyType = "COLUMN"
 )
 
 // ===== ABSORBED TYPES FROM resource_tracker.go =====
@@ -139,8 +143,8 @@ const (
 	ResourceChangeRevoke ResourceChangeType = "REVOKE"
 )
 
-// ResourceType represents the type of database resource - use parser.ObjectType for consistency
-type ResourceType = parser.ObjectType
+// ResourceType represents the type of database resource - use types.ObjectType for consistency
+type ResourceType = types.ObjectType
 
 // SourceRange represents the source location of a change
 type SourceRange struct {
@@ -203,7 +207,7 @@ type ResourceChange struct {
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	Timestamp    time.Time              `json:"timestamp"`
 	Migration    string                 `json:"migration"`
-	Statement    *parser.Statement      `json:"statement,omitempty"`
+	Statement    *types.Statement      `json:"statement,omitempty"`
 }
 
 // DatabaseMetadata contains metadata about the database structure
@@ -398,7 +402,7 @@ func NewChangeTracker(ctx *ChangeContext) *ChangeTracker {
 }
 
 // TrackStatement tracks a statement as a resource change
-func (ct *ChangeTracker) TrackStatement(stmt *parser.Statement, migrationFile string) *ResourceChange {
+func (ct *ChangeTracker) TrackStatement(stmt *types.Statement, migrationFile string) *ResourceChange {
 	ct.sequenceCounter++
 
 	change := &ResourceChange{
@@ -433,27 +437,27 @@ func (ct *ChangeTracker) GetChangesByObject(objectKey string) []*ResourceChange 
 }
 
 // Helper methods
-func (ct *ChangeTracker) getChangeType(op parser.Operation) ResourceChangeType {
+func (ct *ChangeTracker) getChangeType(op types.Operation) ResourceChangeType {
 	switch op {
-	case parser.OpCreate:
+	case types.OpCreate:
 		return ResourceChangeCreate
-	case parser.OpAlter:
+	case types.OpAlter:
 		return ResourceChangeAlter
-	case parser.OpDrop:
+	case types.OpDrop:
 		return ResourceChangeDrop
 	// Note: OpRename not defined in parser, handle as ALTER
-	// case parser.OpRename:
+	// case types.OpRename:
 	//	return ResourceChangeRename
-	case parser.OpGrant:
+	case types.OpGrant:
 		return ResourceChangeGrant
-	case parser.OpRevoke:
+	case types.OpRevoke:
 		return ResourceChangeRevoke
 	default:
 		return ResourceChangeAlter
 	}
 }
 
-func (ct *ChangeTracker) createObjectInfo(stmt *parser.Statement) *ObjectInfo {
+func (ct *ChangeTracker) createObjectInfo(stmt *types.Statement) *ObjectInfo {
 	return &ObjectInfo{
 		Name:   stmt.ObjectName,
 		Schema: ct.resolveSchema(stmt.ObjectName),
@@ -461,16 +465,20 @@ func (ct *ChangeTracker) createObjectInfo(stmt *parser.Statement) *ObjectInfo {
 	}
 }
 
-func (ct *ChangeTracker) createSourceRange(stmt *parser.Statement, filename string) *SourceRange {
+func (ct *ChangeTracker) createSourceRange(stmt *types.Statement, filename string) *SourceRange {
+	// Calculate actual line span by counting newlines in SQL
+	lineCount := strings.Count(stmt.SQL, "\n") + 1
+	endLine := stmt.Line + lineCount - 1
+
 	return &SourceRange{
 		Filename:  filename,
 		StartLine: stmt.Line,
-		EndLine:   stmt.Line, // Single line for now
+		EndLine:   endLine,
 		Text:      stmt.SQL,
 	}
 }
 
-func (ct *ChangeTracker) getObjectKey(stmt *parser.Statement) string {
+func (ct *ChangeTracker) getObjectKey(stmt *types.Statement) string {
 	schema := ct.resolveSchema(stmt.ObjectName)
 	return fmt.Sprintf("%s.%s.%s", schema, stmt.ObjectName, stmt.ObjectType)
 }
@@ -513,7 +521,7 @@ type ObjectMetadata struct {
 
 // ConsolidationResult stores the result of object consolidation
 type ConsolidationResult struct {
-	OriginalStatements []parser.Statement `json:"original_statements"`
+	OriginalStatements []types.Statement `json:"original_statements"`
 	ConsolidatedSQL    string             `json:"consolidated_sql"`
 	Optimizations      []string           `json:"optimizations"`
 	Warnings           []string           `json:"warnings"`
@@ -550,7 +558,7 @@ type RiskRule interface {
 // RedundancyReport provides analysis of redundant operations
 type RedundancyReport struct {
 	Object      string
-	Type        parser.ObjectType
+	Type        types.ObjectType
 	Pattern     RedundancyPattern
 	CanSquash   bool
 	Explanation string
@@ -583,10 +591,11 @@ type TrackerStats struct {
 	TotalObjects      int
 	TotalMigrations   int
 	TotalStatements   int
+	TotalDependencies int
 	DataOperations    int
 	ResourceChanges   int
-	ObjectsByType     map[parser.ObjectType]int
-	ObjectsByCategory map[parser.Category]int
+	ObjectsByType     map[types.ObjectType]int
+	ObjectsByCategory map[types.Category]int
 	ChangesByType     map[ResourceChangeType]int
 }
 
@@ -648,7 +657,7 @@ func NewRiskAssessment() *RiskAssessment {
 }
 
 // ProcessMigration processes a migration with comprehensive tracking
-func (ut *UnifiedTracker) ProcessMigration(m *parser.Migration, sequence int) {
+func (ut *UnifiedTracker) ProcessMigration(m *types.Migration, sequence int) {
 	if m == nil {
 		return // Skip nil migrations
 	}
@@ -658,6 +667,14 @@ func (ut *UnifiedTracker) ProcessMigration(m *parser.Migration, sequence int) {
 		ut.migrations = append(ut.migrations, m)
 	}
 	ut.migrationCounter++
+
+	// Track statement counts even in streaming mode
+	ut.statementCounter += int64(len(m.Statements))
+	for _, stmt := range m.Statements {
+		if stmt.IsDataOp {
+			ut.dataOpCounter++
+		}
+	}
 
 	for stmtIndex, stmt := range m.Statements {
 		// Process all statements, not just those with ObjectName
@@ -694,19 +711,24 @@ func (ut *UnifiedTracker) ProcessMigration(m *parser.Migration, sequence int) {
 
 			// Debug: track profiles events
 			if strings.ToLower(stmt.ObjectName) == "profiles" {
-				log.Printf("DEBUG Tracker: Adding %s event for profiles (type=%s, key=%s) from %s, total events now: %d", stmt.Operation, stmt.ObjectType, key, m.Filename, len(lifecycle.History))
-				if stmt.Operation == parser.OpCreate {
-					log.Printf("  -> This is a CREATE operation (OpCreate=%v)", parser.OpCreate)
+				utils.GetDefaultLogger().WithPrefix("UNIFIED-TRACKER").Info("DEBUG Tracker: Adding %s event for profiles (type=%s, key=%s) from %s, total events now: %d", stmt.Operation, stmt.ObjectType, key, m.Filename, len(lifecycle.History))
+				if stmt.Operation == types.OpCreate {
+					utils.GetDefaultLogger().WithPrefix("UNIFIED-TRACKER").Info("  -> This is a CREATE operation (OpCreate=%v)", types.OpCreate)
 				}
 			}
 
 			// Process permissions if applicable
-			if stmt.Operation == parser.OpGrant || stmt.Operation == parser.OpRevoke {
+			if stmt.Operation == types.OpGrant || stmt.Operation == types.OpRevoke {
 				ut.processPermissionEvent(stmt, lifecycle)
 			}
 
 			// Track dependencies
 			ut.processDependencies(stmt, objectID, lifecycle)
+
+			// NOTE: We previously created separate CONSTRAINT objects for ALTER TABLE ADD CONSTRAINT,
+			// but this caused duplicate output (constraint in both CREATE TABLE and ALTER TABLE)
+			// and circular dependency issues. Constraints from ALTER TABLE ADD CONSTRAINT are now
+			// tracked only as ALTER events on the table itself, and get integrated during consolidation.
 
 			// Update dependency graph
 			ut.dependencyGraph.AddNode(objectID)
@@ -727,7 +749,7 @@ func (ut *UnifiedTracker) ProcessMigration(m *parser.Migration, sequence int) {
 }
 
 // createLifecycleEvent creates an enhanced lifecycle event
-func (ut *UnifiedTracker) createLifecycleEvent(stmt parser.Statement, migrationFile string, sequence int, stmtIndex int) *LifecycleEvent {
+func (ut *UnifiedTracker) createLifecycleEvent(stmt types.Statement, migrationFile string, sequence int, stmtIndex int) *LifecycleEvent {
 	eventID := fmt.Sprintf("%s:%d:%d:%s:%s", migrationFile, sequence, stmtIndex, stmt.ObjectType, stmt.ObjectName)
 
 	return &LifecycleEvent{
@@ -749,13 +771,13 @@ func (ut *UnifiedTracker) createLifecycleEvent(stmt parser.Statement, migrationF
 		SourceRange: &SourceRange{
 			Filename:  migrationFile,
 			StartLine: stmt.Line,
-			EndLine:   stmt.Line, // Single line for now
+			EndLine:   stmt.Line + strings.Count(stmt.SQL, "\n"),
 		},
 	}
 }
 
 // createObjectLifecycle creates a new object lifecycle
-func (ut *UnifiedTracker) createObjectLifecycle(stmt parser.Statement, objectID ObjectID) *ObjectLifecycle {
+func (ut *UnifiedTracker) createObjectLifecycle(stmt types.Statement, objectID ObjectID) *ObjectLifecycle {
 	key := makeKey(stmt.ObjectName, stmt.ObjectType)
 
 	lifecycle := &ObjectLifecycle{
@@ -786,7 +808,7 @@ func (ut *UnifiedTracker) createObjectLifecycle(stmt parser.Statement, objectID 
 }
 
 // createResourceChange creates a resource change from a statement
-func (ut *UnifiedTracker) createResourceChange(stmt parser.Statement, migrationFile string, sequence int) *ResourceChange {
+func (ut *UnifiedTracker) createResourceChange(stmt types.Statement, migrationFile string, sequence int) *ResourceChange {
 	changeType := ut.mapOperationToChangeType(stmt.Operation)
 	resourceType := ut.mapObjectTypeToResourceType(stmt.ObjectType)
 
@@ -801,7 +823,7 @@ func (ut *UnifiedTracker) createResourceChange(stmt parser.Statement, migrationF
 		Range: &SourceRange{
 			Filename:  migrationFile,
 			StartLine: stmt.Line,
-			EndLine:   stmt.Line,
+			EndLine:   stmt.Line + strings.Count(stmt.SQL, "\n"),
 		},
 		Context: &ChangeContext{
 			Database:   "",
@@ -820,17 +842,17 @@ func (ut *UnifiedTracker) createResourceChange(stmt parser.Statement, migrationF
 }
 
 // mapOperationToChangeType maps parser operations to resource change types
-func (ut *UnifiedTracker) mapOperationToChangeType(op parser.Operation) ResourceChangeType {
+func (ut *UnifiedTracker) mapOperationToChangeType(op types.Operation) ResourceChangeType {
 	switch op {
-	case parser.OpCreate:
+	case types.OpCreate:
 		return ResourceChangeCreate
-	case parser.OpAlter:
+	case types.OpAlter:
 		return ResourceChangeAlter
-	case parser.OpDrop:
+	case types.OpDrop:
 		return ResourceChangeDrop
-	case parser.OpGrant:
+	case types.OpGrant:
 		return ResourceChangeGrant
-	case parser.OpRevoke:
+	case types.OpRevoke:
 		return ResourceChangeRevoke
 	default:
 		return ResourceChangeAlter // Default fallback
@@ -838,15 +860,15 @@ func (ut *UnifiedTracker) mapOperationToChangeType(op parser.Operation) Resource
 }
 
 // mapObjectTypeToResourceType maps parser object types to resource types
-func (ut *UnifiedTracker) mapObjectTypeToResourceType(objType parser.ObjectType) ResourceType {
-	// Since ResourceType is now an alias for parser.ObjectType, just return it directly
+func (ut *UnifiedTracker) mapObjectTypeToResourceType(objType types.ObjectType) ResourceType {
+	// Since ResourceType is now an alias for types.ObjectType, just return it directly
 	return ResourceType(objType)
 }
 
 // Helper methods for tracker functionality
 
 // processPermissionEvent processes GRANT/REVOKE operations
-func (ut *UnifiedTracker) processPermissionEvent(stmt parser.Statement, lifecycle *ObjectLifecycle) {
+func (ut *UnifiedTracker) processPermissionEvent(stmt types.Statement, lifecycle *ObjectLifecycle) {
 	for _, grantee := range stmt.Grantees {
 		for _, privilege := range stmt.Privileges {
 			permEvent := PermissionEvent{
@@ -861,7 +883,7 @@ func (ut *UnifiedTracker) processPermissionEvent(stmt parser.Statement, lifecycl
 }
 
 // processDependencies processes object dependencies with enhanced tracking
-func (ut *UnifiedTracker) processDependencies(stmt parser.Statement, objectID ObjectID, lifecycle *ObjectLifecycle) {
+func (ut *UnifiedTracker) processDependencies(stmt types.Statement, objectID ObjectID, lifecycle *ObjectLifecycle) {
 	var dependencies []ObjectDependency
 
 	for _, depName := range stmt.Dependencies {
@@ -884,7 +906,7 @@ func (ut *UnifiedTracker) processDependencies(stmt parser.Statement, objectID Ob
 }
 
 // extractRequiredObjects extracts required objects from a statement
-func (ut *UnifiedTracker) extractRequiredObjects(stmt parser.Statement) []ObjectID {
+func (ut *UnifiedTracker) extractRequiredObjects(stmt types.Statement) []ObjectID {
 	var objects []ObjectID
 	for _, dep := range stmt.Dependencies {
 		objects = append(objects, ut.parseObjectID(dep))
@@ -904,17 +926,17 @@ func (ut *UnifiedTracker) parseObjectID(identifier string) ObjectID {
 			switch prefix {
 			case "REFERENCES":
 				// Foreign key reference - parse as table dependency
-				log.Printf("Parsing foreign key reference dependency: %s", actualIdentifier)
+				utils.GetDefaultLogger().WithPrefix("UNIFIED-TRACKER").Info("Parsing foreign key reference dependency: %s", actualIdentifier)
 				return ut.parseObjectID(actualIdentifier) // Recursive call without prefix
 			case "CONSTRAINT":
-				return ObjectID{Name: actualIdentifier, Type: parser.TypeConstraint}
+				return ObjectID{Name: actualIdentifier, Type: types.TypeConstraint}
 			case "COLUMN":
 				// Column dependencies should reference the table
 				if strings.Contains(actualIdentifier, ".") {
 					tableParts := strings.Split(actualIdentifier, ".")
-					return ObjectID{Name: tableParts[0], Type: parser.TypeTable}
+					return ObjectID{Name: tableParts[0], Type: types.TypeTable}
 				}
-				return ObjectID{Name: actualIdentifier, Type: parser.TypeTable} // Assume table reference
+				return ObjectID{Name: actualIdentifier, Type: types.TypeTable} // Assume table reference
 			default:
 				// Fallback to parsing the actual identifier without prefix
 				return ut.parseObjectID(actualIdentifier)
@@ -926,25 +948,41 @@ func (ut *UnifiedTracker) parseObjectID(identifier string) ObjectID {
 	parts := strings.Split(identifier, ".")
 	switch len(parts) {
 	case 1:
-		return ObjectID{Name: parts[0], Type: parser.TypeTable} // Default assumption
+		return ObjectID{Name: parts[0], Type: types.TypeTable} // Default assumption
 	case 2:
-		return ObjectID{Schema: parts[0], Name: parts[1], Type: parser.TypeTable}
+		return ObjectID{Schema: parts[0], Name: parts[1], Type: types.TypeTable}
 	case 3:
-		return ObjectID{Schema: parts[0], Name: parts[1], Type: parser.ObjectType(parts[2])}
+		return ObjectID{Schema: parts[0], Name: parts[1], Type: types.ObjectType(parts[2])}
 	default:
-		return ObjectID{Name: identifier, Type: parser.TypeUnknown}
+		return ObjectID{Name: identifier, Type: types.TypeUnknown}
 	}
 }
 
 // inferDependencyType infers the type of dependency from context
-func (ut *UnifiedTracker) inferDependencyType(stmt parser.Statement, depName string) DependencyType {
+func (ut *UnifiedTracker) inferDependencyType(stmt types.Statement, depName string) DependencyType {
+	// Check for prefixed dependency types from parser
+	if strings.Contains(depName, ":") {
+		parts := strings.SplitN(depName, ":", 2)
+		if len(parts) == 2 {
+			prefix := parts[0]
+			switch prefix {
+			case "COLUMN":
+				return DependencyTypeColumn
+			case "CONSTRAINT":
+				return DependencyTypeConstraint
+			case "REFERENCES":
+				return DependencyTypeForeignKey
+			}
+		}
+	}
+
 	switch stmt.ObjectType {
-	case parser.TypeTrigger:
+	case types.TypeTrigger:
 		return DependencyTypeFunction
-	case parser.TypeView:
+	case types.TypeView:
 		return DependencyTypeView
-	case parser.TypeConstraint:
-		if stmt.Operation == parser.OpCreate && strings.Contains(strings.ToLower(stmt.SQL), "foreign key") {
+	case types.TypeConstraint:
+		if stmt.Operation == types.OpCreate && strings.Contains(strings.ToLower(stmt.SQL), "foreign key") {
 			return DependencyTypeForeignKey
 		}
 		return DependencyTypeConstraint
@@ -957,13 +995,13 @@ func (ut *UnifiedTracker) inferDependencyType(stmt parser.Statement, depName str
 }
 
 // isRequiredDependency checks if a dependency is required
-func (ut *UnifiedTracker) isRequiredDependency(stmt parser.Statement, depName string) bool {
+func (ut *UnifiedTracker) isRequiredDependency(stmt types.Statement, depName string) bool {
 	// Foreign keys and triggers are typically required
-	return stmt.ObjectType == parser.TypeConstraint || stmt.ObjectType == parser.TypeTrigger
+	return stmt.ObjectType == types.TypeConstraint || stmt.ObjectType == types.TypeTrigger
 }
 
 // extractDescription extracts description from statement
-func extractDescription(stmt parser.Statement) string {
+func extractDescription(stmt types.Statement) string {
 	if len(stmt.Comments) > 0 {
 		return strings.Join(stmt.Comments, " ")
 	}
@@ -971,10 +1009,10 @@ func extractDescription(stmt parser.Statement) string {
 }
 
 // extractTags extracts tags from statement
-func extractTags(stmt parser.Statement) []string {
+func extractTags(stmt types.Statement) []string {
 	var tags []string
 
-	if stmt.AuthPattern != parser.AuthPatternNone {
+	if stmt.AuthPattern != types.AuthPatternNone {
 		tags = append(tags, "auth:"+string(stmt.AuthPattern))
 	}
 	if stmt.IsDynamic {
@@ -990,13 +1028,13 @@ func extractTags(stmt parser.Statement) []string {
 // extractDatabaseMetadata extracts relevant metadata based on object type
 func (ut *UnifiedTracker) extractDatabaseMetadata(dbMeta *metadata.DatabaseMetadata, objectID ObjectID) interface{} {
 	switch objectID.Type {
-	case parser.TypeTable:
+	case types.TypeTable:
 		if schema, exists := dbMeta.Schemas[objectID.Schema]; exists {
 			if table, exists := schema.Tables[objectID.Name]; exists {
 				return table
 			}
 		}
-	case parser.TypeFunction:
+	case types.TypeFunction:
 		if schema, exists := dbMeta.Schemas[objectID.Schema]; exists {
 			if funcs, exists := schema.Functions[objectID.Name]; exists {
 				return funcs
@@ -1007,8 +1045,20 @@ func (ut *UnifiedTracker) extractDatabaseMetadata(dbMeta *metadata.DatabaseMetad
 }
 
 // makeKey creates a unique key for an object
-func makeKey(name string, objType parser.ObjectType) string {
-	return fmt.Sprintf("%s::%s", strings.ToLower(name), objType)
+// For functions, strips schema qualifiers to treat "public.foo" and "foo" as the same function
+func makeKey(name string, objType types.ObjectType) string {
+	normalizedName := strings.ToLower(name)
+
+	// For functions, strip schema qualifier (e.g., "public.clerk_user_id" → "clerk_user_id")
+	// This prevents duplicate tracking of the same function with/without schema qualifier
+	if objType == types.TypeFunction {
+		if dotIndex := strings.LastIndex(normalizedName, "."); dotIndex > 0 {
+			// Extract just the function name after the last dot
+			normalizedName = normalizedName[dotIndex+1:]
+		}
+	}
+
+	return fmt.Sprintf("%s::%s", normalizedName, objType)
 }
 
 // String returns string representation of ObjectID
@@ -1073,13 +1123,15 @@ func (ut *UnifiedTracker) ClearProcessedMigrations() {
 // DetectDDLCycles analyzes tracked objects for DDL cycles and stores results
 func (ut *UnifiedTracker) DetectDDLCycles() error {
 	if ut.cycleDetector == nil {
-		return fmt.Errorf("DDL cycle detector not initialized")
+		return errors.New(errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation,
+			"DDL cycle detector not initialized", nil)
 	}
 
 	// Run cycle detection on all tracked objects
 	cycles, err := ut.cycleDetector.DetectCycles(ut.objects)
 	if err != nil {
-		return fmt.Errorf("failed to detect DDL cycles: %w", err)
+		return errors.Wrap(err, errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation,
+			"failed to detect DDL cycles", nil)
 	}
 
 	ut.detectedCycles = cycles

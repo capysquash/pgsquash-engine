@@ -1,6 +1,6 @@
 version: '3.8'
 
-# Quick Start - Simplest pg-squash usage
+# Quick Start - Simplest pgsquash usage
 # Run the CLI tool in a container without any services
 
 services:

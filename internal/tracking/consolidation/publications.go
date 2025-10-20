@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
-	"github.com/capysquash/pg-squash-engine/internal/patterns"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/patterns"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // PublicationDeduplicationRule removes duplicate ALTER PUBLICATION ADD TABLE statements

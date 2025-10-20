@@ -2,254 +2,170 @@ package parser
 
 import (
 	"context"
-	"fmt"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
-// ErrorSeverity represents the severity level of parsing errors
-type ErrorSeverity int
-
-const (
-	SeverityInfo ErrorSeverity = iota
-	SeverityWarning
-	SeverityError
-	SeverityCritical
+// Type aliases for backward compatibility - delegate to unified errors package
+type (
+	ErrorSeverity = errors.Severity
+	ErrorCategory = errors.Category
 )
 
-func (s ErrorSeverity) String() string {
-	switch s {
-	case SeverityInfo:
-		return "INFO"
-	case SeverityWarning:
-		return "WARNING"
-	case SeverityError:
-		return "ERROR"
-	case SeverityCritical:
-		return "CRITICAL"
-	default:
-		return "UNKNOWN"
-	}
-}
-
-// ErrorCategory represents the category of parsing errors
-type ErrorCategory string
-
+// Constants for backward compatibility
 const (
-	CategorySyntax      ErrorCategory = "SYNTAX"
-	CategorySemantic    ErrorCategory = "SEMANTIC"
-	CategoryDependency  ErrorCategory = "DEPENDENCY"
-	CategoryNaming      ErrorCategory = "NAMING"
-	CategoryPermission  ErrorCategory = "PERMISSION"
-	CategoryConstraint  ErrorCategory = "CONSTRAINT"
-	CategoryDataType    ErrorCategory = "DATA_TYPE"
-	CategoryFunction    ErrorCategory = "FUNCTION"
-	CategoryIndex       ErrorCategory = "INDEX"
-	CategoryPolicy      ErrorCategory = "POLICY"
-	CategoryExtension   ErrorCategory = "EXTENSION"
-	CategoryPerformance ErrorCategory = "PERFORMANCE"
+	SeverityInfo     = errors.SeverityInfo
+	SeverityWarning  = errors.SeverityWarning
+	SeverityError    = errors.SeverityError
+	SeverityCritical = errors.SeverityCritical
+
+	CategorySyntax      = errors.CategorySyntax
+	CategorySemantic    = errors.CategorySemantic
+	CategoryDependency  = errors.CategoryDependency
+	CategoryNaming      = errors.CategoryNaming
+	CategoryPermission  = errors.CategoryPermission
+	CategoryConstraint  = errors.CategoryConstraint
+	CategoryDataType    = errors.CategoryDataType
+	CategoryFunction    = errors.CategoryFunction
+	CategoryIndex       = errors.CategoryIndex
+	CategoryPolicy      = errors.CategoryPolicy
+	CategoryExtension   = errors.CategoryExtension
+	CategoryPerformance = errors.CategoryPerformance
 )
 
 // ParseError represents a structured parsing error with context
+// This now wraps the unified StructuredError
 type ParseError struct {
-	Message     string
-	Severity    ErrorSeverity
-	Category    ErrorCategory
-	Context     *ParseContext
-	Suggestion  string
-	Code        string
-	InnerError  error
-	Statement   *Statement
-	CanContinue bool
+	*errors.StructuredError
+	Statement *types.Statement
 }
 
-// ParseContext provides context information for errors
-type ParseContext struct {
-	Filename        string
-	Line            int
-	Column          int
-	StatementText   string
-	ObjectName      string
-	ObjectType      ObjectType
-	Schema          string
-	MigrationSeq    int
-	ProcessingPhase string
-}
+// ParseContext is now an alias to errors.ErrorContext
+type ParseContext = errors.ErrorContext
 
-// Error implements the error interface
-func (e *ParseError) Error() string {
-	var parts []string
-
-	parts = append(parts, fmt.Sprintf("[%s:%s]", e.Severity, e.Category))
-
-	if e.Context != nil {
-		if e.Context.Filename != "" {
-			parts = append(parts, fmt.Sprintf("file:%s", e.Context.Filename))
-		}
-		if e.Context.Line > 0 {
-			parts = append(parts, fmt.Sprintf("line:%d", e.Context.Line))
-		}
-		if e.Context.ObjectName != "" {
-			parts = append(parts, fmt.Sprintf("object:%s", e.Context.ObjectName))
-		}
+// NewParseError creates a new ParseError wrapping StructuredError
+func NewParseError(message string, severity ErrorSeverity, category ErrorCategory) *ParseError {
+	return &ParseError{
+		StructuredError: errors.NewError(
+			errors.ErrorCode(""),
+			message,
+			severity,
+			category,
+		),
 	}
-
-	parts = append(parts, e.Message)
-
-	if e.Suggestion != "" {
-		parts = append(parts, fmt.Sprintf("suggestion: %s", e.Suggestion))
-	}
-
-	return strings.Join(parts, " ")
 }
 
-// Unwrap returns the inner error for error unwrapping
-func (e *ParseError) Unwrap() error {
-	return e.InnerError
-}
-
-// ErrorCollector collects and manages parsing errors
+// ErrorCollector now wraps errors.ErrorCollector with ParseError compatibility
 type ErrorCollector struct {
-	errors   []*ParseError
-	warnings []*ParseError
-	context  context.Context
+	*errors.ErrorCollector
 }
 
 // NewErrorCollector creates a new error collector
 func NewErrorCollector(ctx context.Context) *ErrorCollector {
 	return &ErrorCollector{
-		errors:   make([]*ParseError, 0),
-		warnings: make([]*ParseError, 0),
-		context:  ctx,
+		ErrorCollector: errors.NewErrorCollector(ctx),
 	}
 }
 
 // AddError adds an error to the collector
 func (ec *ErrorCollector) AddError(err *ParseError) {
-	if err.Severity >= SeverityError {
-		ec.errors = append(ec.errors, err)
-	} else {
-		ec.warnings = append(ec.warnings, err)
-	}
+	ec.ErrorCollector.AddError(err.StructuredError)
 }
 
 // AddSyntaxError adds a syntax error
 func (ec *ErrorCollector) AddSyntaxError(message string, ctx *ParseContext, innerErr error) {
-	ec.AddError(&ParseError{
-		Message:     message,
-		Severity:    SeverityError,
-		Category:    CategorySyntax,
-		Context:     ctx,
-		InnerError:  innerErr,
-		CanContinue: false,
-	})
+	structuredErr := errors.NewError(
+		errors.ErrorCodeSyntaxError,
+		message,
+		SeverityError,
+		CategorySyntax,
+	).WithContext(ctx).WithInnerError(innerErr).WithCanContinue(false)
+
+	ec.ErrorCollector.AddError(structuredErr)
 }
 
 // AddSemanticError adds a semantic error
 func (ec *ErrorCollector) AddSemanticError(message, suggestion string, ctx *ParseContext) {
-	ec.AddError(&ParseError{
-		Message:     message,
-		Severity:    SeverityError,
-		Category:    CategorySemantic,
-		Context:     ctx,
-		Suggestion:  suggestion,
-		CanContinue: true,
-	})
+	structuredErr := errors.NewError(
+		errors.ErrorCodeSemanticError,
+		message,
+		SeverityError,
+		CategorySemantic,
+	).WithContext(ctx).WithSuggestion(suggestion).WithCanContinue(true)
+
+	ec.ErrorCollector.AddError(structuredErr)
 }
 
 // AddDependencyError adds a dependency error
 func (ec *ErrorCollector) AddDependencyError(message string, ctx *ParseContext) {
-	ec.AddError(&ParseError{
-		Message:     message,
-		Severity:    SeverityError,
-		Category:    CategoryDependency,
-		Context:     ctx,
-		Suggestion:  "Check dependency order and ensure referenced objects exist",
-		CanContinue: true,
-	})
+	structuredErr := errors.NewError(
+		errors.ErrorCodeDependencyError,
+		message,
+		SeverityError,
+		CategoryDependency,
+	).WithContext(ctx).WithSuggestion("Check dependency order and ensure referenced objects exist").WithCanContinue(true)
+
+	ec.ErrorCollector.AddError(structuredErr)
 }
 
 // AddNamingWarning adds a naming convention warning
 func (ec *ErrorCollector) AddNamingWarning(message, suggestion string, ctx *ParseContext) {
-	ec.AddError(&ParseError{
-		Message:     message,
-		Severity:    SeverityWarning,
-		Category:    CategoryNaming,
-		Context:     ctx,
-		Suggestion:  suggestion,
-		CanContinue: true,
-	})
+	structuredErr := errors.NewError(
+		errors.ErrorCode(""),
+		message,
+		SeverityWarning,
+		CategoryNaming,
+	).WithContext(ctx).WithSuggestion(suggestion).WithCanContinue(true)
+
+	ec.ErrorCollector.AddError(structuredErr)
 }
 
 // AddPerformanceWarning adds a performance warning
 func (ec *ErrorCollector) AddPerformanceWarning(message, suggestion string, ctx *ParseContext) {
-	ec.AddError(&ParseError{
-		Message:     message,
-		Severity:    SeverityWarning,
-		Category:    CategoryPerformance,
-		Context:     ctx,
-		Suggestion:  suggestion,
-		CanContinue: true,
-	})
+	structuredErr := errors.NewError(
+		errors.ErrorCode(""),
+		message,
+		SeverityWarning,
+		CategoryPerformance,
+	).WithContext(ctx).WithSuggestion(suggestion).WithCanContinue(true)
+
+	ec.ErrorCollector.AddError(structuredErr)
 }
 
-// HasErrors returns true if there are any errors
-func (ec *ErrorCollector) HasErrors() bool {
-	return len(ec.errors) > 0
-}
-
-// HasWarnings returns true if there are any warnings
-func (ec *ErrorCollector) HasWarnings() bool {
-	return len(ec.warnings) > 0
-}
-
-// GetErrors returns all errors
+// GetErrors returns all errors as ParseErrors
 func (ec *ErrorCollector) GetErrors() []*ParseError {
-	return ec.errors
+	structuredErrors := ec.ErrorCollector.GetErrors()
+	parseErrors := make([]*ParseError, len(structuredErrors))
+	for i, err := range structuredErrors {
+		parseErrors[i] = &ParseError{StructuredError: err}
+	}
+	return parseErrors
 }
 
-// GetWarnings returns all warnings
+// GetWarnings returns all warnings as ParseErrors
 func (ec *ErrorCollector) GetWarnings() []*ParseError {
-	return ec.warnings
+	structuredWarnings := ec.ErrorCollector.GetWarnings()
+	parseWarnings := make([]*ParseError, len(structuredWarnings))
+	for i, warning := range structuredWarnings {
+		parseWarnings[i] = &ParseError{StructuredError: warning}
+	}
+	return parseWarnings
 }
 
-// GetAllIssues returns both errors and warnings
+// GetAllIssues returns both errors and warnings as ParseErrors
 func (ec *ErrorCollector) GetAllIssues() []*ParseError {
-	var all []*ParseError
-	all = append(all, ec.errors...)
-	all = append(all, ec.warnings...)
-	return all
-}
-
-// Clear removes all collected errors and warnings
-func (ec *ErrorCollector) Clear() {
-	ec.errors = ec.errors[:0]
-	ec.warnings = ec.warnings[:0]
-}
-
-// Summary returns a summary of collected issues
-func (ec *ErrorCollector) Summary() ErrorSummary {
-	summary := ErrorSummary{
-		TotalErrors:   len(ec.errors),
-		TotalWarnings: len(ec.warnings),
-		Categories:    make(map[ErrorCategory]int),
-		Severities:    make(map[ErrorSeverity]int),
+	structuredIssues := ec.ErrorCollector.GetAllIssues()
+	parseIssues := make([]*ParseError, len(structuredIssues))
+	for i, issue := range structuredIssues {
+		parseIssues[i] = &ParseError{StructuredError: issue}
 	}
-
-	for _, err := range ec.GetAllIssues() {
-		summary.Categories[err.Category]++
-		summary.Severities[err.Severity]++
-	}
-
-	return summary
+	return parseIssues
 }
 
-// ErrorSummary provides a summary of collected errors
-type ErrorSummary struct {
-	TotalErrors   int
-	TotalWarnings int
-	Categories    map[ErrorCategory]int
-	Severities    map[ErrorSeverity]int
-}
+// ErrorSummary is now an alias to errors.ErrorSummary
+type ErrorSummary = errors.ErrorSummary
 
 // ErrorReporter handles error reporting and formatting
 type ErrorReporter struct {
@@ -265,45 +181,30 @@ func NewErrorReporter(collector *ErrorCollector) *ErrorReporter {
 	}
 }
 
-// ErrorFormatter formats errors for different outputs
-type ErrorFormatter struct{}
+// ErrorFormatter wraps errors.ErrorFormatter
+type ErrorFormatter struct {
+	*errors.ErrorFormatter
+}
 
 // NewErrorFormatter creates a new error formatter
 func NewErrorFormatter() *ErrorFormatter {
-	return &ErrorFormatter{}
+	return &ErrorFormatter{
+		ErrorFormatter: errors.NewErrorFormatter(),
+	}
 }
 
 // FormatError formats a single error
 func (ef *ErrorFormatter) FormatError(err *ParseError) string {
-	return err.Error()
-}
-
-// FormatSummary formats an error summary
-func (ef *ErrorFormatter) FormatSummary(summary ErrorSummary) string {
-	var parts []string
-
-	parts = append(parts, fmt.Sprintf("Total: %d errors, %d warnings",
-		summary.TotalErrors, summary.TotalWarnings))
-
-	if len(summary.Categories) > 0 {
-		parts = append(parts, "Categories:")
-		for category, count := range summary.Categories {
-			parts = append(parts, fmt.Sprintf("  %s: %d", category, count))
-		}
-	}
-
-	return strings.Join(parts, "\n")
+	return ef.ErrorFormatter.FormatError(err.StructuredError)
 }
 
 // FormatErrorList formats a list of errors
-func (ef *ErrorFormatter) FormatErrorList(errors []*ParseError) string {
-	var parts []string
-
-	for i, err := range errors {
-		parts = append(parts, fmt.Sprintf("%d. %s", i+1, ef.FormatError(err)))
+func (ef *ErrorFormatter) FormatErrorList(errorList []*ParseError) string {
+	structuredErrors := make([]*errors.StructuredError, len(errorList))
+	for i, err := range errorList {
+		structuredErrors[i] = err.StructuredError
 	}
-
-	return strings.Join(parts, "\n")
+	return ef.ErrorFormatter.FormatErrorList(structuredErrors)
 }
 
 // ErrorHandler provides centralized error handling
@@ -327,27 +228,76 @@ func NewErrorHandler(ctx context.Context) *ErrorHandler {
 
 // HandleParseError handles a parse error with appropriate logging
 func (eh *ErrorHandler) HandleParseError(err error, ctx *ParseContext) *ParseError {
+	// Detect missing semicolon and provide clearer error message
+	errorMsg := err.Error()
+	enhancedMsg := errorMsg
+	suggestion := ""
+
+	if detectsMissingSemicolon(errorMsg, ctx) {
+		enhancedMsg = "Missing semicolon at end of SQL statement"
+		suggestion = "Add a semicolon (;) at the end of the statement. PostgreSQL requires semicolons to separate statements in migration files."
+	}
+
 	parseErr := &ParseError{
-		Message:     err.Error(),
-		Severity:    SeverityError,
-		Category:    CategorySyntax,
-		Context:     ctx,
-		InnerError:  err,
-		CanContinue: false,
+		StructuredError: errors.NewError(
+			errors.ErrorCodeSyntaxError,
+			enhancedMsg,
+			SeverityError,
+			CategorySyntax,
+		).WithContext(ctx).WithInnerError(err).WithCanContinue(false).WithSuggestion(suggestion),
 	}
 
 	eh.collector.AddError(parseErr)
 	return parseErr
 }
 
+// detectsMissingSemicolon analyzes parse errors to detect missing semicolons
+func detectsMissingSemicolon(errorMsg string, ctx *ParseContext) bool {
+	// Common pg_query error patterns that indicate missing semicolons:
+	// 1. "syntax error at or near" followed by a keyword that starts a new statement
+	// 2. "syntax error at end of input"
+	// 3. Statement text doesn't end with semicolon
+
+	errorLower := strings.ToLower(errorMsg)
+
+	// Pattern 1: "syntax error at or near" followed by statement-starting keywords
+	if strings.Contains(errorLower, "syntax error at or near") {
+		statementStarters := []string{"create", "alter", "drop", "insert", "update", "delete", "grant", "revoke", "do"}
+		for _, starter := range statementStarters {
+			if strings.Contains(errorLower, "\""+starter+"\"") || strings.Contains(errorLower, "'"+starter+"'") {
+				return true
+			}
+		}
+	}
+
+	// Pattern 2: "syntax error at end of input"
+	if strings.Contains(errorLower, "syntax error at end of input") {
+		return true
+	}
+
+	// Pattern 3: Check if statement text exists and doesn't end with semicolon
+	if ctx != nil && ctx.StatementText != "" {
+		trimmed := strings.TrimSpace(ctx.StatementText)
+		if !strings.HasSuffix(trimmed, ";") {
+			// Additional check: ensure it's not just a comment or empty line
+			if len(trimmed) > 0 && !strings.HasPrefix(trimmed, "--") {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 // HandleValidationError handles validation errors
 func (eh *ErrorHandler) HandleValidationError(message string, ctx *ParseContext) *ParseError {
 	parseErr := &ParseError{
-		Message:     message,
-		Severity:    SeverityError,
-		Category:    CategorySemantic,
-		Context:     ctx,
-		CanContinue: true,
+		StructuredError: errors.NewError(
+			errors.ErrorCodeSemanticError,
+			message,
+			SeverityError,
+			CategorySemantic,
+		).WithContext(ctx).WithCanContinue(true),
 	}
 
 	eh.collector.AddError(parseErr)
@@ -355,7 +305,7 @@ func (eh *ErrorHandler) HandleValidationError(message string, ctx *ParseContext)
 }
 
 // CreateContext creates a parse context from available information
-func (eh *ErrorHandler) CreateContext(filename string, line int, stmt *Statement) *ParseContext {
+func (eh *ErrorHandler) CreateContext(filename string, line int, stmt *types.Statement) *ParseContext {
 	ctx := &ParseContext{
 		Filename: filename,
 		Line:     line,
@@ -364,7 +314,7 @@ func (eh *ErrorHandler) CreateContext(filename string, line int, stmt *Statement
 	if stmt != nil {
 		ctx.StatementText = stmt.SQL
 		ctx.ObjectName = stmt.ObjectName
-		ctx.ObjectType = stmt.ObjectType
+		ctx.ObjectType = string(stmt.ObjectType)
 		ctx.Schema = stmt.Schema
 	}
 
@@ -390,11 +340,11 @@ func (eh *ErrorHandler) Recovery(filename string, line int) {
 		}
 
 		parseErr := &ParseError{
-			Message:     fmt.Sprintf("Panic during parsing: %v", r),
-			Severity:    SeverityCritical,
-			Category:    CategorySyntax,
-			Context:     ctx,
-			CanContinue: false,
+			StructuredError: errors.NewCriticalError(
+				errors.ErrorCodeSyntaxError,
+				"Panic during parsing: "+string([]byte(r.(error).Error())),
+				CategorySyntax,
+			).WithContext(ctx),
 		}
 
 		eh.collector.AddError(parseErr)
@@ -415,6 +365,6 @@ func (eh *ErrorHandler) ShouldContinue() bool {
 func (eh *ErrorHandler) LogSummary() {
 	summary := eh.collector.Summary()
 	if summary.TotalErrors > 0 || summary.TotalWarnings > 0 {
-		fmt.Printf("Parse Summary: %s\n", eh.reporter.formatter.FormatSummary(summary))
+		println("Parse Summary: " + eh.reporter.formatter.FormatSummary(summary))
 	}
 }

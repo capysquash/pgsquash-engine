@@ -1,7 +1,8 @@
 package consolidation
 
 import (
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // ConsolidationRule interface for consolidation rules used by the squasher
@@ -76,6 +77,7 @@ func (cre *ConsolidationRuleEngine) AddRule(rule ConsolidationRule) {
 
 // ApplyRules applies all applicable rules to a lifecycle
 // Uses registry if enabled, falls back to legacy rules otherwise
+// If no rules apply, returns a default consolidation that preserves the original SQL
 func (cre *ConsolidationRuleEngine) ApplyRules(lifecycle *tracking.ObjectLifecycle, engine ConsolidationEngine) (*tracking.ConsolidationResult, error) {
 	if cre.useRegistry {
 		// Get applicable rules from registry (sorted by priority)
@@ -86,7 +88,8 @@ func (cre *ConsolidationRuleEngine) ApplyRules(lifecycle *tracking.ObjectLifecyc
 				return result, err
 			}
 		}
-		return nil, nil
+		// No rules applied - return default preservation
+		return createDefaultConsolidation(lifecycle), nil
 	}
 
 	// Legacy behavior: iterate through static rules
@@ -96,7 +99,30 @@ func (cre *ConsolidationRuleEngine) ApplyRules(lifecycle *tracking.ObjectLifecyc
 		}
 	}
 
-	return nil, nil
+	// No rules applied - return default preservation
+	return createDefaultConsolidation(lifecycle), nil
+}
+
+// createDefaultConsolidation creates a default consolidation result that preserves the original SQL
+// This ensures objects without matching consolidation rules are still included in output
+func createDefaultConsolidation(lifecycle *tracking.ObjectLifecycle) *tracking.ConsolidationResult {
+	if lifecycle == nil || len(lifecycle.History) == 0 {
+		return nil
+	}
+
+	// Get the final state (last CREATE or most recent non-DROP operation)
+	finalState := lifecycle.GetFinalState()
+	if finalState == nil {
+		return nil
+	}
+
+	return &tracking.ConsolidationResult{
+		OriginalStatements: []types.Statement{*finalState},
+		ConsolidatedSQL:    finalState.SQL,
+		Optimizations:      []string{"preserved_as_is"},
+		RiskLevel:          tracking.RiskLevelLow,
+		Warnings:           []string{},
+	}
 }
 
 // GetApplicableRules returns all rules that can be applied to a lifecycle

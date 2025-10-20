@@ -3,11 +3,12 @@ package transformation
 import (
 	"context"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
@@ -156,7 +157,13 @@ func (st *SQLTransformer) Transform(ctx context.Context, sql string) (*Transform
 		result.Warnings = append(result.Warnings, fmt.Sprintf("Plugin transformations warning: %v", err))
 	}
 
-	// STEP 1: Function Volatility Fix (Pre-Parse, Fallback)
+	// STEP 1: Normalize LANGUAGE Position (Pre-Parse, Critical)
+	// MUST run BEFORE volatility fix to prevent syntax conflicts
+	// Moves "AS $$ ... $$ LANGUAGE plpgsql" → "LANGUAGE plpgsql AS $$ ... $$"
+	// This ensures LANGUAGE is before AS when volatility markers are added
+	transformedSQL = st.normalizeLanguagePosition(transformedSQL)
+
+	// STEP 2: Function Volatility Fix (Pre-Parse, Fallback)
 	// CRITICAL: Must run BEFORE pg_query.Parse() because:
 	// - Parser fails on complex migrations (e.g., 9850 lines, 367KB files)
 	// - Volatility fix uses regex, doesn't need AST
@@ -238,7 +245,7 @@ func (st *SQLTransformer) applyPluginTransformations(ctx context.Context, sql st
 	// Call TransformSQL on registry (handles priority ordering internally)
 	transformedSQL, err := registry.TransformSQL(ctx, sql)
 	if err != nil {
-		log.Printf("[transformation] Plugin transformation error: %v", err)
+		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[transformation] Plugin transformation error: %v", err)
 		return sql, err // Return original SQL on error
 	}
 
@@ -533,7 +540,7 @@ func (st *SQLTransformer) BatchTransform(ctx context.Context, statements []strin
 	for i, stmt := range statements {
 		result, err := st.Transform(ctx, stmt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to transform statement %d: %w", i, err)
+			return nil, errors.Wrap(err, errors.ErrorCodeTransformationFailed, errors.CategoryTransformation, fmt.Sprintf("failed to transform statement %d", i), nil)
 		}
 		results[i] = result
 	}
@@ -546,12 +553,12 @@ func (st *SQLTransformer) ValidateTransformation(original, transformed string) e
 	// Parse both to ensure they're valid SQL
 	_, err := pg_query.Parse(original)
 	if err != nil {
-		return fmt.Errorf("original SQL is invalid: %w", err)
+		return errors.Wrap(err, errors.ErrorCodeInvalidSQL, errors.CategoryTransformation, "original SQL is invalid", nil)
 	}
 
 	_, err = pg_query.Parse(transformed)
 	if err != nil {
-		return fmt.Errorf("transformed SQL is invalid: %w", err)
+		return errors.Wrap(err, errors.ErrorCodeInvalidSQL, errors.CategoryTransformation, "transformed SQL is invalid", nil)
 	}
 
 	return nil
@@ -590,8 +597,10 @@ func (st *SQLTransformer) fixReturnNextWithOutParams(sql string, result *Transfo
 
 	matches := returnsTableRegex.FindAllStringSubmatchIndex(sql, -1)
 	if len(matches) == 0 {
+		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] No RETURNS TABLE functions found")
 		return sql // No RETURNS TABLE functions found
 	}
+	utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] Found %d RETURNS TABLE functions", len(matches))
 
 	transformedSQL := sql
 	offset := 0
@@ -628,36 +637,51 @@ func (st *SQLTransformer) fixReturnNextWithOutParams(sql string, result *Transfo
 		bodyEnd := funcStart + bodyMatch[3]
 		body := transformedSQL[bodyStart:bodyEnd]
 
-		// Find RETURN NEXT statements with arguments in this function body
-		returnNextRegex := regexp.MustCompile(`(?m)^\s*RETURN\s+NEXT\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*;`)
+		// Find RETURN NEXT statements (with or without arguments) in this function body
+		// Pattern 1: RETURN NEXT variable_name; (with argument - needs conversion)
+		// Pattern 2: RETURN NEXT; (no argument - also invalid with RETURNS TABLE)
+		returnNextRegex := regexp.MustCompile(`RETURN\s+NEXT(?:\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*))?(\s*);`)
 		returnMatches := returnNextRegex.FindAllStringSubmatchIndex(body, -1)
 
 		if len(returnMatches) == 0 {
+			utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] No RETURN NEXT found in function %s", funcName)
 			continue
 		}
+		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] Found %d RETURN NEXT statements in function %s", len(returnMatches), funcName)
 
 		fixedBody := body
 		bodyOffset := 0
 
 		for _, returnMatch := range returnMatches {
-			if len(returnMatch) < 4 {
+			if len(returnMatch) < 2 {
 				continue
 			}
 
-			// Get the variable name being returned
-			varNameStart := returnMatch[2] + bodyOffset
-			varNameEnd := returnMatch[3] + bodyOffset
-			varName := fixedBody[varNameStart:varNameEnd]
-
-			// Build RETURN QUERY SELECT statement
-			// For a RECORD variable, we need to access its fields
-			var selectColumns []string
-			for _, colName := range columnNames {
-				selectColumns = append(selectColumns, fmt.Sprintf("%s.%s", varName, colName))
+			// Check if there's a variable name (Group 1)
+			var varName string
+			if returnMatch[2] >= 0 && returnMatch[3] >= 0 {
+				// Has variable: RETURN NEXT variable_name;
+				varName = fixedBody[returnMatch[2]+bodyOffset : returnMatch[3]+bodyOffset]
 			}
-			selectStmt := fmt.Sprintf("RETURN QUERY SELECT %s;", strings.Join(selectColumns, ", "))
 
-			// Replace RETURN NEXT var; with RETURN QUERY SELECT var.field1, var.field2;
+			var selectStmt string
+			if varName != "" {
+				// Case 1: RETURN NEXT record_var; → RETURN QUERY SELECT record_var.field1, record_var.field2;
+				var selectColumns []string
+				for _, colName := range columnNames {
+					selectColumns = append(selectColumns, fmt.Sprintf("%s.%s", varName, colName))
+				}
+				selectStmt = fmt.Sprintf("RETURN QUERY SELECT %s;", strings.Join(selectColumns, ", "))
+			} else {
+				// Case 2: RETURN NEXT; (no argument)
+				// The function should have already assigned to OUT parameter variables.
+				// We need to RETURN the OUT parameters directly.
+				// Build: RETURN QUERY SELECT col1, col2, col3;
+				// where col1, col2, col3 are the OUT parameter names from RETURNS TABLE
+				selectStmt = fmt.Sprintf("RETURN QUERY SELECT %s;", strings.Join(columnNames, ", "))
+			}
+
+			// Replace RETURN NEXT with RETURN QUERY SELECT
 			oldStmt := fixedBody[returnMatch[0]+bodyOffset : returnMatch[1]+bodyOffset]
 			fixedBody = fixedBody[:returnMatch[0]+bodyOffset] + selectStmt + fixedBody[returnMatch[1]+bodyOffset:]
 
@@ -758,6 +782,117 @@ func (st *SQLTransformer) fixCommentSyntax(sql string, result *TransformationRes
 	return sql
 }
 
+// normalizeLanguagePosition moves LANGUAGE clauses from after-body to before-AS position.
+// This standardizes function syntax before adding volatility markers.
+//
+// Problem:
+// pg_query.Deparse() preserves original function syntax, which may have:
+//   Format A: CREATE FUNCTION foo() RETURNS text AS $$ ... $$ LANGUAGE plpgsql;
+//   Format B: CREATE FUNCTION foo() RETURNS text LANGUAGE plpgsql AS $$ ... $$;
+//
+// When we add VOLATILE markers (before AS), Format A creates invalid syntax:
+//   Invalid: CREATE FUNCTION foo() RETURNS text VOLATILE AS $$ ... $$ LANGUAGE plpgsql;
+//   (VOLATILE before AS conflicts with LANGUAGE after body)
+//
+// Solution:
+// Normalize all functions to Format B BEFORE adding volatility markers:
+//   Format A → Format B: Move LANGUAGE from after-body to before-AS
+//   Then adding VOLATILE works: LANGUAGE plpgsql VOLATILE AS $$ ... $$
+//
+// PostgreSQL Rule:
+// When volatility markers (VOLATILE/STABLE/IMMUTABLE) appear before AS $$,
+// the LANGUAGE clause must also appear before AS $$, not after the function body.
+func (st *SQLTransformer) normalizeLanguagePosition(sql string) string {
+	// CRITICAL FIX: Match ONE function at a time using terminating semicolon
+	// Pattern: CREATE FUNCTION ... AS $$ body $$ LANGUAGE plpgsql ... ;
+	//
+	// We match up to the FIRST semicolon after LANGUAGE clause to avoid
+	// matching multiple functions as one and corrupting the output.
+	//
+	// Group 1: CREATE [OR REPLACE] FUNCTION [schema.]name(...) RETURNS type
+	// Group 2: Optional modifiers before AS (SECURITY DEFINER, etc.) - but NOT LANGUAGE
+	// Group 3: AS $$
+	// Group 4: Function body
+	// Group 5: $$
+	// Group 6: LANGUAGE clause (e.g., "LANGUAGE plpgsql")
+	// Group 7: Optional modifiers after LANGUAGE (SECURITY DEFINER, VOLATILE, etc.)
+	// Group 8: Terminating semicolon
+	pattern := regexp.MustCompile(
+		`(?ims)(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s*\([^)]*\)\s*RETURNS\s+(?:TABLE\s*\([^)]+\)|SETOF\s+[^\s]+|[^\s]+))((?:\s+(?:SECURITY\s+DEFINER|SET\s+[^\s]+\s*=\s*[^\s]+|VOLATILE|STABLE|IMMUTABLE))*?)(\s+AS\s+\$\$)([\s\S]*?)(\$\$)\s+(LANGUAGE\s+[a-z]+)((?:\s+(?:SECURITY\s+DEFINER|VOLATILE|STABLE|IMMUTABLE))*?)\s*;`,
+	)
+
+	matches := pattern.FindAllStringSubmatchIndex(sql, -1)
+	if len(matches) == 0 {
+		return sql // No functions with post-body LANGUAGE found
+	}
+
+	transformedSQL := sql
+	offset := 0
+	fixedCount := 0
+
+	for _, match := range matches {
+		if len(match) < 16 {
+			continue
+		}
+
+		// Extract parts from capture groups
+		signature := transformedSQL[match[2]+offset : match[3]+offset]           // Group 1: CREATE FUNCTION...RETURNS type
+		preModifiers := transformedSQL[match[4]+offset : match[5]+offset]        // Group 2: Existing modifiers before AS
+		asKeyword := transformedSQL[match[6]+offset : match[7]+offset]           // Group 3: AS $$
+		body := transformedSQL[match[8]+offset : match[9]+offset]                // Group 4: function body
+		closingDelim := transformedSQL[match[10]+offset : match[11]+offset]      // Group 5: $$
+		languageClause := transformedSQL[match[12]+offset : match[13]+offset]    // Group 6: LANGUAGE plpgsql
+		postModifiers := transformedSQL[match[14]+offset : match[15]+offset]     // Group 7: Modifiers after LANGUAGE
+
+		// Build normalized function:
+		// signature + preModifiers + LANGUAGE + postModifiers + AS $$ + body + $$;
+		normalizedPreMods := strings.TrimSpace(preModifiers)
+		normalizedLang := strings.TrimSpace(languageClause)
+		normalizedPostMods := strings.TrimSpace(postModifiers)
+
+		// Combine all modifiers in correct order: pre + LANGUAGE + post
+		var allModifiers string
+		if normalizedPreMods != "" {
+			allModifiers = normalizedPreMods
+		}
+		if normalizedLang != "" {
+			if allModifiers != "" {
+				allModifiers += " "
+			}
+			allModifiers += normalizedLang
+		}
+		if normalizedPostMods != "" {
+			if allModifiers != "" {
+				allModifiers += " "
+			}
+			allModifiers += normalizedPostMods
+		}
+
+		// Reconstruct: signature + " " + allModifiers + AS $$ + body + $$;
+		var normalizedFunction string
+		if allModifiers != "" {
+			normalizedFunction = signature + " " + allModifiers + asKeyword + body + closingDelim + ";"
+		} else {
+			normalizedFunction = signature + asKeyword + body + closingDelim + ";"
+		}
+
+		// Replace the entire matched function (from CREATE to semicolon)
+		oldFunctionStart := match[0] + offset
+		oldFunctionEnd := match[1] + offset // Includes the semicolon
+		oldFunction := transformedSQL[oldFunctionStart:oldFunctionEnd]
+
+		transformedSQL = transformedSQL[:oldFunctionStart] + normalizedFunction + transformedSQL[oldFunctionEnd:]
+		offset += len(normalizedFunction) - len(oldFunction)
+		fixedCount++
+	}
+
+	if fixedCount > 0 {
+		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("Normalized LANGUAGE position in %d functions (moved from after-body to before-AS)", fixedCount)
+	}
+
+	return transformedSQL
+}
+
 // fixFunctionVolatilityMarkers adds STABLE/IMMUTABLE/VOLATILE markers to functions without them.
 //
 // PostgreSQL Requirement:
@@ -783,6 +918,9 @@ func (st *SQLTransformer) fixCommentSyntax(sql string, result *TransformationRes
 // Implementation Note:
 // This runs BEFORE pg_query.Parse() because the parser can fail on complex migrations.
 // Uses regex-based detection instead of AST analysis.
+//
+// IMPORTANT: Call normalizeLanguagePosition() BEFORE this function to ensure
+// LANGUAGE clauses are in the correct position (before AS, not after body).
 func (st *SQLTransformer) fixFunctionVolatilityMarkers(ctx context.Context, sql string, result *TransformationResult) (string, error) {
 	// Regex Pattern Explanation:
 	// (?ims) - Case insensitive, multiline, dot matches newline
@@ -796,7 +934,7 @@ func (st *SQLTransformer) fixFunctionVolatilityMarkers(ctx context.Context, sql 
 	//                RETURNS TEXT
 	//                LANGUAGE plpgsql
 	//                AS $$...
-	funcPattern := regexp.MustCompile(`(?ims)(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s*\([^)]*\)\s*RETURNS\s+(?:TABLE\s*\([^)]+\)|SETOF\s+[^\s]+|[^\s]+))((?:\s+(?:LANGUAGE\s+[a-z]+|SECURITY\s+DEFINER|SET\s+[^\s]+\s*=\s*[^\s]+))*?)(\s+AS\s+(?:\$\$|\$[a-z0-9_]*\$|\'))`)
+	funcPattern := regexp.MustCompile(`(?ims)(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s*\([^)]*\)\s*RETURNS\s+(?:TABLE\s*\([^)]+\)|SETOF\s+[^\s]+|[^\s]+))((?:\s+(?:LANGUAGE\s+[a-z]+|SECURITY\s+DEFINER|SET\s+[^\s]+\s*=\s*[^\s]+|VOLATILE|STABLE|IMMUTABLE))*?)(\s+AS\s+(?:\$\$|\$[a-z0-9_]*\$|\'))`)
 
 	matches := funcPattern.FindAllStringSubmatchIndex(sql, -1)
 	if len(matches) == 0 {
@@ -840,10 +978,23 @@ func (st *SQLTransformer) fixFunctionVolatilityMarkers(ctx context.Context, sql 
 		// Determine appropriate volatility based on function body
 		volatility := st.determineVolatility(functionBody)
 
-		// Insert volatility marker before AS
-		// Priority: LANGUAGE > SECURITY DEFINER > SET > VOLATILITY > AS
-		newModifiers := modifiers + " " + volatility
-		replacement := beforeAS[:match[4]+offset-match[0]-offset] + newModifiers + asKeyword
+		// Build new modifiers string
+		// PostgreSQL syntax: CREATE FUNCTION name() RETURNS type [LANGUAGE lang] [SECURITY DEFINER] [VOLATILE|STABLE|IMMUTABLE] AS $$
+		newModifiers := strings.TrimSpace(modifiers)
+
+		// Only add volatility if not already present
+		if newModifiers != "" {
+			// Modifiers already exist, volatility marker goes after them
+			newModifiers = newModifiers + " " + volatility
+		} else {
+			// No existing modifiers, just add volatility
+			newModifiers = volatility
+		}
+
+		// Construct replacement: signature + newModifiers + AS
+		// Ensure single space separation
+		signature := beforeAS[:match[4]+offset-match[0]-offset]
+		replacement := strings.TrimRight(signature, " ") + " " + newModifiers + asKeyword
 
 		transformedSQL = transformedSQL[:match[0]+offset] + replacement + transformedSQL[match[7]+offset:]
 		offset += len(replacement) - (match[7] - match[0])
@@ -862,11 +1013,28 @@ func (st *SQLTransformer) fixFunctionVolatilityMarkers(ctx context.Context, sql 
 
 // hasVolatilityMarker checks if a function definition already has a volatility marker.
 // Returns true if IMMUTABLE, STABLE, or VOLATILE is found (case-insensitive).
+// Handles both space-separated and newline-separated keywords.
 func (st *SQLTransformer) hasVolatilityMarker(s string) bool {
 	upper := strings.ToUpper(s)
-	return strings.Contains(upper, " IMMUTABLE") ||
-	       strings.Contains(upper, " STABLE") ||
-	       strings.Contains(upper, " VOLATILE")
+	// Check with space prefix (single-line format)
+	hasWithSpace := strings.Contains(upper, " IMMUTABLE") ||
+		strings.Contains(upper, " STABLE") ||
+		strings.Contains(upper, " VOLATILE")
+	if hasWithSpace {
+		return true
+	}
+	// Check with newline prefix (multi-line format)
+	hasWithNewline := strings.Contains(upper, "\nIMMUTABLE") ||
+		strings.Contains(upper, "\nSTABLE") ||
+		strings.Contains(upper, "\nVOLATILE")
+	if hasWithNewline {
+		return true
+	}
+	// Check if it's at the start of the string (for modifiers group)
+	hasAtStart := strings.HasPrefix(upper, "IMMUTABLE") ||
+		strings.HasPrefix(upper, "STABLE") ||
+		strings.HasPrefix(upper, "VOLATILE")
+	return hasAtStart
 }
 
 // determineVolatility analyzes a function body to determine appropriate volatility category.

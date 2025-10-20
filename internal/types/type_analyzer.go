@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
@@ -106,7 +107,7 @@ func (ta *TypeAnalyzer) AnalyzeStatement(ctx context.Context, sql string) ([]*Ty
 	// Parse SQL to get AST
 	parseResult, err := pg_query.Parse(sql)
 	if err != nil {
-		return nil, NewTypeError(ErrorCodeAnalysisError, "failed to parse SQL", "").WithInnerError(err)
+		return nil, errors.NewTypeError(errors.ErrorCodeAnalysisError, "failed to parse SQL", "").WithInnerError(err)
 	}
 
 	types := make(map[string]*TypeInfo)
@@ -115,7 +116,7 @@ func (ta *TypeAnalyzer) AnalyzeStatement(ctx context.Context, sql string) ([]*Ty
 	for _, stmt := range parseResult.Stmts {
 		err := ta.extractTypesFromNode(ctx, stmt.Stmt, types)
 		if err != nil {
-			return nil, NewTypeError(ErrorCodeAnalysisError, "failed to extract types", "").WithInnerError(err)
+			return nil, errors.NewTypeError(errors.ErrorCodeAnalysisError, "failed to extract types", "").WithInnerError(err)
 		}
 	}
 
@@ -215,9 +216,26 @@ func (ta *TypeAnalyzer) extractTypesFromAlterTable(ctx context.Context, stmt *pg
 				}
 
 			case pg_query.AlterTableType_AT_AlterColumnType:
-				// This would require more complex parsing to extract the new type
-				// For now, we'll skip detailed analysis of column type changes
-				// Future enhancement: Parse alterCmd.GetDef() to extract the new type
+				// Extract column name
+				columnName := alterCmd.Name
+				if columnName == "" {
+					continue
+				}
+
+				// Extract new type from Def node
+				if colDef := alterCmd.Def.GetColumnDef(); colDef != nil && colDef.TypeName != nil {
+					newTypeName := ta.extractTypeNameFromNode(colDef.TypeName)
+
+					typeInfo := ta.getOrCreateTypeInfo(newTypeName)
+					if typeInfo != nil {
+						typeInfo.UsageContext = append(typeInfo.UsageContext, UsageContext{
+							Location: fmt.Sprintf("table %s, column %s (type changed)", tableName, columnName),
+							Context:  TableColumnContext,
+							Required: true,
+						})
+						types[typeInfo.Name] = typeInfo
+					}
+				}
 			}
 		}
 	}
@@ -378,14 +396,14 @@ func (ta *TypeAnalyzer) extractTypesFromCreateFunction(ctx context.Context, stmt
 // analyzeColumnType analyzes a column definition to extract type information
 func (ta *TypeAnalyzer) analyzeColumnType(ctx context.Context, colDef *pg_query.ColumnDef) (*TypeInfo, error) {
 	if colDef.TypeName == nil {
-		return nil, NewTypeError(ErrorCodeInvalidType, "column has no type", "")
+		return nil, errors.NewTypeError(errors.ErrorCodeInvalidType, "column has no type", "")
 	}
 
 	typeName := ta.extractTypeNameFromColumnDef(colDef)
 
 	typeInfo := ta.getOrCreateTypeInfo(typeName)
 	if typeInfo == nil {
-		return nil, NewTypeError(ErrorCodeInvalidType, "failed to create type info", typeName)
+		return nil, errors.NewTypeError(errors.ErrorCodeInvalidType, "failed to create type info", typeName)
 	}
 
 	// Extract constraints
@@ -513,7 +531,7 @@ func (ta *TypeAnalyzer) GenerateTypeConversion(ctx context.Context, fromType, to
 	}
 
 	if !compatibility.Compatible {
-		return nil, NewTypeError(ErrorCodeIncompatibleTypes, "types are not compatible", fromType).WithContext("target_type", toType)
+		return nil, errors.NewTypeError(errors.ErrorCodeIncompatibleTypes, "types are not compatible", fromType).WithAdditional("target_type", toType)
 	}
 
 	switch compatibility.CastType {
@@ -654,7 +672,66 @@ type TypeChange struct {
 
 // detectTypeChanges detects type changes in ALTER TABLE statements
 func (ta *TypeAnalyzer) detectTypeChanges(stmt Statement) []*TypeChange {
-	// This would require more sophisticated parsing of ALTER TABLE statements
-	// For now, return empty slice as placeholder
-	return []*TypeChange{}
+	changes := make([]*TypeChange, 0)
+
+	// Parse the statement to get AST
+	if stmt.ParseTree == nil {
+		return changes
+	}
+
+	// Cast to ParseResult
+	parseResult, ok := stmt.ParseTree.(*pg_query.ParseResult)
+	if !ok || len(parseResult.Stmts) == 0 {
+		return changes
+	}
+
+	// Get ALTER TABLE statement
+	node := parseResult.Stmts[0].Stmt
+	alterStmt := node.GetAlterTableStmt()
+	if alterStmt == nil || alterStmt.Relation == nil {
+		return changes
+	}
+
+	tableName := alterStmt.Relation.Relname
+
+	// Process ALTER TABLE commands
+	for _, cmd := range alterStmt.Cmds {
+		alterCmd := cmd.GetAlterTableCmd()
+		if alterCmd == nil {
+			continue
+		}
+
+		// Check for ALTER COLUMN TYPE operations
+		if alterCmd.Subtype == pg_query.AlterTableType_AT_AlterColumnType {
+			columnName := alterCmd.Name
+			if columnName == "" {
+				continue
+			}
+
+			// Extract new type
+			var newType string
+			if colDef := alterCmd.Def.GetColumnDef(); colDef != nil && colDef.TypeName != nil {
+				newType = ta.extractTypeNameFromNode(colDef.TypeName)
+			}
+
+			if newType != "" {
+				// We don't have the old type readily available in the ALTER statement
+				// Mark it as "unknown" and let the caller track it from previous CREATE/ALTER
+				change := &TypeChange{
+					Table:      tableName,
+					Column:     columnName,
+					FromType:   "unknown", // Would need to be tracked from migration history
+					ToType:     newType,
+					Reversible: false, // Conservative: assume not reversible without more info
+					DataLoss:   false, // Can't determine without knowing old type
+				}
+
+				// If we have database access, we could query the current type
+				// For now, add the change with limited information
+				changes = append(changes, change)
+			}
+		}
+	}
+
+	return changes
 }

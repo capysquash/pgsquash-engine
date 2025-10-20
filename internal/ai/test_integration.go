@@ -1,16 +1,18 @@
 package ai
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/ai/providers"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // TestAIIntegration demonstrates the new modular AI system
 func TestAIIntegration() {
-	fmt.Println("🤖 Testing pg-squash AI Integration")
+	fmt.Println("🤖 Testing pgsquash AI Integration")
 	fmt.Println("====================================")
 
 	// Test Analyzer
@@ -29,7 +31,7 @@ func TestAIIntegration() {
 		}
 
 		// Health check
-		healthResults := analyzer.HealthCheck()
+		healthResults := analyzer.HealthCheck(context.Background())
 		fmt.Println("   Health check results:")
 		for providerType, err := range healthResults {
 			if err == nil {
@@ -138,7 +140,7 @@ func testAnalysisTypes() {
 func RunAIIntegrationTest() {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("Integration test panic: %v", r)
+			utils.GetDefaultLogger().WithPrefix("AI").Info("Integration test panic: %v", r)
 		}
 	}()
 
@@ -152,7 +154,12 @@ func DemoAICapabilities() error {
 
 	analyzer, err := NewAnalyzer()
 	if err != nil || analyzer == nil {
-		return fmt.Errorf("no AI providers available: %v", err)
+		return errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"no AI providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("configure AI provider API keys")
 	}
 
 	// Example 1: Function Equivalence
@@ -167,11 +174,11 @@ $$ LANGUAGE plpgsql;`
     SELECT count(*)::int FROM users;
 $$ LANGUAGE sql;`
 
-	equivalent, err := analyzer.AreFunctionsSemanticallyEquivalent(func1, func2)
+	equivalent, confidence, err := analyzer.AreFunctionsSemanticallyEquivalent(context.Background(), func1, func2)
 	if err != nil {
 		fmt.Printf("   ❌ Error: %v\n", err)
 	} else {
-		fmt.Printf("   Functions are equivalent: %v\n", equivalent)
+		fmt.Printf("   Functions are equivalent: %v (confidence: %.2f)\n", equivalent, confidence)
 	}
 
 	// Example 2: Dead Code Detection
@@ -186,11 +193,11 @@ CREATE FUNCTION unused_function() RETURNS void AS $$
     -- This function is never called
 $$ LANGUAGE sql;`
 
-	isDead, err := analyzer.IsDeadCode(schema, "unused_function")
+	isDead, confidence, err := analyzer.IsDeadCode(context.Background(), schema, "unused_function")
 	if err != nil {
 		fmt.Printf("   ❌ Error: %v\n", err)
 	} else {
-		fmt.Printf("   Function 'unused_function' is dead code: %v\n", isDead)
+		fmt.Printf("   Function 'unused_function' is dead code: %v (confidence: %.2f)\n", isDead, confidence)
 	}
 
 	// Example 3: Auth Pattern Detection
@@ -207,14 +214,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;`
 
-	patterns, err := analyzer.DetectAuthPatterns(authSQL)
+	patternsResp, err := analyzer.DetectAuthPatterns(context.Background(), authSQL)
 	if err != nil {
 		fmt.Printf("   ❌ Error: %v\n", err)
 	} else {
-		fmt.Printf("   Detected %d authentication patterns:\n", len(patterns))
-		for i, pattern := range patterns {
-			fmt.Printf("     %d. %s\n", i+1, pattern)
+		fmt.Printf("   Detected %d authentication patterns:\n", len(patternsResp.Patterns))
+		for i, pattern := range patternsResp.Patterns {
+			fmt.Printf("     %d. [%s] %s\n", i+1, pattern.Type, pattern.Description)
 		}
+		fmt.Printf("   Summary: %s\n", patternsResp.Summary)
 	}
 
 	fmt.Println("\n✨ AI capabilities demonstration complete!")

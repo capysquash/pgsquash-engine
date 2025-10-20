@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // ModernPatternRule defines optimization rules for modern PostgreSQL patterns
@@ -12,10 +12,10 @@ type ModernPatternRule struct {
 	Name        string
 	Priority    int // Higher number = higher priority
 	Pattern     string
-	AuthType    parser.AuthPatternType
+	AuthType    types.AuthPatternType
 	Conflicts   []string    // Rule names that conflict with this one
 	SafetyLevel SafetyLevel // Minimum safety level required
-	Consolidate func([]*parser.Statement) []*parser.Statement
+	Consolidate func([]*types.Statement) []*types.Statement
 }
 
 // ModernPatternOptimizer handles JWT v2, storage, and dynamic SQL patterns
@@ -24,29 +24,23 @@ type ModernPatternOptimizer struct {
 }
 
 // NewModernPatternOptimizer creates an optimizer for modern PostgreSQL patterns
+// NOTE: Many auth-specific rules are now handled by plugins (Clerk, Supabase, etc.)
+// These rules provide fallback generic handling.
 func NewModernPatternOptimizer() *ModernPatternOptimizer {
 	optimizer := &ModernPatternOptimizer{
 		rules: []ModernPatternRule{
 			{
-				Name:        "JWT_V2_Organization_Policies",
+				Name:        "JWT_Organization_Policies",
 				Priority:    100,
-				AuthType:    parser.AuthPatternClerkJWTV2,
-				Conflicts:   []string{"Auth_Function_Deduplication", "General_Clerk_Policies"},
+				AuthType:    types.AuthPatternJWT, // Generic JWT pattern
+				Conflicts:   []string{"Auth_Function_Deduplication"},
 				SafetyLevel: Standard,
 				Consolidate: consolidateJWTV2OrgPolicies,
 			},
 			{
-				Name:        "Auth0_Integration_Policies",
-				Priority:    95,
-				AuthType:    parser.AuthPatternAuth0,
-				Conflicts:   []string{"JWT_V2_Organization_Policies"},
-				SafetyLevel: Standard,
-				Consolidate: consolidateAuth0Policies,
-			},
-			{
-				Name:        "NextAuth_Session_Management",
+				Name:        "Session_Management",
 				Priority:    90,
-				AuthType:    parser.AuthPatternNextAuth,
+				AuthType:    types.AuthPatternSession, // Generic session pattern
 				SafetyLevel: Conservative,
 				Consolidate: consolidateNextAuthPolicies,
 			},
@@ -60,7 +54,7 @@ func NewModernPatternOptimizer() *ModernPatternOptimizer {
 			{
 				Name:        "Storage_Bucket_Policies",
 				Priority:    80,
-				AuthType:    parser.AuthPatternStorage,
+				AuthType:    types.AuthPatternStorage,
 				SafetyLevel: Conservative,
 				Consolidate: consolidateStoragePolicies,
 			},
@@ -88,8 +82,8 @@ func NewModernPatternOptimizer() *ModernPatternOptimizer {
 			{
 				Name:        "Auth_Function_Deduplication",
 				Priority:    50,
-				AuthType:    parser.AuthPatternClerk,
-				Conflicts:   []string{"JWT_V2_Organization_Policies"},
+				AuthType:    types.AuthPatternJWT, // Generic JWT pattern
+				Conflicts:   []string{"JWT_Organization_Policies"},
 				SafetyLevel: Standard,
 				Consolidate: consolidateAuthFunctions,
 			},
@@ -99,8 +93,8 @@ func NewModernPatternOptimizer() *ModernPatternOptimizer {
 }
 
 // ApplyModernOptimizations applies pattern-specific optimizations with priority and conflict handling
-func (m *ModernPatternOptimizer) ApplyModernOptimizations(statements []*parser.Statement, safetyLevel SafetyLevel) []*parser.Statement {
-	optimized := make([]*parser.Statement, 0, len(statements))
+func (m *ModernPatternOptimizer) ApplyModernOptimizations(statements []*types.Statement, safetyLevel SafetyLevel) []*types.Statement {
+	optimized := make([]*types.Statement, 0, len(statements))
 	processed := make(map[int]bool)
 	appliedRules := make(map[string]bool)
 
@@ -134,7 +128,7 @@ func (m *ModernPatternOptimizer) ApplyModernOptimizations(statements []*parser.S
 		}
 
 		// Find statements matching this rule
-		var matching []*parser.Statement
+		var matching []*types.Statement
 		var indices []int
 
 		for i, stmt := range statements {
@@ -183,7 +177,7 @@ func meetsSafetyLevel(ruleLevel, currentLevel SafetyLevel) bool {
 }
 
 // matchesModernPattern checks if a statement matches a modern pattern rule
-func matchesModernPattern(stmt *parser.Statement, rule ModernPatternRule) bool {
+func matchesModernPattern(stmt *types.Statement, rule ModernPatternRule) bool {
 	if rule.AuthType != "" && stmt.AuthPattern == rule.AuthType {
 		return true
 	}
@@ -196,16 +190,18 @@ func matchesModernPattern(stmt *parser.Statement, rule ModernPatternRule) bool {
 }
 
 // consolidateJWTV2OrgPolicies consolidates JWT v2 organization-aware policies
-func consolidateJWTV2OrgPolicies(statements []*parser.Statement) []*parser.Statement {
+func consolidateJWTV2OrgPolicies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group by table and policy pattern
-	policyGroups := make(map[string][]*parser.Statement)
+	policyGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.ObjectType == parser.TypePolicy && stmt.AuthPattern == parser.AuthPatternClerkJWTV2 {
+		// Check for JWT-based org policies (generic pattern, plugins set specific strings)
+		if stmt.ObjectType == types.TypePolicy &&
+		   (stmt.AuthPattern == types.AuthPatternJWT || strings.Contains(string(stmt.AuthPattern), "jwt")) {
 			// Extract table name from policy
 			tableName := extractPolicyTable(stmt.SQL)
 			key := fmt.Sprintf("%s_org_policy", tableName)
@@ -213,7 +209,7 @@ func consolidateJWTV2OrgPolicies(statements []*parser.Statement) []*parser.State
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for groupKey, policies := range policyGroups {
 		if len(policies) > 1 {
@@ -229,16 +225,16 @@ func consolidateJWTV2OrgPolicies(statements []*parser.Statement) []*parser.State
 }
 
 // consolidateStoragePolicies consolidates storage bucket policies
-func consolidateStoragePolicies(statements []*parser.Statement) []*parser.Statement {
+func consolidateStoragePolicies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group by bucket name
-	bucketGroups := make(map[string][]*parser.Statement)
+	bucketGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.AuthPattern == parser.AuthPatternStorage {
+		if stmt.AuthPattern == types.AuthPatternStorage {
 			bucketName := extractBucketName(stmt.SQL)
 			if bucketName == "" {
 				bucketName = "default"
@@ -247,7 +243,7 @@ func consolidateStoragePolicies(statements []*parser.Statement) []*parser.Statem
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for bucketName, policies := range bucketGroups {
 		if len(policies) > 1 {
@@ -263,7 +259,7 @@ func consolidateStoragePolicies(statements []*parser.Statement) []*parser.Statem
 }
 
 // consolidateDynamicPolicies handles EXECUTE format() patterns
-func consolidateDynamicPolicies(statements []*parser.Statement) []*parser.Statement {
+func consolidateDynamicPolicies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
@@ -283,23 +279,26 @@ func consolidateDynamicPolicies(statements []*parser.Statement) []*parser.Statem
 }
 
 // consolidateAuthFunctions consolidates authentication-related functions
-func consolidateAuthFunctions(statements []*parser.Statement) []*parser.Statement {
+func consolidateAuthFunctions(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group identical function definitions
-	funcGroups := make(map[string][]*parser.Statement)
+	funcGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.ObjectType == parser.TypeFunction && stmt.AuthPattern == parser.AuthPatternClerk {
+		// Check for JWT-based auth functions (generic pattern, plugins set specific strings)
+		if stmt.ObjectType == types.TypeFunction &&
+		   (stmt.AuthPattern == types.AuthPatternJWT || strings.Contains(string(stmt.AuthPattern), "jwt") ||
+		    strings.Contains(string(stmt.AuthPattern), "auth")) {
 			// Use function signature as key
 			funcSig := extractFunctionSignature(stmt)
 			funcGroups[funcSig] = append(funcGroups[funcSig], stmt)
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for _, functions := range funcGroups {
 		if len(functions) > 1 {
@@ -358,7 +357,7 @@ func extractBucketName(sql string) string {
 	return ""
 }
 
-func extractFunctionSignature(stmt *parser.Statement) string {
+func extractFunctionSignature(stmt *types.Statement) string {
 	// Extract function name and parameters for deduplication
 	sql := strings.ToUpper(stmt.SQL)
 	if strings.Contains(sql, "CREATE FUNCTION") || strings.Contains(sql, "CREATE OR REPLACE FUNCTION") {
@@ -378,13 +377,19 @@ func extractFunctionSignature(stmt *parser.Statement) string {
 	return stmt.ObjectName
 }
 
-func createConsolidatedOrgPolicy(policies []*parser.Statement, groupKey string) *parser.Statement {
+func createConsolidatedOrgPolicy(policies []*types.Statement, groupKey string) *types.Statement {
 	// Create a new comprehensive policy statement
-	consolidated := &parser.Statement{
-		ObjectType:  parser.TypePolicy,
+	// Use the auth pattern from the first policy (will be vendor-specific string from plugin)
+	authPattern := types.AuthPatternJWT
+	if len(policies) > 0 && policies[0].AuthPattern != "" {
+		authPattern = policies[0].AuthPattern
+	}
+
+	consolidated := &types.Statement{
+		ObjectType:  types.TypePolicy,
 		ObjectName:  groupKey + "_consolidated",
-		Operation:   parser.OpCreate,
-		AuthPattern: parser.AuthPatternClerkJWTV2,
+		Operation:   types.OpCreate,
+		AuthPattern: authPattern,
 		Comments:    []string{fmt.Sprintf("Consolidated %d organization policies", len(policies))},
 	}
 
@@ -415,12 +420,12 @@ func createConsolidatedOrgPolicy(policies []*parser.Statement, groupKey string) 
 	return consolidated
 }
 
-func createConsolidatedStoragePolicy(policies []*parser.Statement, bucketName string) *parser.Statement {
-	consolidated := &parser.Statement{
-		ObjectType:  parser.TypePolicy,
+func createConsolidatedStoragePolicy(policies []*types.Statement, bucketName string) *types.Statement {
+	consolidated := &types.Statement{
+		ObjectType:  types.TypePolicy,
 		ObjectName:  bucketName + "_comprehensive_storage_policy",
-		Operation:   parser.OpCreate,
-		AuthPattern: parser.AuthPatternStorage,
+		Operation:   types.OpCreate,
+		AuthPattern: types.AuthPatternStorage,
 		Comments:    []string{fmt.Sprintf("Consolidated %d storage policies for bucket: %s", len(policies), bucketName)},
 	}
 
@@ -456,23 +461,25 @@ func createConsolidatedStoragePolicy(policies []*parser.Statement, bucketName st
 // New consolidation functions for modern PostgreSQL patterns
 
 // consolidateAuth0Policies consolidates Auth0 authentication policies
-func consolidateAuth0Policies(statements []*parser.Statement) []*parser.Statement {
+func consolidateAuth0Policies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group by table and policy type
-	policyGroups := make(map[string][]*parser.Statement)
+	policyGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.ObjectType == parser.TypePolicy && stmt.AuthPattern == parser.AuthPatternAuth0 {
+		// Check for JWT-based policies (Auth0 would be detected as JWT pattern)
+		if stmt.ObjectType == types.TypePolicy &&
+		   (stmt.AuthPattern == types.AuthPatternJWT || strings.Contains(string(stmt.AuthPattern), "auth0")) {
 			tableName := extractPolicyTable(stmt.SQL)
 			key := fmt.Sprintf("%s_auth0_policy", tableName)
 			policyGroups[key] = append(policyGroups[key], stmt)
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for groupKey, policies := range policyGroups {
 		if len(policies) > 1 {
@@ -487,16 +494,17 @@ func consolidateAuth0Policies(statements []*parser.Statement) []*parser.Statemen
 }
 
 // consolidateNextAuthPolicies consolidates NextAuth session management policies
-func consolidateNextAuthPolicies(statements []*parser.Statement) []*parser.Statement {
+func consolidateNextAuthPolicies(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// NextAuth typically involves accounts, sessions, and users tables
-	tableGroups := make(map[string][]*parser.Statement)
+	tableGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.AuthPattern == parser.AuthPatternNextAuth {
+		// Check for session-based auth patterns (NextAuth would be detected as session pattern)
+		if stmt.AuthPattern == types.AuthPatternSession || strings.Contains(string(stmt.AuthPattern), "nextauth") {
 			if strings.Contains(strings.ToLower(stmt.SQL), "accounts") {
 				tableGroups["accounts"] = append(tableGroups["accounts"], stmt)
 			} else if strings.Contains(strings.ToLower(stmt.SQL), "sessions") {
@@ -507,7 +515,7 @@ func consolidateNextAuthPolicies(statements []*parser.Statement) []*parser.State
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for table, statements := range tableGroups {
 		if len(statements) > 1 {
@@ -522,16 +530,16 @@ func consolidateNextAuthPolicies(statements []*parser.Statement) []*parser.State
 }
 
 // consolidateVectorIndexes consolidates vector index operations
-func consolidateVectorIndexes(statements []*parser.Statement) []*parser.Statement {
+func consolidateVectorIndexes(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group by table and column
-	indexGroups := make(map[string][]*parser.Statement)
+	indexGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
-		if stmt.ObjectType == parser.TypeIndex &&
+		if stmt.ObjectType == types.TypeIndex &&
 			(strings.Contains(strings.ToUpper(stmt.SQL), "USING IVFFLAT") ||
 				strings.Contains(strings.ToUpper(stmt.SQL), "USING HNSW")) {
 
@@ -542,7 +550,7 @@ func consolidateVectorIndexes(statements []*parser.Statement) []*parser.Statemen
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for groupKey, indexes := range indexGroups {
 		if len(indexes) > 1 {
@@ -557,13 +565,13 @@ func consolidateVectorIndexes(statements []*parser.Statement) []*parser.Statemen
 }
 
 // consolidateGeneratedColumns consolidates generated column operations
-func consolidateGeneratedColumns(statements []*parser.Statement) []*parser.Statement {
+func consolidateGeneratedColumns(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group by table
-	tableGroups := make(map[string][]*parser.Statement)
+	tableGroups := make(map[string][]*types.Statement)
 
 	for _, stmt := range statements {
 		if strings.Contains(strings.ToUpper(stmt.SQL), "GENERATED ALWAYS AS") {
@@ -574,7 +582,7 @@ func consolidateGeneratedColumns(statements []*parser.Statement) []*parser.State
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	for table, statements := range tableGroups {
 		if len(statements) > 1 {
@@ -589,31 +597,31 @@ func consolidateGeneratedColumns(statements []*parser.Statement) []*parser.State
 }
 
 // consolidateEventSourcing consolidates event sourcing patterns
-func consolidateEventSourcing(statements []*parser.Statement) []*parser.Statement {
+func consolidateEventSourcing(statements []*types.Statement) []*types.Statement {
 	if len(statements) <= 1 {
 		return statements
 	}
 
 	// Group event sourcing related statements
-	var eventTables []*parser.Statement
-	var eventFunctions []*parser.Statement
-	var eventTriggers []*parser.Statement
+	var eventTables []*types.Statement
+	var eventFunctions []*types.Statement
+	var eventTriggers []*types.Statement
 
 	for _, stmt := range statements {
 		sqlLower := strings.ToLower(stmt.SQL)
 		if strings.Contains(sqlLower, "event_type") && strings.Contains(sqlLower, "event_data") {
 			switch stmt.ObjectType {
-			case parser.TypeTable:
+			case types.TypeTable:
 				eventTables = append(eventTables, stmt)
-			case parser.TypeFunction:
+			case types.TypeFunction:
 				eventFunctions = append(eventFunctions, stmt)
-			case parser.TypeTrigger:
+			case types.TypeTrigger:
 				eventTriggers = append(eventTriggers, stmt)
 			}
 		}
 	}
 
-	var consolidated []*parser.Statement
+	var consolidated []*types.Statement
 
 	// Consolidate each type separately
 	if len(eventTables) > 1 {
@@ -637,12 +645,18 @@ func consolidateEventSourcing(statements []*parser.Statement) []*parser.Statemen
 
 // Helper functions for new consolidation patterns
 
-func createConsolidatedAuth0Policy(policies []*parser.Statement, groupKey string) *parser.Statement {
-	consolidated := &parser.Statement{
-		ObjectType:  parser.TypePolicy,
+func createConsolidatedAuth0Policy(policies []*types.Statement, groupKey string) *types.Statement {
+	// Use the auth pattern from the first policy (will be vendor-specific string from plugin)
+	authPattern := types.AuthPatternJWT
+	if len(policies) > 0 && policies[0].AuthPattern != "" {
+		authPattern = policies[0].AuthPattern
+	}
+
+	consolidated := &types.Statement{
+		ObjectType:  types.TypePolicy,
 		ObjectName:  groupKey + "_consolidated",
-		Operation:   parser.OpCreate,
-		AuthPattern: parser.AuthPatternAuth0,
+		Operation:   types.OpCreate,
+		AuthPattern: authPattern,
 		Comments:    []string{fmt.Sprintf("Consolidated %d Auth0 policies", len(policies))},
 	}
 
@@ -669,12 +683,18 @@ func createConsolidatedAuth0Policy(policies []*parser.Statement, groupKey string
 	return consolidated
 }
 
-func createConsolidatedNextAuthPolicy(statements []*parser.Statement, table string) *parser.Statement {
-	consolidated := &parser.Statement{
-		ObjectType:  parser.TypePolicy,
+func createConsolidatedNextAuthPolicy(statements []*types.Statement, table string) *types.Statement {
+	// Use the auth pattern from the first statement (will be vendor-specific string from plugin)
+	authPattern := types.AuthPatternSession
+	if len(statements) > 0 && statements[0].AuthPattern != "" {
+		authPattern = statements[0].AuthPattern
+	}
+
+	consolidated := &types.Statement{
+		ObjectType:  types.TypePolicy,
 		ObjectName:  table + "_nextauth_comprehensive",
-		Operation:   parser.OpCreate,
-		AuthPattern: parser.AuthPatternNextAuth,
+		Operation:   types.OpCreate,
+		AuthPattern: authPattern,
 		Comments:    []string{fmt.Sprintf("Consolidated NextAuth policies for %s table", table)},
 	}
 
@@ -693,11 +713,11 @@ func createConsolidatedNextAuthPolicy(statements []*parser.Statement, table stri
 	return consolidated
 }
 
-func createConsolidatedVectorIndex(indexes []*parser.Statement, groupKey string) *parser.Statement {
-	consolidated := &parser.Statement{
-		ObjectType: parser.TypeIndex,
+func createConsolidatedVectorIndex(indexes []*types.Statement, groupKey string) *types.Statement {
+	consolidated := &types.Statement{
+		ObjectType: types.TypeIndex,
 		ObjectName: groupKey + "_optimized",
-		Operation:  parser.OpCreate,
+		Operation:  types.OpCreate,
 		Comments:   []string{fmt.Sprintf("Consolidated %d vector indexes", len(indexes))},
 	}
 
@@ -718,11 +738,11 @@ func createConsolidatedVectorIndex(indexes []*parser.Statement, groupKey string)
 	return consolidated
 }
 
-func createConsolidatedGeneratedColumns(statements []*parser.Statement, table string) *parser.Statement {
-	consolidated := &parser.Statement{
-		ObjectType: parser.TypeTable,
+func createConsolidatedGeneratedColumns(statements []*types.Statement, table string) *types.Statement {
+	consolidated := &types.Statement{
+		ObjectType: types.TypeTable,
 		ObjectName: table + "_generated_columns",
-		Operation:  parser.OpAlter,
+		Operation:  types.OpAlter,
 		Comments:   []string{fmt.Sprintf("Consolidated %d generated columns for %s", len(statements), table)},
 	}
 
@@ -743,7 +763,7 @@ func createConsolidatedGeneratedColumns(statements []*parser.Statement, table st
 	return consolidated
 }
 
-func createConsolidatedEventTable(tables []*parser.Statement) *parser.Statement {
+func createConsolidatedEventTable(tables []*types.Statement) *types.Statement {
 	// Take the most comprehensive table definition
 	best := tables[0]
 	for _, table := range tables[1:] {
@@ -758,7 +778,7 @@ func createConsolidatedEventTable(tables []*parser.Statement) *parser.Statement 
 	return best
 }
 
-func createConsolidatedEventFunction(functions []*parser.Statement) *parser.Statement {
+func createConsolidatedEventFunction(functions []*types.Statement) *types.Statement {
 	// Take the most recent function definition
 	best := functions[len(functions)-1]
 	best.Comments = append(best.Comments,

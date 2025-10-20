@@ -1,11 +1,11 @@
 package consolidation
 
 import (
-	"github.com/capysquash/pg-squash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 )
 
 // ExternalDependencyFilterRule filters out dependencies on external schemas

@@ -1,14 +1,14 @@
 package consolidation
 
 import (
-	"github.com/capysquash/pg-squash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // CreateAlterConsolidationRule consolidates CREATE statements followed by ALTER statements
@@ -106,6 +106,11 @@ func (r *CreateAlterConsolidationRule) Risk() tracking.RiskLevel {
 // integrateAlterIntoCreate integrates ALTER operations into a CREATE statement
 func integrateAlterIntoCreate(createStmt *types.Statement, alterStmts []types.Statement) string {
 	createSQL := createStmt.SQL
+
+	// Handle ENUM types specially - merge ALTER TYPE ADD VALUE into CREATE TYPE
+	if createStmt.ObjectType == types.TypeEnum {
+		return integrateAlterTypeIntoCreate(createSQL, alterStmts)
+	}
 
 	// Extract column additions and constraints from ALTER statements
 	// Use a map to track column definitions by name (last definition wins for duplicates)
@@ -290,4 +295,90 @@ func integrateColumnsAndConstraintsIntoCreate(createSQL string, columns []string
 
 	// Ensure proper formatting with closing paren on its own line
 	return beforeParen + "\n" + strings.TrimLeft(afterParen, " \t")
+}
+
+// integrateAlterTypeIntoCreate merges ALTER TYPE ADD VALUE statements into CREATE TYPE
+func integrateAlterTypeIntoCreate(createSQL string, alterStmts []types.Statement) string {
+	// Extract new values from ALTER TYPE ADD VALUE statements
+	var newValues []string
+	for _, alterStmt := range alterStmts {
+		if alterStmt.AlterTypeNewValue != "" {
+			newValues = append(newValues, alterStmt.AlterTypeNewValue)
+		}
+	}
+
+	if len(newValues) == 0 {
+		return createSQL // No ALTER TYPE ADD VALUE statements to merge
+	}
+
+	// Parse existing CREATE TYPE to extract current values
+	// Match: CREATE TYPE name AS ENUM ('value1', 'value2')
+	upperSQL := strings.ToUpper(createSQL)
+	enumStart := strings.Index(upperSQL, "AS ENUM")
+	if enumStart == -1 {
+		return createSQL // Not an ENUM type, can't merge
+	}
+
+	// Find the parentheses containing enum values
+	parenStart := strings.Index(createSQL[enumStart:], "(")
+	if parenStart == -1 {
+		return createSQL
+	}
+	parenStart += enumStart
+
+	parenEnd := strings.Index(createSQL[parenStart:], ")")
+	if parenEnd == -1 {
+		return createSQL
+	}
+	parenEnd += parenStart
+
+	// Extract existing values
+	valuesStr := createSQL[parenStart+1 : parenEnd]
+	existingValues := parseEnumValuesFromSQL(valuesStr)
+
+	// Merge new values (avoid duplicates)
+	allValues := existingValues
+	for _, newVal := range newValues {
+		if !containsValue(existingValues, newVal) {
+			allValues = append(allValues, newVal)
+		}
+	}
+
+	// Reconstruct the CREATE TYPE statement with all values
+	quotedValues := make([]string, len(allValues))
+	for i, val := range allValues {
+		quotedValues[i] = fmt.Sprintf("'%s'", val)
+	}
+
+	beforeValues := createSQL[:parenStart+1]
+	afterValues := createSQL[parenEnd:]
+	return beforeValues + strings.Join(quotedValues, ", ") + afterValues
+}
+
+// parseEnumValuesFromSQL extracts enum values from the values string
+// Input: "'active', 'inactive', 'suspended'"
+// Output: ["active", "inactive", "suspended"]
+func parseEnumValuesFromSQL(valuesStr string) []string {
+	var values []string
+	// Remove whitespace and split by comma
+	parts := strings.Split(valuesStr, ",")
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		// Remove surrounding quotes
+		if len(trimmed) >= 2 && trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'' {
+			value := trimmed[1 : len(trimmed)-1]
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// containsValue checks if a string slice contains a specific value
+func containsValue(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }

@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // ChangeType represents the type of schema change
@@ -48,7 +49,7 @@ type SchemaChange interface {
 
 // ObjectID represents a unique object identifier for schema diffing
 type ObjectID struct {
-	Type   parser.ObjectType `json:"type"`
+	Type   types.ObjectType `json:"type"`
 	Schema string            `json:"schema"`
 	Name   string            `json:"name"`
 }
@@ -289,19 +290,19 @@ func (sd *SchemaDiffer) Compare(ctx context.Context) ([]SchemaChange, error) {
 	// Compare each object type
 	tableChanges, err := sd.compareTables(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("comparing tables: %w", err)
+		return nil, errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, "comparing tables", nil)
 	}
 	changes = append(changes, tableChanges...)
 
 	indexChanges, err := sd.compareIndexes(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("comparing indexes: %w", err)
+		return nil, errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, "comparing indexes", nil)
 	}
 	changes = append(changes, indexChanges...)
 
 	functionChanges, err := sd.compareFunctions(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("comparing functions: %w", err)
+		return nil, errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, "comparing functions", nil)
 	}
 	changes = append(changes, functionChanges...)
 
@@ -347,7 +348,7 @@ func (sd *SchemaDiffer) compareTables(ctx context.Context) ([]SchemaChange, erro
 		if toTable, exists := sd.toSchema.Tables[id]; exists {
 			tableChanges, err := sd.compareTableDefinitions(ctx, fromTable, toTable)
 			if err != nil {
-				return nil, fmt.Errorf("comparing table %s: %w", id, err)
+				return nil, errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation, fmt.Sprintf("comparing table %s", id), nil)
 			}
 			changes = append(changes, tableChanges...)
 		}

@@ -4,10 +4,11 @@ package types
 
 // Migration represents a parsed migration file with metadata and statements
 type Migration struct {
-	Filename   string      // Migration filename
-	Sequence   int         // Migration sequence number
-	Statements []Statement // Parsed SQL statements
-	Size       int64       // File size in bytes
+	Filename    string      // Migration filename
+	Sequence    int         // Migration sequence number
+	Statements  []Statement // Parsed SQL statements
+	Size        int64       // File size in bytes
+	ParseErrors []string    // Parse errors encountered during migration parsing
 }
 
 // Statement represents a single parsed SQL statement with rich metadata
@@ -35,6 +36,9 @@ type Statement struct {
 	// GRANT/REVOKE specific fields
 	Grantees   []string // Users/roles receiving permissions
 	Privileges []string // Privileges being granted/revoked
+
+	// ALTER TYPE specific fields
+	AlterTypeNewValue string // New ENUM value being added via ALTER TYPE ADD VALUE
 }
 
 // ObjectType represents the type of database object
@@ -75,20 +79,19 @@ type CrossSchemaRef struct {
 	ObjectName string     // Name of referenced object
 }
 
-// AuthPatternType represents detected authentication/authorization patterns
+// AuthPatternType represents detected authentication/authorization patterns.
+// Plugins provide specific identifiers (e.g., "clerk_jwt_v2", "supabase_rls").
+// The parser delegates auth pattern detection to the plugin layer.
 type AuthPatternType string
 
+// Generic auth pattern categories (for backward compatibility and filtering)
 const (
-	AuthPatternNone       AuthPatternType = ""
-	AuthPatternSupabase   AuthPatternType = "SUPABASE_AUTH"   // Supabase auth.uid(), auth.users
-	AuthPatternClerk      AuthPatternType = "CLERK_AUTH"      // Clerk generic patterns
-	AuthPatternClerkJWTV2 AuthPatternType = "CLERK_JWT_V2"    // Clerk JWT v2 with organization claims
-	AuthPatternAuth0      AuthPatternType = "AUTH0_AUTH"      // Auth0 JWT patterns
-	AuthPatternNextAuth   AuthPatternType = "NEXTAUTH_AUTH"   // NextAuth.js session patterns
-	AuthPatternFirebase   AuthPatternType = "FIREBASE_AUTH"   // Firebase custom tokens
-	AuthPatternRLS        AuthPatternType = "RLS_POLICY"      // Row-Level Security policies
-	AuthPatternStorage    AuthPatternType = "STORAGE_POLICY"  // Storage bucket policies
-	AuthPatternCustomJWT  AuthPatternType = "CUSTOM_JWT"      // Custom JWT implementation
+	AuthPatternNone    AuthPatternType = ""
+	AuthPatternRLS     AuthPatternType = "RLS_POLICY"     // Row-Level Security policies
+	AuthPatternStorage AuthPatternType = "STORAGE_POLICY" // Storage bucket policies
+	AuthPatternJWT     AuthPatternType = "JWT_AUTH"       // JWT-based authentication
+	AuthPatternSession AuthPatternType = "SESSION_AUTH"   // Session-based authentication
+	AuthPatternCustom  AuthPatternType = "CUSTOM_AUTH"    // Custom authentication
 )
 
 // Operation represents the SQL operation being performed

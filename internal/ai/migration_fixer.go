@@ -8,14 +8,19 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/fatih/color"
 )
 
+// ValidationFunc is a function that validates migrations and returns an error if validation fails
+type ValidationFunc func(ctx context.Context, migrationPath string) error
+
 // MigrationFixer uses AI to automatically fix broken migrations
 type MigrationFixer struct {
-	provider    Provider
-	maxAttempts int
-	verbose     bool
+	provider       Provider
+	maxAttempts    int
+	verbose        bool
+	validationFunc ValidationFunc
 }
 
 // FixAttempt represents a single fix attempt
@@ -47,6 +52,12 @@ func NewMigrationFixer(provider Provider, maxAttempts int, verbose bool) *Migrat
 		maxAttempts: maxAttempts,
 		verbose:     verbose,
 	}
+}
+
+// WithValidation sets a validation function for the fixer
+func (mf *MigrationFixer) WithValidation(validationFunc ValidationFunc) *MigrationFixer {
+	mf.validationFunc = validationFunc
+	return mf
 }
 
 // FixMigrationsUntilValid attempts to fix migrations until validation passes
@@ -86,7 +97,12 @@ func (mf *MigrationFixer) FixMigrationsUntilValid(
 		fix, err := mf.analyzeAndFix(ctx, currentError, migrationPath, attempt)
 		if err != nil {
 			result.FinalError = err.Error()
-			return result, fmt.Errorf("failed to generate fix on attempt %d: %w", attempt, err)
+			return result, errors.NewError(
+				errors.ErrorCodeTransformationFailed,
+				fmt.Sprintf("failed to generate fix on attempt %d", attempt),
+				errors.SeverityError,
+				errors.CategoryTransformation,
+			).WithInnerError(err).WithSuggestion("review migration errors and fix manually if needed")
 		}
 
 		result.Attempts = append(result.Attempts, *fix)
@@ -101,16 +117,38 @@ func (mf *MigrationFixer) FixMigrationsUntilValid(
 			result.FilesModified = append(result.FilesModified, fix.FilePath)
 		}
 
-		// After applying fix, validation would be re-run by caller
-		// For now, we just track that we made progress
 		if mf.verbose {
 			color.Green("✅ Fix applied: %s\n", fix.Description)
 		}
 
-		// In a real implementation, we'd re-run validation here
-		// For this iteration, we break after one successful fix
-		// and let the caller re-run validation
-		break
+		// Re-run validation if validation function is provided
+		if mf.validationFunc != nil {
+			if mf.verbose {
+				color.Cyan("🔍 Re-running validation...\n")
+			}
+
+			currentError = mf.validationFunc(ctx, migrationPath)
+
+			if currentError == nil {
+				if mf.verbose {
+					color.Green("✅ Validation passed after fix!\n")
+				}
+				result.Success = true
+				return result, nil
+			}
+
+			if mf.verbose {
+				color.Yellow("⚠️  Validation still failing: %v\n", currentError)
+				color.Cyan("   Attempting next fix...\n")
+			}
+		} else {
+			// No validation function provided - break after one fix
+			// This maintains backward compatibility
+			if mf.verbose {
+				color.Yellow("⚠️  No validation function provided - stopping after one fix\n")
+			}
+			break
+		}
 	}
 
 	if result.TotalFixes > 0 {
@@ -144,30 +182,64 @@ func (mf *MigrationFixer) analyzeAndFix(
 	}
 
 	// Build AI prompt
-	_ = mf.buildFixPrompt(errorAnalysis, migrations) // Placeholder until full integration
+	promptContent := mf.buildFixPrompt(errorAnalysis, migrations)
 
-	// Get AI suggestion using the Analyze method
-	// We need to import the providers package to use AnalysisRequest
-	// For now, we'll use a simpler approach and assume the provider responds with text
-	// This is a simplified implementation - a full version would use the proper types
+	// Call AI provider to get fix suggestion
+	if mf.provider == nil {
+		return fixAttempt, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI provider not initialized",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
+	}
 
-	// Create a placeholder analysis request
-	// In a full implementation, we'd import providers package and use proper types
-	// For now, just return a placeholder error
-	return fixAttempt, fmt.Errorf("AI fixing requires full provider integration - coming soon")
+	// Use custom analysis type for migration fixing
+	aiRequest := &AnalysisRequest{
+		Type:        "migration_fix", // Custom type for migration fixing
+		Content:     promptContent,
+		Context:     fmt.Sprintf("Attempt %d of %d", attempt, mf.maxAttempts),
+		MaxTokens:   2000,
+		Temperature: 0.3, // Low temperature for consistent fixes
+	}
 
-	// TODO: Implement full AI provider integration
-	// The code below is commented out pending proper provider integration
-	/*
-	// Parse AI response
-	fix, err := mf.parseAIResponse(response)
+	aiResponse, err := mf.provider.Analyze(ctx, aiRequest)
 	if err != nil {
-		return fixAttempt, fmt.Errorf("failed to parse AI response: %w", err)
+		return fixAttempt, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analysis failed",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("check AI provider connectivity and rate limits")
+	}
+
+	if mf.verbose {
+		color.Cyan("🤖 AI suggestion (confidence: %.2f):\n%s\n", aiResponse.Confidence, aiResponse.Result)
+	}
+
+	// Parse AI response
+	fix, err := mf.parseAIResponse(aiResponse.Result)
+	if err != nil {
+		return fixAttempt, errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"failed to parse AI response",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err).WithSuggestion("AI response format may be invalid")
 	}
 
 	fixAttempt.FilePath = fix.FilePath
 	fixAttempt.FixApplied = fix.SQL
 	fixAttempt.Description = fix.Description
+
+	// Check confidence threshold
+	if aiResponse.Confidence < 0.75 {
+		fixAttempt.Description = fmt.Sprintf("Low confidence fix (%.2f): %s", aiResponse.Confidence, fix.Description)
+		if mf.verbose {
+			color.Yellow("⚠️  AI confidence is low (%.2f), skipping automatic fix\n", aiResponse.Confidence)
+		}
+		return fixAttempt, nil // Don't apply low-confidence fixes
+	}
 
 	// Apply the fix
 	if err := mf.applyFix(fix, migrationPath); err != nil {
@@ -177,7 +249,6 @@ func (mf *MigrationFixer) analyzeAndFix(
 
 	fixAttempt.Success = true
 	return fixAttempt, nil
-	*/
 }
 
 // ErrorAnalysis contains parsed error information
@@ -321,7 +392,6 @@ type AIFix struct {
 	SQL         string
 }
 
-//nolint:unused // Reserved for future AI fix parsing functionality
 // parseAIResponse parses the AI response into a structured fix
 func (mf *MigrationFixer) parseAIResponse(response string) (*AIFix, error) {
 	fix := &AIFix{}
@@ -331,7 +401,12 @@ func (mf *MigrationFixer) parseAIResponse(response string) (*AIFix, error) {
 	if matches := fileRegex.FindStringSubmatch(response); len(matches) == 2 {
 		fix.FilePath = strings.TrimSpace(matches[1])
 	} else {
-		return nil, fmt.Errorf("could not parse FILE from AI response")
+		return nil, errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"could not parse FILE from AI response",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithSuggestion("AI response should contain 'FILE: <filename>'")
 	}
 
 	// Extract DESCRIPTION
@@ -345,13 +420,17 @@ func (mf *MigrationFixer) parseAIResponse(response string) (*AIFix, error) {
 	if matches := sqlRegex.FindStringSubmatch(response); len(matches) == 2 {
 		fix.SQL = strings.TrimSpace(matches[1])
 	} else {
-		return nil, fmt.Errorf("could not parse FIX_SQL from AI response")
+		return nil, errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"could not parse FIX_SQL from AI response",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithSuggestion("AI response should contain 'FIX_SQL:...END_FIX' block")
 	}
 
 	return fix, nil
 }
 
-//nolint:unused // Reserved for future AI fix application functionality
 // applyFix applies the suggested fix to the migration file
 func (mf *MigrationFixer) applyFix(fix *AIFix, migrationPath string) error {
 	// Construct full path
@@ -360,7 +439,12 @@ func (mf *MigrationFixer) applyFix(fix *AIFix, migrationPath string) error {
 	// Read current content
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"failed to read file",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err).WithFile(fullPath)
 	}
 
 	// Apply fix (for now, just prepend the fix SQL)
@@ -370,12 +454,22 @@ func (mf *MigrationFixer) applyFix(fix *AIFix, migrationPath string) error {
 	// Backup original
 	backupPath := fullPath + ".backup"
 	if err := os.WriteFile(backupPath, content, 0644); err != nil {
-		return fmt.Errorf("failed to create backup: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"failed to create backup",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err).WithFile(backupPath)
 	}
 
 	// Write fixed content
 	if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
-		return fmt.Errorf("failed to write fix: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"failed to write fix",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err).WithFile(fullPath)
 	}
 
 	if mf.verbose {
