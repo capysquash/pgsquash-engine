@@ -147,3 +147,9 @@ test_migrations/007_clerk_integration.sql
 test_migrations_clerk/001_clerk_setup.sql
 test_migrations_simple/001_basic.sql
 test_migrations_simple/002_add_column.sql
+.env.github-app
+AGENTS.md
+capysquash-private-key.pem
+cmd/api-server/README.md
+docs/internal/refactors/FLOW_EXPLANATION.md
+fly.toml
