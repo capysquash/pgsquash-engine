@@ -177,14 +177,14 @@ func (sc *SchemaComparator) validateStatementDependencies(ctx context.Context, s
 	for _, dep := range stmt.Dependencies {
 		// Parse dependency (format: "schema.object" or "object")
 		parts := strings.Split(dep, ".")
-		var schema, object string
+		var schema string
 
 		if len(parts) == 2 {
 			schema = parts[0]
-			object = parts[1]
+			// object = parts[1] - not needed, we only check if schema is found
 		} else {
 			// Use default search path
-			schema, object = dbMeta.SearchObject(dbMeta.GetSearchPath(), parts[0])
+			schema, _ = dbMeta.SearchObject(dbMeta.GetSearchPath(), parts[0])
 		}
 
 		if schema == "" {
