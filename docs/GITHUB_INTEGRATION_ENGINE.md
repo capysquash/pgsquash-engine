@@ -51,7 +51,7 @@ The engine supports **two integration modes**:
    - GitHub webhooks go to CAPYSQUASH platform
    - Platform orchestrates analysis requests to engine
    - Platform manages authentication, projects, and user settings
-   - See: [ecosystem docs/GITHUB_INTEGRATION.md](../ecosystem%20docs/GITHUB_INTEGRATION.md)
+   - See: [ecosystem docs/GITHUB\_INTEGRATION.md](../ecosystem%20docs/GITHUB_INTEGRATION.md)
 
 2. **Direct Mode** (self-hosted)
    - GitHub webhooks go directly to engine API server
@@ -190,6 +190,7 @@ Files must meet ALL criteria:
 3. ✅ Does NOT match any `exclude` pattern
 
 Example:
+
 ```yaml
 include:
   - "migrations/**/*.sql"
@@ -210,7 +211,7 @@ The engine formats PR comments to align with the CAPYSQUASH platform style:
 
 ### Success (No Warnings)
 
-```markdown
+````markdown
 ## ✅ CAPYSQUASH Migration Analysis
 
 **Status**: Analysis Successful
@@ -229,13 +230,15 @@ You have 12 migration files. Consider using `pgsquash squash` to consolidate the
 
 ```bash
 pgsquash squash migrations/*.sql --output consolidated/ --safety standard
-```
+````
 
 [View detailed analysis →](https://capysquash.dev/analyze)
 
 ---
+
 _Powered by [CAPYSQUASH](https://capysquash.dev) 🦫_
-```
+
+````
 
 ### With Warnings
 
@@ -258,7 +261,7 @@ You have 8 migration files. Consider using `pgsquash squash` to consolidate them
 
 ---
 _Powered by [CAPYSQUASH](https://capysquash.dev) 🦫_
-```
+````
 
 ### Failed Checks
 
@@ -358,6 +361,7 @@ The engine evaluates checks and sets GitHub check run conclusion:
 ### For Platform Users
 
 See the comprehensive platform guide:
+
 - [CAPYSQUASH GitHub Integration Guide](../ecosystem%20docs/GITHUB_INTEGRATION.md)
 
 **Quick Start:**
@@ -370,6 +374,7 @@ See the comprehensive platform guide:
 ### For Self-Hosted Engine
 
 See the engine-specific guide:
+
 - [GitHub App Setup Guide](./github-app-setup.md)
 
 **Quick Start:**
@@ -392,16 +397,19 @@ See the engine-specific guide:
 ### From Personal Token to GitHub App
 
 **Before:**
+
 ```bash
 GITHUB_TOKEN=ghp_xxxxx
 ```
 
 **After (Platform Mode):**
+
 - Install CAPYSQUASH GitHub App
 - Configure in platform dashboard
 - Remove `GITHUB_TOKEN` from environment
 
 **After (Direct Mode):**
+
 ```bash
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA..."
@@ -409,6 +417,7 @@ GITHUB_WEBHOOK_SECRET=xxxxx
 ```
 
 **Benefits:**
+
 - ✅ 3x higher rate limits (15k vs 5k requests/hour)
 - ✅ Better security (app credentials vs user credentials)
 - ✅ Multi-repository support without extra configuration
@@ -459,6 +468,7 @@ After PR analysis, check GitHub PR:
 **GitHub → Settings → Developer settings → GitHub Apps → Your App → Advanced → Recent Deliveries**
 
 Look for:
+
 - ✅ Response: 200 OK
 - ⚠️ Response: 400/401 - Check webhook secret
 - ❌ Response: 500 - Check engine logs
@@ -658,7 +668,7 @@ The engine respects rate limits and includes rate limit info in logs.
 
 ## Related Documentation
 
-- **Platform Integration**: [ecosystem docs/GITHUB_INTEGRATION.md](../ecosystem%20docs/GITHUB_INTEGRATION.md)
+- **Platform Integration**: [ecosystem docs/GITHUB\_INTEGRATION.md](../ecosystem%20docs/GITHUB_INTEGRATION.md)
 - **GitHub App Setup**: [github-app-setup.md](./github-app-setup.md)
 - **Configuration Reference**: [user docs/configuration.md](./user%20docs/configuration.md)
 - **Webhook Guide**: [user docs/github-webhooks.md](./user%20docs/github-webhooks.md)

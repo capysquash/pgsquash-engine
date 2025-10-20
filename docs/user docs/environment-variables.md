@@ -91,7 +91,7 @@ Set this in your build pipeline to track which version analyzed migrations.
 
 **When to use:** Running the REST API server for hosted orchestration, GitHub webhooks, or team collaboration.
 
-### JWT_SECRET
+### JWT\_SECRET
 
 **Type:** String (required for API server)
 **When to use:** Securing API endpoints with JWT authentication
@@ -107,13 +107,14 @@ api-server
 ⚠️ **Security:** This secret is **required** for production. Never use default values or commit secrets to version control.
 
 **Purpose:**
+
 - Authenticates API requests
 - Signs and verifies JWT tokens
 - Prevents unauthorized access to operations
 
 ---
 
-### DATABASE_URL
+### DATABASE\_URL
 
 **Type:** String (PostgreSQL connection string, required for API server)
 **When to use:** Operation tracking and API server state management
@@ -126,6 +127,7 @@ api-server
 **Format:** `postgres://username:password@hostname:port/database`
 
 **Purpose:**
+
 - Tracks operation status and progress
 - Stores API request metadata
 - Manages user sessions and state
@@ -379,17 +381,20 @@ export GITHUB_REDIRECT_URL="https://yourapp.com/github/callback"
 Environment variables **do not override** configuration file settings for most options. Only specific environment variables are supported:
 
 **CLI Supported Variables:**
+
 - `PGSQUASH_LOG_LEVEL` - Sets logging verbosity
 - `PROD_DB_DSN` - Database connection for paranoid mode and backups
 - AI provider keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
 
 **API Server Supported Variables:**
+
 - `JWT_SECRET` - Required for authentication
 - `DATABASE_URL` - Required for operation tracking
 - `PORT`, `CORS_ORIGIN` - Server configuration
 - GitHub integration variables (`GITHUB_TOKEN`, etc.)
 
 **Priority Order:**
+
 1. **CLI Flags** (highest priority) - e.g., `--safety conservative`
 2. **Environment Variables** - Only for supported variables listed above
 3. **Config File** (`pgsquash.config.json`)
@@ -456,31 +461,31 @@ docker-compose --env-file .env up
 
 ### CLI Environment Variables
 
-| Variable                   | Type    | Default     | Used By     |
-| -------------------------- | ------- | ----------- | ----------- |
-| `PGSQUASH_LOG_LEVEL`       | string  | `info`      | CLI         |
-| `PROD_DB_DSN`              | string  | -           | CLI         |
-| `ANTHROPIC_API_KEY`        | string  | -           | CLI, AI features |
-| `OPENAI_API_KEY`           | string  | -           | CLI, AI features |
-| `AZURE_OPENAI_ENDPOINT`    | URL     | -           | CLI, AI features |
-| `AZURE_OPENAI_API_KEY`     | string  | -           | CLI, AI features |
-| `AZURE_OPENAI_DEPLOYMENT`  | string  | -           | CLI, AI features |
-| `AZURE_OPENAI_API_VERSION` | string  | latest      | CLI, AI features |
-| `AZURE_OPENAI_USE_AD`      | boolean | `false`     | CLI, AI features |
+| Variable                   | Type    | Default | Used By          |
+| -------------------------- | ------- | ------- | ---------------- |
+| `PGSQUASH_LOG_LEVEL`       | string  | `info`  | CLI              |
+| `PROD_DB_DSN`              | string  | -       | CLI              |
+| `ANTHROPIC_API_KEY`        | string  | -       | CLI, AI features |
+| `OPENAI_API_KEY`           | string  | -       | CLI, AI features |
+| `AZURE_OPENAI_ENDPOINT`    | URL     | -       | CLI, AI features |
+| `AZURE_OPENAI_API_KEY`     | string  | -       | CLI, AI features |
+| `AZURE_OPENAI_DEPLOYMENT`  | string  | -       | CLI, AI features |
+| `AZURE_OPENAI_API_VERSION` | string  | latest  | CLI, AI features |
+| `AZURE_OPENAI_USE_AD`      | boolean | `false` | CLI, AI features |
 
 ### API Server Environment Variables
 
-| Variable                   | Type    | Default     | Required    |
-| -------------------------- | ------- | ----------- | ----------- |
-| `JWT_SECRET`               | string  | -           | **Yes**     |
-| `DATABASE_URL`             | string  | -           | **Yes**     |
-| `PORT`                     | int     | `8080`      | No          |
-| `CORS_ORIGIN`              | string  | -           | No          |
-| `GITHUB_TOKEN`             | string  | -           | No          |
-| `GITHUB_WEBHOOK_SECRET`    | string  | -           | No          |
-| `GITHUB_CLIENT_ID`         | string  | -           | No          |
-| `GITHUB_CLIENT_SECRET`     | string  | -           | No          |
-| `GITHUB_REDIRECT_URL`      | URL     | -           | No          |
+| Variable                | Type   | Default | Required |
+| ----------------------- | ------ | ------- | -------- |
+| `JWT_SECRET`            | string | -       | **Yes**  |
+| `DATABASE_URL`          | string | -       | **Yes**  |
+| `PORT`                  | int    | `8080`  | No       |
+| `CORS_ORIGIN`           | string | -       | No       |
+| `GITHUB_TOKEN`          | string | -       | No       |
+| `GITHUB_WEBHOOK_SECRET` | string | -       | No       |
+| `GITHUB_CLIENT_ID`      | string | -       | No       |
+| `GITHUB_CLIENT_SECRET`  | string | -       | No       |
+| `GITHUB_REDIRECT_URL`   | URL    | -       | No       |
 
 **Note:** `PGSQUASH_DOCKER_NETWORK` and `PGSQUASH_CONFIG_PATH` are not supported environment variables. Use Docker Compose network configuration and the `--config` CLI flag instead.
 

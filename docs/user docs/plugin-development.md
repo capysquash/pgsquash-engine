@@ -1451,6 +1451,7 @@ pgsquash includes several built-in plugins that demonstrate best practices and h
 **Priority:** 95 (runs before most plugins)
 
 **Detects:**
+
 - Custom auth schemas and tables
 - Session management tables
 - Authentication helper functions
@@ -1458,11 +1459,13 @@ pgsquash includes several built-in plugins that demonstrate best practices and h
 - Custom user tables with auth patterns
 
 **Use Cases:**
+
 - Projects with custom authentication systems
 - Internal auth implementations
 - Auth systems that don't use Clerk, Supabase, or Auth0
 
 **Detection Patterns:**
+
 ```sql
 -- Detects tables with auth-related names
 CREATE TABLE user_sessions (...)
@@ -1475,6 +1478,7 @@ CREATE FUNCTION validate_session(...) ...
 ```
 
 **Configuration:**
+
 ```json
 {
   "plugins": {
@@ -1488,12 +1492,14 @@ CREATE FUNCTION validate_session(...) ...
 ```
 
 **What It Does:**
+
 - Marks auth-related tables and functions for preservation
 - Groups authentication objects together in output
 - Prevents unsafe consolidation of session tables
 - Maintains auth function signatures
 
 **Example:**
+
 ```bash
 # Enable auth plugin explicitly
 pgsquash squash migrations/*.sql --config pgsquash.config.json
@@ -1514,12 +1520,14 @@ CREATE FUNCTION verify_session_token(...) ...;
 **Priority:** 90
 
 **Detects:**
+
 - Clerk JWT claims (`auth.jwt()->>'id'`)
 - Organization metadata (`auth.jwt()->'o'->>'id'`)
 - Public metadata support
 - Clerk user ID patterns
 
 **Detection Patterns:**
+
 ```sql
 -- JWT v2 organization claims
 WHERE auth.jwt()->'o'->>'id' = organization_id
@@ -1532,6 +1540,7 @@ metadata JSONB -- Clerk public_metadata
 ```
 
 **Configuration:**
+
 ```json
 {
   "third_party_integrations": {
@@ -1546,6 +1555,7 @@ metadata JSONB -- Clerk public_metadata
 ```
 
 **What It Does:**
+
 - Preserves Clerk-specific JWT claim syntax
 - Handles organization-scoped RLS policies
 - Maintains public metadata JSONB columns
@@ -1562,12 +1572,14 @@ metadata JSONB -- Clerk public_metadata
 **Priority:** 90
 
 **Detects:**
+
 - `auth.users` references
 - `storage.buckets` and `storage.objects`
 - RLS policies using `auth.uid()`
 - Supabase realtime patterns
 
 **Detection Patterns:**
+
 ```sql
 -- Auth schema references
 FOREIGN KEY (user_id) REFERENCES auth.users(id)
@@ -1582,6 +1594,7 @@ CREATE POLICY users_policy ON users
 ```
 
 **Configuration:**
+
 ```json
 {
   "third_party_integrations": {
@@ -1612,6 +1625,7 @@ CREATE FUNCTION auth.jwt() RETURNS JSONB ...
 ```
 
 **What It Does:**
+
 - Preserves references to `auth.users` and `storage` tables
 - Groups RLS policies logically
 - Injects auth schema stubs for validation
@@ -1628,12 +1642,14 @@ CREATE FUNCTION auth.jwt() RETURNS JSONB ...
 **Priority:** 80
 
 **Detects:**
+
 - `_prisma_migrations` table
 - Prisma enum tables (`_prisma_enum_*`)
 - Shadow database patterns
 - Prisma-specific constraints
 
 **Detection Patterns:**
+
 ```sql
 -- Migration tracking
 CREATE TABLE "_prisma_migrations" (
@@ -1647,6 +1663,7 @@ CREATE TABLE "_prisma_enum_UserRole" (...);
 ```
 
 **Configuration:**
+
 ```json
 {
   "plugins": {
@@ -1662,6 +1679,7 @@ CREATE TABLE "_prisma_enum_UserRole" (...);
 ```
 
 **What It Does:**
+
 - Preserves `_prisma_migrations` table structure exactly
 - Handles Prisma enum conflicts
 - Maintains shadow database compatibility
@@ -1678,12 +1696,14 @@ CREATE TABLE "_prisma_enum_UserRole" (...);
 **Priority:** 80
 
 **Detects:**
+
 - `GENERATED ALWAYS AS IDENTITY`
 - Generated columns
 - Drizzle migration metadata
 - Drizzle-specific column defaults
 
 **Detection Patterns:**
+
 ```sql
 -- Identity columns
 id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY
@@ -1693,6 +1713,7 @@ full_name TEXT GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED
 ```
 
 **Configuration:**
+
 ```json
 {
   "plugins": {
@@ -1705,6 +1726,7 @@ full_name TEXT GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED
 ```
 
 **What It Does:**
+
 - Preserves `GENERATED ALWAYS AS IDENTITY` syntax
 - Maintains generated column definitions
 - Handles Drizzle column defaults correctly
@@ -1721,17 +1743,20 @@ full_name TEXT GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED
 **Priority:** 70
 
 **Detects:**
+
 - Functions without volatility declarations
 - Functions with incorrect volatility
 - Performance-critical functions
 
 **What It Does:**
+
 - Analyzes function bodies to infer volatility
 - Adds missing volatility declarations
 - Warns about performance implications
 - Suggests optimal volatility levels
 
 **Detection Patterns:**
+
 ```sql
 -- Missing volatility (defaults to VOLATILE)
 CREATE FUNCTION count_users() RETURNS INTEGER AS $$
@@ -1750,6 +1775,7 @@ $$ LANGUAGE plpgsql STABLE;
 ```
 
 **Configuration:**
+
 ```json
 {
   "plugins": {
@@ -1764,11 +1790,11 @@ $$ LANGUAGE plpgsql STABLE;
 
 **Volatility Levels:**
 
-| Level     | Description                   | Use Case                  |
-| --------- | ----------------------------- | ------------------------- |
-| VOLATILE  | Modifies database state       | INSERT, UPDATE, DELETE    |
-| STABLE    | No modifications, may vary    | SELECT with WHERE         |
-| IMMUTABLE | Always same result for input  | Math functions, constants |
+| Level     | Description                  | Use Case                  |
+| --------- | ---------------------------- | ------------------------- |
+| VOLATILE  | Modifies database state      | INSERT, UPDATE, DELETE    |
+| STABLE    | No modifications, may vary   | SELECT with WHERE         |
+| IMMUTABLE | Always same result for input | Math functions, constants |
 
 **What It Fixes:**
 
@@ -1787,6 +1813,7 @@ $$ LANGUAGE sql STABLE;
 **Performance Impact:**
 
 Functions without proper volatility can't be optimized:
+
 - Missing `IMMUTABLE`: Function called for every row instead of once
 - Missing `STABLE`: Function re-evaluated in same query
 - Incorrect `VOLATILE`: Prevents query optimization
@@ -1824,6 +1851,7 @@ Plugins work together based on priority:
 ```
 
 **Execution Order (by priority):**
+
 1. Auth Plugin (95)
 2. Clerk Plugin (90)
 3. Supabase Plugin (90)

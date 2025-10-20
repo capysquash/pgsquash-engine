@@ -23,20 +23,20 @@ pgsquash offers four safety levels that control consolidation strategies and opt
 
 ## Safety Level Comparison
 
-| Feature                          | Paranoid | Conservative | Standard     | Aggressive |
-| -------------------------------- | -------- | ------------ | ------------ | ---------- |
-| CREATE + ALTER Consolidation     | Yes      | Yes          | Yes          | Yes        |
-| Column Evolution Tracking        | Yes      | Yes          | Yes          | Yes        |
-| DROP/CREATE Cycle Removal        | Yes      | No           | Yes          | Yes        |
-| RLS Policy Consolidation         | Yes      | No           | Yes          | Yes        |
-| Function Deduplication           | Yes      | No           | No           | Yes        |
-| Dead Code Removal                | Yes\*    | No           | No           | Yes\*\*    |
-| AI-Powered Analysis (Optional)   | Yes      | No           | No           | Yes        |
-| Database Validation              | Required | Recommended  | Optional     | Optional   |
-| Circular FK Detection & Handling | Yes      | Yes          | Yes          | Yes        |
-| DDL Cycle Detection              | Yes      | Yes          | Yes          | Yes        |
-| Optimization Rules Applied       | All 9    | 4            | 7            | All 9      |
-| Processing Speed                 | Slowest  | Fast         | Fast         | Medium     |
+| Feature                          | Paranoid  | Conservative | Standard     | Aggressive |
+| -------------------------------- | --------- | ------------ | ------------ | ---------- |
+| CREATE + ALTER Consolidation     | Yes       | Yes          | Yes          | Yes        |
+| Column Evolution Tracking        | Yes       | Yes          | Yes          | Yes        |
+| DROP/CREATE Cycle Removal        | Yes       | No           | Yes          | Yes        |
+| RLS Policy Consolidation         | Yes       | No           | Yes          | Yes        |
+| Function Deduplication           | Yes       | No           | No           | Yes        |
+| Dead Code Removal                | Yes\*     | No           | No           | Yes\*\*    |
+| AI-Powered Analysis (Optional)   | Yes       | No           | No           | Yes        |
+| Database Validation              | Required  | Recommended  | Optional     | Optional   |
+| Circular FK Detection & Handling | Yes       | Yes          | Yes          | Yes        |
+| DDL Cycle Detection              | Yes       | Yes          | Yes          | Yes        |
+| Optimization Rules Applied       | All 9     | 4            | 7            | All 9      |
+| Processing Speed                 | Slowest   | Fast         | Fast         | Medium     |
 | Production Ready                 | Yes\*\*\* | Yes          | With Testing | No         |
 
 \* **Paranoid:** Database-validated dead code removal (queries production DB to verify no usage)
@@ -109,6 +109,7 @@ CREATE TABLE users (
 **Maximum consolidation with database-validated safety.** Paranoid mode applies the same aggressive optimization rules as Aggressive mode, but validates every dead code removal against your actual production database. This provides the most thorough optimization possible while ensuring absolute safety through runtime verification.
 
 **Key Characteristics:**
+
 - Applies **all** Aggressive-level consolidations
 - **Plus:** Database-validated dead code removal
 - Slowest processing (requires database queries)

@@ -8,12 +8,12 @@ Last Updated: October 20, 2025
 
 ## 📦 Component Matrix
 
-| Component | Tech Stack | Purpose | Location | Business Role |
-|-----------|-----------|---------|----------|---------------|
-| **pgsquash-engine** | Go 1.22 | CLI & API for migration consolidation | `/pgsquash-engine` | Free OSS, awareness driver |
-| **capysquash-platform** | Next.js 15, React 19 | SaaS web app, team features | `/capysquash-platform` | Revenue source, $12-custom/mo |
-| **capysquash-docs** | Next.js + Fumadocs | Public documentation | `/capysquash-docs` | Activation, SEO, support |
-| **Business Docs** | Markdown | Strategy, positioning, GTM | `/branding and business docs` | Strategic direction |
+| Component               | Tech Stack           | Purpose                               | Location                      | Business Role                 |
+| ----------------------- | -------------------- | ------------------------------------- | ----------------------------- | ----------------------------- |
+| **pgsquash-engine**     | Go 1.22              | CLI & API for migration consolidation | `/pgsquash-engine`            | Free OSS, awareness driver    |
+| **capysquash-platform** | Next.js 15, React 19 | SaaS web app, team features           | `/capysquash-platform`        | Revenue source, $12-custom/mo |
+| **capysquash-docs**     | Next.js + Fumadocs   | Public documentation                  | `/capysquash-docs`            | Activation, SEO, support      |
+| **Business Docs**       | Markdown             | Strategy, positioning, GTM            | `/branding and business docs` | Strategic direction           |
 
 ---
 
@@ -21,31 +21,32 @@ Last Updated: October 20, 2025
 
 ### Production
 
-- **Platform**: https://capysquash.dev
-- **API**: https://api.capysquash.dev (Fly.io)
-- **Docs**: https://docs.capysquash.dev (planned)
-- **GitHub Org**: https://github.com/CAPYSQUASH
-- **Engine Repo**: https://github.com/CAPYSQUASH/pgsquash-engine
+- **Platform**: <https://capysquash.dev>
+- **API**: <https://api.capysquash.dev> (Fly.io)
+- **Docs**: <https://docs.capysquash.dev> (planned)
+- **GitHub Org**: <https://github.com/CAPYSQUASH>
+- **Engine Repo**: <https://github.com/CAPYSQUASH/pgsquash-engine>
 
 ### Development
 
-- **Platform Local**: http://localhost:3000
-- **API Local**: http://localhost:8080
-- **Docs Local**: http://localhost:3000
+- **Platform Local**: <http://localhost:3000>
+- **API Local**: <http://localhost:8080>
+- **Docs Local**: <http://localhost:3000>
 
 ---
 
 ## 💰 Pricing Tiers
 
-| Tier | Price | Target | Key Features |
-|------|-------|--------|--------------|
-| **Free** | $0 | Individuals | CLI unlimited, 3 repos on web |
-| **Creator** | $12/mo | Solo devs | Unlimited repos, automation |
-| **Professional** | $29/mo | Teams (≤5) | Collaboration, SSO |
-| **Agency** | $99/mo | Dev shops | 20 users, white-label |
-| **Enterprise** | Custom | Large orgs | On-premise, SAML, SLA |
+| Tier             | Price  | Target      | Key Features                  |
+| ---------------- | ------ | ----------- | ----------------------------- |
+| **Free**         | $0     | Individuals | CLI unlimited, 3 repos on web |
+| **Creator**      | $12/mo | Solo devs   | Unlimited repos, automation   |
+| **Professional** | $29/mo | Teams (≤5)  | Collaboration, SSO            |
+| **Agency**       | $99/mo | Dev shops   | 20 users, white-label         |
+| **Enterprise**   | Custom | Large orgs  | On-premise, SAML, SLA         |
 
 **Conversion Triggers**:
+
 - Free → Creator: Hit 3-repo limit, want automation
 - Creator → Pro: Add second team member
 - Pro → Agency: Managing 5+ client projects
@@ -132,7 +133,7 @@ GET  /health       # Health check
 
 **Auth**: `X-API-Secret` header
 
-### Platform API (Next.js - /api/*)
+### Platform API (Next.js - /api/\*)
 
 **56 endpoints total** organized as:
 
@@ -156,13 +157,13 @@ GET  /health       # Health check
 **26 tables** across 8 categories:
 
 - **Core** (6): organizations, users, projects, runs, files, memberships
-- **Payments** (4): subscriptions, usage_tracking, plans, stripe_events
-- **GitHub** (2): installations, webhook_events
-- **Settings** (3): org_settings, user_preferences, notification_rules
+- **Payments** (4): subscriptions, usage\_tracking, plans, stripe\_events
+- **GitHub** (2): installations, webhook\_events
+- **Settings** (3): org\_settings, user\_preferences, notification\_rules
 - **Audit** (4): activities, comments, favorites, notifications
-- **API** (2): api_keys, database_connections
-- **Templates** (2): project_templates, feature_flags
-- **Config** (1): subscription_plans
+- **API** (2): api\_keys, database\_connections
+- **Templates** (2): project\_templates, feature\_flags
+- **Config** (1): subscription\_plans
 
 **ORM**: Drizzle ORM
 **Hosting**: Neon (Serverless PostgreSQL)
@@ -181,10 +182,12 @@ User → Clerk Sign In → JWT → Platform → Verification → Authorized
 ### RBAC (3-Tier)
 
 **Platform Roles**:
+
 - `ADMIN` - Full platform access
 - `USER` - Standard user
 
 **Organization Roles**:
+
 - `OWNER` - Full org control + billing
 - `ADMIN` - Org management
 - `MEMBER` - Project access
@@ -221,6 +224,7 @@ User → Clerk Sign In → JWT → Platform → Verification → Authorized
 - **Year 2**: $400-600k ARR (770 customers)
 
 **Unit Economics**:
+
 - CAC: <$50 organic, <$200 paid
 - LTV: Creator $200, Pro $500, Agency $1,500, Enterprise $5,000+
 - LTV:CAC: >3:1
@@ -546,19 +550,21 @@ pnpm build
 
 ### Detailed Guides
 
-- **[ECOSYSTEM_OVERVIEW.md](./ECOSYSTEM_OVERVIEW.md)** - Original ecosystem overview
-- **[ECOSYSTEM_COMPLETE_GUIDE.md](./ECOSYSTEM_COMPLETE_GUIDE.md)** - Comprehensive technical guide
+- **[ECOSYSTEM\_OVERVIEW.md](./ECOSYSTEM_OVERVIEW.md)** - Original ecosystem overview
+- **[ECOSYSTEM\_COMPLETE\_GUIDE.md](./ECOSYSTEM_COMPLETE_GUIDE.md)** - Comprehensive technical guide
 - **[pg-squash-engine-e2e-task.md](./pg-squash-engine-e2e-task.md)** - E2E implementation task
 
 ### Component-Specific Docs
 
 **Engine**:
+
 - `pgsquash-engine/README.md` - Engine overview
 - `pgsquash-engine/docs/` - User documentation
 - `pgsquash-engine/AGENTS.md` - Development guidelines
 - `pgsquash-engine/CHANGELOG.md` - Release notes
 
 **Platform**:
+
 - `capysquash-platform/README.md` - Platform overview
 - `capysquash-platform/docs/API_REFERENCE.md` - All 56 endpoints
 - `capysquash-platform/docs/DATABASE_SCHEMA.md` - All 26 tables
@@ -567,6 +573,7 @@ pnpm build
 - `capysquash-platform/AGENTS.md` - Development guidelines
 
 **Business**:
+
 - `branding and business docs/pgsquash-complete-strategy.md` - Complete playbook (2,016 lines)
 - `branding and business docs/capysquash-complete-brand-guide.md` - Brand identity
 - `branding and business docs/pgsquash-integration-roadmap.md` - Partnership strategy
@@ -615,8 +622,8 @@ pnpm build
 
 ## 🔗 Quick Links
 
-- **Main Repo**: https://github.com/CAPYSQUASH/pgsquash-engine
-- **Production**: https://capysquash.dev
+- **Main Repo**: <https://github.com/CAPYSQUASH/pgsquash-engine>
+- **Production**: <https://capysquash.dev>
 - **Platform Docs**: `capysquash-platform/docs/`
 - **Engine Docs**: `pgsquash-engine/docs/`
 - **Strategy**: `branding and business docs/pgsquash-complete-strategy.md`

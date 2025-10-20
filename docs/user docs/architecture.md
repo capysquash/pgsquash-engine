@@ -193,12 +193,14 @@ internal/
 Beyond the core processing pipeline, pgsquash includes several supporting modules:
 
 **diff/** - Schema Comparison
-- Byte-level schema comparison using pg_dump
+
+- Byte-level schema comparison using pg\_dump
 - Schema difference detection and reporting
 - Validation result formatting
 - Used by the validate command for schema equivalence checking
 
 **errors/** - Error Handling Framework
+
 - Structured error types with error codes (ErrorCodeSyntaxError, ErrorCodeValidationFailed, etc.)
 - Error categories (CategoryParsing, CategoryValidation, CategoryDependency, etc.)
 - Severity levels (SeverityError, SeverityWarning, SeverityInfo)
@@ -206,31 +208,36 @@ Beyond the core processing pipeline, pgsquash includes several supporting module
 - Error wrapping and chaining for detailed error traces
 
 **fileutil/** - File Utilities
+
 - File discovery and pattern matching
 - Migration file reading and writing
 - Path normalization and validation
 - Backup file management
 
 **github/** - GitHub Integration
+
 - Webhook handling for pull request events
 - Automated migration analysis on PR creation
 - PR comment generation with analysis results
 - CI/CD integration support for GitHub Actions
 
 **output/** - Output Organization
+
 - Migration file organization by category (extensions, schema, constraints, etc.)
 - Semantic file naming strategies
 - Comment preservation and generation
 - SQL formatting and prettification
 
 **patterns/** - Pattern Detection
+
 - Authentication provider detection (Supabase auth.users, Clerk JWT, Auth0)
-- ORM pattern recognition (Prisma _prisma_migrations, Drizzle schemas)
+- ORM pattern recognition (Prisma \_prisma\_migrations, Drizzle schemas)
 - Storage schema detection (Supabase storage.buckets)
 - SQL dialect and PostgreSQL version detection
 - Auth pattern analysis for RLS policies and security
 
 **plugins/** - Plugin System
+
 - Plugin interface defining lifecycle hooks (Detect, Initialize, EnrichStatement, etc.)
 - Plugin registry with priority-based ordering
 - Auto-detection of third-party patterns in migrations
@@ -244,6 +251,7 @@ Beyond the core processing pipeline, pgsquash includes several supporting module
 - Custom plugin support for proprietary systems
 
 **tui/** - Terminal User Interface
+
 - Interactive dashboard with migration overview
 - Real-time analysis view with lifecycle patterns
 - Configuration wizard for interactive setup
@@ -252,6 +260,7 @@ Beyond the core processing pipeline, pgsquash includes several supporting module
 - Built with Bubble Tea framework
 
 **types/** - Core Type Definitions
+
 - Migration and Statement structures
 - Object lifecycle representations
 - Dependency graph types
@@ -259,12 +268,11 @@ Beyond the core processing pipeline, pgsquash includes several supporting module
 - Shared enums and constants used across all modules
 
 **utils/** - Utility Functions
+
 - String manipulation and formatting
 - Collection utilities (map, filter, reduce operations)
 - Common helper functions
 - Logging utilities
-
-
 
 ## Processing Pipeline
 

@@ -49,27 +49,33 @@ Before setting up the GitHub integration:
 ### 1.2 Configure App Settings
 
 **GitHub App name:**
+
 ```
 CAPYSQUASH Migration Analyzer
 ```
 
 **Homepage URL:**
+
 ```
 https://capysquash.dev
 ```
 
 **Webhook URL:**
+
 ```
 https://capysquash.dev/api/webhooks/github
 ```
-*(This endpoint is now live! Replace with your deployment URL if self-hosting)*
+
+_(This endpoint is now live! Replace with your deployment URL if self-hosting)_
 
 **Webhook secret:**
+
 ```
 Generate a random secret (save this for later):
 openssl rand -hex 32
 ```
-*(Store this for when webhook support is implemented)*
+
+_(Store this for when webhook support is implemented)_
 
 ### 1.3 Set Permissions
 
@@ -122,6 +128,7 @@ After creating the app, note these values:
 ### 2.2 Note Installation ID
 
 After installation, you'll be redirected to:
+
 ```
 https://github.com/settings/installations/INSTALLATION_ID
 ```
@@ -153,6 +160,7 @@ awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' your-private-key.pem
 ```
 
 Or use this script:
+
 ```bash
 cat your-private-key.pem | tr '\n' '|' | sed 's/|/\\n/g'
 ```
@@ -160,6 +168,7 @@ cat your-private-key.pem | tr '\n' '|' | sed 's/|/\\n/g'
 ### 3.2 Deploy Configuration
 
 **Vercel:**
+
 ```bash
 vercel env add GITHUB_APP_ID
 vercel env add GITHUB_APP_CLIENT_ID
@@ -172,6 +181,7 @@ vercel --prod
 ```
 
 **Railway:**
+
 ```bash
 railway variables set GITHUB_APP_ID="123456"
 railway variables set GITHUB_APP_CLIENT_ID="Iv1..."
@@ -222,22 +232,26 @@ The following settings will be available once webhook automation is implemented:
 In CAPYSQUASH Settings → GitHub Integration:
 
 **Default Safety Level:**
+
 - Conservative (recommended for production repos)
 - Standard (balanced)
 - Aggressive (development repos)
 
 **PR Comment Settings:**
+
 - Post analysis results as comment
 - Update existing comments (vs. new comment each time)
 - Include file reduction stats
 - Include warnings and recommendations
 
 **Trigger Conditions:**
+
 - Analyze on PR open
 - Analyze on PR update (new commits)
 - Analyze on every commit (can be noisy)
 
 **File Filters:**
+
 - Include pattern: `migrations/**/*.sql` (customize for your project)
 - Exclude pattern: `**/seeds/**` (optional)
 
@@ -553,6 +567,7 @@ branches:
 ### 3. Review Warnings
 
 Don't auto-merge PRs with warnings. Review them carefully, especially:
+
 - Data loss operations
 - Missing indexes on foreign keys
 - Complex dependency changes
@@ -564,6 +579,7 @@ Commit `.capysquash.yml` to track configuration changes over time.
 ### 5. Monitor Usage
 
 Check CAPYSQUASH dashboard regularly to track:
+
 - Analysis success rate
 - Common warnings
 - Time savings
@@ -571,6 +587,7 @@ Check CAPYSQUASH dashboard regularly to track:
 ### 6. Team Communication
 
 Ensure team knows:
+
 - How to interpret analysis results
 - When to override warnings
 - How to adjust configuration
@@ -624,8 +641,8 @@ Ensure team knows:
 
 Need help with GitHub integration?
 
-- **Documentation:** [https://capysquash.dev/docs](https://capysquash.dev/docs)
-- **Email:** support@capysquash.dev
+- **Documentation:** <https://capysquash.dev/docs>
+- **Email:** <support@capysquash.dev>
 - **GitHub Issues:** [Report integration issues](https://github.com/capysquash/capysquash-platform/issues)
 
 ---

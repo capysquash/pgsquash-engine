@@ -37,11 +37,13 @@ Stop reviewing migrations manually—catch issues before they hit production.
 ## Integration Options
 
 ### Option 1: CAPYSQUASH Platform (Recommended)
+
 - Install GitHub App from CAPYSQUASH
 - Web UI for project management
 - See [Platform Guide](../../ecosystem%20docs/GITHUB_INTEGRATION.md)
 
 ### Option 2: Direct Engine Webhooks (Self-Hosted)
+
 - Deploy engine API server
 - Configure webhooks to engine directly
 - No platform dependency
@@ -320,15 +322,15 @@ auto_apply:
 
 **Key Configuration Options:**
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable pgsquash |
-| `safety_level` | string | `standard` | Analysis safety level |
-| `migration_threshold` | integer | `15` | Min files for consolidation suggestions |
-| `pr_comment.enabled` | boolean | `true` | Post PR comments |
-| `checks.max_warnings` | integer | `5` | Max warnings before failing |
-| `checks.fail_on_critical` | boolean | `true` | Fail on critical warnings |
-| `auto_apply.enabled` | boolean | `false` | Auto-create consolidation PRs |
+| Option                    | Type    | Default    | Description                             |
+| ------------------------- | ------- | ---------- | --------------------------------------- |
+| `enabled`                 | boolean | `true`     | Enable/disable pgsquash                 |
+| `safety_level`            | string  | `standard` | Analysis safety level                   |
+| `migration_threshold`     | integer | `15`       | Min files for consolidation suggestions |
+| `pr_comment.enabled`      | boolean | `true`     | Post PR comments                        |
+| `checks.max_warnings`     | integer | `5`        | Max warnings before failing             |
+| `checks.fail_on_critical` | boolean | `true`     | Fail on critical warnings               |
+| `auto_apply.enabled`      | boolean | `false`    | Auto-create consolidation PRs           |
 
 See [.capysquash.yml.example](../../.capysquash.yml.example) for complete configuration options.
 

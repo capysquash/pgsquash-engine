@@ -18,15 +18,15 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
 
 ### GitHub App vs Personal Access Token
 
-| Feature | Personal Token | GitHub App |
-|---------|---------------|------------|
-| **Multi-repo support** | One token per repo | One app for unlimited repos |
-| **Permissions** | Broad, user-level | Fine-grained, repo-specific |
-| **Security** | User credentials | App credentials + installation tokens |
-| **Rate limits** | 5,000 req/hour | 15,000 req/hour per installation |
-| **Revocation** | Revokes user access | Revokes only app access |
-| **Installation** | Manual webhook setup | Automatic webhook configuration |
-| **Audit trail** | User actions | App actions (clearer attribution) |
+| Feature                | Personal Token       | GitHub App                            |
+| ---------------------- | -------------------- | ------------------------------------- |
+| **Multi-repo support** | One token per repo   | One app for unlimited repos           |
+| **Permissions**        | Broad, user-level    | Fine-grained, repo-specific           |
+| **Security**           | User credentials     | App credentials + installation tokens |
+| **Rate limits**        | 5,000 req/hour       | 15,000 req/hour per installation      |
+| **Revocation**         | Revokes user access  | Revokes only app access               |
+| **Installation**       | Manual webhook setup | Automatic webhook configuration       |
+| **Audit trail**        | User actions         | App actions (clearer attribution)     |
 
 ### Benefits for Your Team
 
@@ -52,13 +52,14 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
 
 ### Step 1: Create GitHub App (2 minutes)
 
-1. Go to https://github.com/settings/apps/new
+1. Go to <https://github.com/settings/apps/new>
 2. **GitHub App name**: `pgsquash` (or `pgsquash-{your-org}`)
 3. **Homepage URL**: `https://capysquash.dev`
 4. **Webhook URL**: `https://your-api-server.fly.dev/github/webhook`
 5. **Webhook secret**: Generate with: `openssl rand -hex 32`
 
 **Permissions:**
+
 - ✅ Repository permissions:
   - Contents: **Read & write**
   - Pull requests: **Read & write**
@@ -67,6 +68,7 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
   - Metadata: **Read-only**
 
 **Subscribe to events:**
+
 - ✅ Pull request
 - ✅ Pull request review
 - ✅ Pull request review comment
@@ -109,6 +111,7 @@ fly secrets set \
 ```
 
 **Railway:**
+
 ```bash
 railway variables set GITHUB_APP_ID=123456
 railway variables set GITHUB_WEBHOOK_SECRET=your_webhook_secret
@@ -116,6 +119,7 @@ railway variables set GITHUB_APP_PRIVATE_KEY="$(cat pgsquash.*.private-key.pem)"
 ```
 
 **Docker:**
+
 ```bash
 docker run -d \
   -e GITHUB_APP_ID=123456 \
@@ -177,13 +181,13 @@ docker run -d \
 
 4. **Permissions:** Set the minimum required permissions:
 
-   | Permission | Access | Reason |
-   |------------|--------|--------|
-   | Contents | Read & write | Read migrations, create consolidation PRs |
-   | Pull requests | Read & write | Comment on PRs, create consolidation PRs |
-   | Issues | Read & write | Post analysis comments |
-   | Checks | Read & write | Create check runs with analysis results |
-   | Metadata | Read-only | Repository metadata (automatically granted) |
+   | Permission    | Access       | Reason                                      |
+   | ------------- | ------------ | ------------------------------------------- |
+   | Contents      | Read & write | Read migrations, create consolidation PRs   |
+   | Pull requests | Read & write | Comment on PRs, create consolidation PRs    |
+   | Issues        | Read & write | Post analysis comments                      |
+   | Checks        | Read & write | Create check runs with analysis results     |
+   | Metadata      | Read-only    | Repository metadata (automatically granted) |
 
 5. **Subscribe to events:** Select these events:
 
@@ -267,6 +271,7 @@ Same process as organization, but select your personal account.
 #### Finding Installation ID
 
 After installation, you'll be redirected to a URL like:
+
 ```
 https://github.com/settings/installations/12345678
 ```
@@ -274,6 +279,7 @@ https://github.com/settings/installations/12345678
 The number `12345678` is your **Installation ID**. Save this for API server configuration.
 
 Alternatively, you can find it via API:
+
 ```bash
 # List all installations (requires App JWT)
 curl -H "Authorization: Bearer {APP_JWT}" \
@@ -322,6 +328,7 @@ DATABASE_URL=postgres://...             # For storing GitHub installations
 #### Fly.io
 
 **Set secrets:**
+
 ```bash
 # Read private key from file
 fly secrets set GITHUB_APP_PRIVATE_KEY="$(cat pgsquash.*.private-key.pem)"
@@ -333,11 +340,13 @@ fly secrets set \
 ```
 
 **Verify secrets:**
+
 ```bash
 fly secrets list
 ```
 
 **Update fly.toml:**
+
 ```toml
 [env]
   PORT = "8080"
@@ -350,6 +359,7 @@ fly secrets list
 #### Railway
 
 **Via CLI:**
+
 ```bash
 railway variables set GITHUB_APP_ID=123456
 railway variables set GITHUB_WEBHOOK_SECRET=your_secret
@@ -357,6 +367,7 @@ railway variables set GITHUB_APP_PRIVATE_KEY="$(cat pgsquash.*.private-key.pem)"
 ```
 
 **Via Dashboard:**
+
 1. Go to your project
 2. Click **Variables**
 3. Add each variable manually
@@ -365,6 +376,7 @@ railway variables set GITHUB_APP_PRIVATE_KEY="$(cat pgsquash.*.private-key.pem)"
 #### Docker
 
 **Using environment file:**
+
 ```bash
 # Create .env file
 cat > .env << EOF
@@ -381,6 +393,7 @@ docker run -d \
 ```
 
 **Using secrets:**
+
 ```bash
 # Create secret
 docker secret create pgsquash_private_key pgsquash.*.private-key.pem
@@ -405,11 +418,13 @@ secrets:
 #### Self-Hosted (systemd)
 
 **Create service file:**
+
 ```bash
 sudo nano /etc/systemd/system/pgsquash-api.service
 ```
 
 **Service configuration:**
+
 ```ini
 [Unit]
 Description=pgsquash API Server
@@ -432,6 +447,7 @@ WantedBy=multi-user.target
 ```
 
 **Enable and start:**
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable pgsquash-api
@@ -499,15 +515,15 @@ Create `.pgsquash.config.json` in the root of each repository:
 
 **Configuration options:**
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable pgsquash for this repo |
-| `auto_analyze` | boolean | `true` | Automatically analyze PRs |
-| `auto_pr` | boolean | `false` | Automatically create consolidation PRs |
-| `migration_threshold` | number | `15` | Min migrations to trigger auto-consolidation |
-| `consolidation_ratio` | number | `0.7` | Max ratio to trigger (lower = more consolidation) |
-| `safety_level` | string | `"standard"` | `paranoid`, `conservative`, `standard`, `aggressive` |
-| `migrations_dir` | string | `"migrations"` | Path to migration directory |
+| Option                | Type    | Default        | Description                                          |
+| --------------------- | ------- | -------------- | ---------------------------------------------------- |
+| `enabled`             | boolean | `true`         | Enable/disable pgsquash for this repo                |
+| `auto_analyze`        | boolean | `true`         | Automatically analyze PRs                            |
+| `auto_pr`             | boolean | `false`        | Automatically create consolidation PRs               |
+| `migration_threshold` | number  | `15`           | Min migrations to trigger auto-consolidation         |
+| `consolidation_ratio` | number  | `0.7`          | Max ratio to trigger (lower = more consolidation)    |
+| `safety_level`        | string  | `"standard"`   | `paranoid`, `conservative`, `standard`, `aggressive` |
+| `migrations_dir`      | string  | `"migrations"` | Path to migration directory                          |
 
 ---
 
@@ -546,6 +562,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 ### Test Bot Commands
 
 **Comment on PR:**
+
 ```
 /pgsquash analyze
 ```
@@ -568,6 +585,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 **Symptoms:** No bot comments on PRs
 
 **Check:**
+
 1. Verify webhook URL is correct and accessible:
    ```bash
    curl https://your-api-server.fly.dev/health
@@ -592,6 +610,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 **Symptoms:** Error message about missing installation
 
 **Solutions:**
+
 1. Verify app is installed on the repository
 2. Check installation ID in logs
 3. Reinstall the app if necessary
@@ -601,6 +620,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 **Symptoms:** 401 Unauthorized or authentication failures
 
 **Check:**
+
 1. Verify App ID is correct:
    ```bash
    fly secrets list | grep APP_ID
@@ -619,6 +639,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 **Symptoms:** API returns 403 with rate limit message
 
 **Solutions:**
+
 1. Check current rate limits:
    ```bash
    curl -H "Authorization: Bearer {INSTALLATION_TOKEN}" \
@@ -626,6 +647,7 @@ Create `.pgsquash.config.json` in the root of each repository:
    ```
 
 2. Implement rate limit backoff in your code
+
 3. Consider caching responses
 
 ### Bot Not Responding to Commands
@@ -633,6 +655,7 @@ Create `.pgsquash.config.json` in the root of each repository:
 **Symptoms:** `/pgsquash` commands don't work
 
 **Check:**
+
 1. Verify "Issue comment" event is enabled in GitHub App
 2. Check command syntax is correct
 3. Verify bot has `issues: write` permission
@@ -650,6 +673,6 @@ Create `.pgsquash.config.json` in the root of each repository:
 
 ## Support
 
-- **Issues**: https://github.com/capysquash/pgsquash-engine/issues
-- **Discussions**: https://github.com/capysquash/pgsquash-engine/discussions
-- **Documentation**: https://capysquash.dev/docs
+- **Issues**: <https://github.com/capysquash/pgsquash-engine/issues>
+- **Discussions**: <https://github.com/capysquash/pgsquash-engine/discussions>
+- **Documentation**: <https://capysquash.dev/docs>

@@ -91,8 +91,8 @@ pgsquash squash [files...] [options]
 | `--rollback`      | bool   | false   | Generate rollback scripts (saved to rollbacks/rollback\_plans/)     |
 | `--transform`     | bool   | true    | Apply SQL transformations                                           |
 | `--detect-cycles` | bool   | true    | DDL cycle detection                                                 |
-| `--memory-limit` | int  | 256     | Memory limit in MB for streaming mode       |
-| `--tui`          | bool | false   | Launch interactive TUI for squashing        |
+| `--memory-limit`  | int    | 256     | Memory limit in MB for streaming mode                               |
+| `--tui`           | bool   | false   | Launch interactive TUI for squashing                                |
 
 **Examples:**
 
@@ -158,6 +158,7 @@ pgsquash validate migrations/ clean/ --verbose
 Launch the interactive terminal user interface (TUI) for migration analysis and squashing.
 
 The TUI provides a visual interface for:
+
 - Analyzing migrations and viewing lifecycle patterns
 - Configuring squashing settings interactively
 - Visualizing dependency graphs
@@ -169,16 +170,16 @@ pgsquash tui [migrations-dir] [options]
 
 **Arguments:**
 
-| Argument         | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `migrations-dir` | Optional path to migrations (default: `.`)   |
+| Argument         | Description                                |
+| ---------------- | ------------------------------------------ |
+| `migrations-dir` | Optional path to migrations (default: `.`) |
 
 **Subcommands:**
 
-| Command   | Description                                    |
-| --------- | ---------------------------------------------- |
-| `analyze` | Launch TUI directly in the analysis view       |
-| `config`  | Launch TUI directly in the configuration wizard|
+| Command   | Description                                      |
+| --------- | ------------------------------------------------ |
+| `analyze` | Launch TUI directly in the analysis view         |
+| `config`  | Launch TUI directly in the configuration wizard  |
 | `deps`    | Launch TUI directly in the dependency graph view |
 
 **Examples:**
@@ -195,7 +196,8 @@ pgsquash tui analyze path/to/migrations/
 ```
 
 ### init-config
-```
+
+````
 
 **Validation Approaches:**
 
@@ -209,7 +211,7 @@ Generate default configuration file.
 
 ```bash
 pgsquash init-config [options]
-```
+````
 
 **Options:**
 
@@ -321,9 +323,9 @@ Returns status information in JSON format (default) or plain text.
 
 **Options:**
 
-| Flag         | Default | Description                                          |
-| ------------ | ------- | ---------------------------------------------------- |
-| `--text`     | false   | Output in plain text format instead of JSON         |
+| Flag         | Default | Description                                             |
+| ------------ | ------- | ------------------------------------------------------- |
+| `--text`     | false   | Output in plain text format instead of JSON             |
 | `--detailed` | false   | Include detailed system information (CPU, memory, etc.) |
 
 **Examples:**

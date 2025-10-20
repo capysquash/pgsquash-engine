@@ -731,7 +731,7 @@ API Route Request Flow:
 
 ### RBAC Permission Matrix
 
-```
+````
 ┌───────────────────────────────────────────────────────────────────┐
 │              RBAC PERMISSION MATRIX                                │
 └───────────────────────────────────────────────────────────────────┘
@@ -815,7 +815,8 @@ Permission Check Example (in code):
 
     // Proceed with action...
   }
-  ```
+````
+
 ```
 
 ---
@@ -825,98 +826,99 @@ Permission Check Example (in code):
 ### External Service Integration Map
 
 ```
+
 ┌────────────────────────────────────────────────────────────────────┐
 │           EXTERNAL SERVICE INTEGRATIONS                             │
 └────────────────────────────────────────────────────────────────────┘
 
 Platform (capysquash.dev)
-    │
-    ├─── Clerk ──────────────────────────┐
-    │    • Authentication               │
-    │    • User management              │
-    │    • Organization management      │
-    │    • Session handling             │
-    │    SDK: @clerk/nextjs             │
-    │                                   │
-    │    Webhooks:                      │
-    │    user.created ──▶ /api/webhooks/clerk
-    │    user.updated ──▶ /api/webhooks/clerk
-    │    org.created  ──▶ /api/webhooks/clerk
-    │                                   │
-    ├─── Stripe ─────────────────────────┤
-    │    • Payment processing           │
-    │    • Subscription management      │
-    │    • Customer portal              │
-    │    • Invoice generation           │
-    │    SDK: stripe (Node.js)          │
-    │                                   │
-    │    Webhooks:                      │
-    │    checkout.session.completed ──▶ /api/stripe/webhook
-    │    customer.subscription.* ─────▶ /api/stripe/webhook
-    │    invoice.* ──────────────────▶ /api/stripe/webhook
-    │                                   │
-    ├─── GitHub ─────────────────────────┤
-    │    • Repository access            │
-    │    • PR creation                  │
-    │    • Webhook events               │
-    │    • OAuth authentication         │
-    │    SDK: @octokit/rest             │
-    │                                   │
-    │    Webhooks:                      │
-    │    push ────────────────────────▶ /github/webhook (Engine)
-    │    pull_request ───────────────▶ /github/webhook (Engine)
-    │    installation.* ─────────────▶ /api/github/webhook
-    │                                   │
-    ├─── Neon ───────────────────────────┤
-    │    • PostgreSQL hosting           │
-    │    • Connection pooling           │
-    │    • Automatic backups            │
-    │    Driver: @neondatabase/serverless
-    │    Protocol: PostgreSQL wire      │
-    │                                   │
-    ├─── Upstash ────────────────────────┤
-    │    • Redis caching                │
-    │    • Rate limiting                │
-    │    • Session storage              │
-    │    SDK: @upstash/redis            │
-    │    Protocol: Redis                │
-    │                                   │
-    ├─── Vercel ─────────────────────────┤
-    │    • Web app hosting              │
-    │    • Edge CDN                     │
-    │    • Preview deployments          │
-    │    • Analytics                    │
-    │    • Cron jobs                    │
-    │                                   │
-    └─── Monitoring ─────────────────────┘
-         • Sentry (error tracking)
-         • Vercel Analytics (performance)
-         • DataDog (optional APM)
-
+│
+├─── Clerk ──────────────────────────┐
+│    • Authentication               │
+│    • User management              │
+│    • Organization management      │
+│    • Session handling             │
+│    SDK: @clerk/nextjs             │
+│                                   │
+│    Webhooks:                      │
+│    user.created ──▶ /api/webhooks/clerk
+│    user.updated ──▶ /api/webhooks/clerk
+│    org.created  ──▶ /api/webhooks/clerk
+│                                   │
+├─── Stripe ─────────────────────────┤
+│    • Payment processing           │
+│    • Subscription management      │
+│    • Customer portal              │
+│    • Invoice generation           │
+│    SDK: stripe (Node.js)          │
+│                                   │
+│    Webhooks:                      │
+│    checkout.session.completed ──▶ /api/stripe/webhook
+│    customer.subscription.\* ─────▶ /api/stripe/webhook
+│    invoice.\* ──────────────────▶ /api/stripe/webhook
+│                                   │
+├─── GitHub ─────────────────────────┤
+│    • Repository access            │
+│    • PR creation                  │
+│    • Webhook events               │
+│    • OAuth authentication         │
+│    SDK: @octokit/rest             │
+│                                   │
+│    Webhooks:                      │
+│    push ────────────────────────▶ /github/webhook (Engine)
+│    pull\_request ───────────────▶ /github/webhook (Engine)
+│    installation.\* ─────────────▶ /api/github/webhook
+│                                   │
+├─── Neon ───────────────────────────┤
+│    • PostgreSQL hosting           │
+│    • Connection pooling           │
+│    • Automatic backups            │
+│    Driver: @neondatabase/serverless
+│    Protocol: PostgreSQL wire      │
+│                                   │
+├─── Upstash ────────────────────────┤
+│    • Redis caching                │
+│    • Rate limiting                │
+│    • Session storage              │
+│    SDK: @upstash/redis            │
+│    Protocol: Redis                │
+│                                   │
+├─── Vercel ─────────────────────────┤
+│    • Web app hosting              │
+│    • Edge CDN                     │
+│    • Preview deployments          │
+│    • Analytics                    │
+│    • Cron jobs                    │
+│                                   │
+└─── Monitoring ─────────────────────┘
+• Sentry (error tracking)
+• Vercel Analytics (performance)
+• DataDog (optional APM)
 
 Engine API (api.capysquash.dev)
-    │
-    ├─── GitHub ─────────────────────────┐
-    │    • Webhook handling              │
-    │    • Repository cloning            │
-    │    • PR creation                   │
-    │                                    │
-    ├─── OpenAI (Optional) ──────────────┤
-    │    • AI-powered analysis           │
-    │    • Function equivalency          │
-    │    • Dead code detection           │
-    │    SDK: sashabaranov/go-openai     │
-    │                                    │
-    ├─── Anthropic (Optional) ───────────┤
-    │    • Alternative AI provider       │
-    │    • Claude analysis               │
-    │    SDK: anthropics/anthropic-sdk-go│
-    │                                    │
-    └─── Docker ─────────────────────────┘
-         • Schema validation
-         • Migration replay
-         • Equivalence testing
-         Socket: unix:///var/run/docker.sock
+│
+├─── GitHub ─────────────────────────┐
+│    • Webhook handling              │
+│    • Repository cloning            │
+│    • PR creation                   │
+│                                    │
+├─── OpenAI (Optional) ──────────────┤
+│    • AI-powered analysis           │
+│    • Function equivalency          │
+│    • Dead code detection           │
+│    SDK: sashabaranov/go-openai     │
+│                                    │
+├─── Anthropic (Optional) ───────────┤
+│    • Alternative AI provider       │
+│    • Claude analysis               │
+│    SDK: anthropics/anthropic-sdk-go│
+│                                    │
+└─── Docker ─────────────────────────┘
+• Schema validation
+• Migration replay
+• Equivalence testing
+Socket: unix:///var/run/docker.sock
+
 ```
 
 ---
@@ -926,6 +928,7 @@ Engine API (api.capysquash.dev)
 ### Entity Relationship Diagram (Simplified)
 
 ```
+
 ┌────────────────────────────────────────────────────────────────────┐
 │              DATABASE SCHEMA (26 Tables)                            │
 │              PostgreSQL 17 via Neon                                 │
@@ -937,52 +940,50 @@ CORE ENTITIES:
 │organizations │       │ users           │       │ projects     │
 ├──────────────┤       ├─────────────────┤       ├──────────────┤
 │ id (PK)      │◄──┐   │ id (PK)         │   ┌──▶│ id (PK)      │
-│ name         │   │   │ clerk_id        │   │   │ name         │
-│ slug         │   │   │ email           │   │   │ org_id (FK)  │
-│ plan_id      │   │   │ name            │   │   │ repo_url     │
-│ created_at   │   │   │ created_at      │   │   │ created_at   │
+│ name         │   │   │ clerk\_id        │   │   │ name         │
+│ slug         │   │   │ email           │   │   │ org\_id (FK)  │
+│ plan\_id      │   │   │ name            │   │   │ repo\_url     │
+│ created\_at   │   │   │ created\_at      │   │   │ created\_at   │
 └──────────────┘   │   └─────────────────┘   │   └──────────────┘
-                   │            │             │
-                   │            │             │
-        ┌──────────┴────────────┴─────────────┘
-        │
+│            │             │
+│            │             │
+┌──────────┴────────────┴─────────────┘
+│
 ┌───────────────────────┐
-│ organization_         │
+│ organization\_         │
 │ memberships           │
 ├───────────────────────┤
 │ id (PK)               │
-│ user_id (FK) ─────────┼──▶ users.id
-│ organization_id (FK) ─┼──▶ organizations.id
+│ user\_id (FK) ─────────┼──▶ users.id
+│ organization\_id (FK) ─┼──▶ organizations.id
 │ role (OWNER/ADMIN/...)│
-│ joined_at             │
+│ joined\_at             │
 └───────────────────────┘
-
 
 ANALYSIS ENTITIES:
 
 ┌──────────────┐       ┌──────────────────┐
-│ projects     │       │ analysis_runs    │
+│ projects     │       │ analysis\_runs    │
 │              │       ├──────────────────┤
 │ id (PK)      │◄──────│ id (PK)          │
-│ ...          │       │ project_id (FK)  │
+│ ...          │       │ project\_id (FK)  │
 └──────────────┘       │ status           │
-                       │ safety_level     │
-                       │ file_count       │
-                       │ results (JSONB)  │
-                       │ started_at       │
-                       └──────────────────┘
-                                │
-                                │
-                       ┌────────▼──────────┐
-                       │ migration_files   │
-                       ├───────────────────┤
-                       │ id (PK)           │
-                       │ run_id (FK)       │
-                       │ filename          │
-                       │ content           │
-                       │ order             │
-                       └───────────────────┘
-
+│ safety\_level     │
+│ file\_count       │
+│ results (JSONB)  │
+│ started\_at       │
+└──────────────────┘
+│
+│
+┌────────▼──────────┐
+│ migration\_files   │
+├───────────────────┤
+│ id (PK)           │
+│ run\_id (FK)       │
+│ filename          │
+│ content           │
+│ order             │
+└───────────────────┘
 
 BILLING ENTITIES:
 
@@ -990,65 +991,65 @@ BILLING ENTITIES:
 │organizations │       │ subscriptions       │
 │              │       ├─────────────────────┤
 │ id (PK)      │◄──────│ id (PK)             │
-│ plan_id (FK) ├──┐    │ org_id (FK)         │
-└──────────────┘  │    │ stripe_customer_id  │
-                  │    │ stripe_subscription │
-                  │    │ status              │
-                  │    │ current_period_end  │
-                  │    └─────────────────────┘
-                  │
-         ┌────────▼─────────┐
-         │subscription_plans│
-         ├──────────────────┤
-         │ id (PK)          │
-         │ name             │
-         │ price            │
-         │ stripe_price_id  │
-         │ features (JSONB) │
-         └──────────────────┘
-
+│ plan\_id (FK) ├──┐    │ org\_id (FK)         │
+└──────────────┘  │    │ stripe\_customer\_id  │
+│    │ stripe\_subscription │
+│    │ status              │
+│    │ current\_period\_end  │
+│    └─────────────────────┘
+│
+┌────────▼─────────┐
+│subscription\_plans│
+├──────────────────┤
+│ id (PK)          │
+│ name             │
+│ price            │
+│ stripe\_price\_id  │
+│ features (JSONB) │
+└──────────────────┘
 
 Complete Table List (26):
 
 CORE (6):
-  • organizations
-  • users
-  • projects
-  • analysis_runs
-  • migration_files
-  • organization_memberships
+• organizations
+• users
+• projects
+• analysis\_runs
+• migration\_files
+• organization\_memberships
 
 PAYMENTS (4):
-  • subscriptions
-  • usage_tracking
-  • subscription_plans
-  • stripe_events
+• subscriptions
+• usage\_tracking
+• subscription\_plans
+• stripe\_events
 
 GITHUB (2):
-  • github_installations
-  • github_webhook_events
+• github\_installations
+• github\_webhook\_events
 
 SETTINGS (3):
-  • organization_settings
-  • user_preferences
-  • notification_rules
+• organization\_settings
+• user\_preferences
+• notification\_rules
 
 AUDIT (4):
-  • activity_log
-  • comments
-  • favorites
-  • notification_history
+• activity\_log
+• comments
+• favorites
+• notification\_history
 
 API (2):
-  • api_keys
-  • database_connections
+• api\_keys
+• database\_connections
 
 TEMPLATES (2):
-  • project_templates
-  • feature_flags
+• project\_templates
+• feature\_flags
 
 CONFIG (1):
-  • subscription_plan_limits
+• subscription\_plan\_limits
+
 ```
 
 ---
@@ -1061,3 +1062,4 @@ CONFIG (1):
 ---
 
 Last Updated: October 20, 2025
+```

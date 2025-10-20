@@ -36,14 +36,15 @@ suggestion: Check for missing semicolons or unbalanced parentheses
 
 ## Error Severity Levels
 
-| Severity   | Description                                  | Action Required      |
-| ---------- | -------------------------------------------- | -------------------- |
-| INFO       | Informational message, no action needed      | None                 |
-| WARNING    | Potential issue, but processing can continue | Review recommended   |
-| ERROR      | Serious issue, operation may fail            | Fix required         |
-| CRITICAL   | Fatal error, processing cannot continue      | Immediate fix needed |
+| Severity | Description                                  | Action Required      |
+| -------- | -------------------------------------------- | -------------------- |
+| INFO     | Informational message, no action needed      | None                 |
+| WARNING  | Potential issue, but processing can continue | Review recommended   |
+| ERROR    | Serious issue, operation may fail            | Fix required         |
+| CRITICAL | Fatal error, processing cannot continue      | Immediate fix needed |
 
 **Processing Behavior:**
+
 - **INFO/WARNING**: Logged but processing continues
 - **ERROR**: Processing continues but operation may fail or produce suboptimal results
 - **CRITICAL**: Stops processing immediately and exits with non-zero status code
@@ -56,35 +57,35 @@ pgsquash organizes errors into categories to help identify the source of the pro
 
 ### Core Categories
 
-| Category        | Description                              | Common Causes                              |
-| --------------- | ---------------------------------------- | ------------------------------------------ |
-| PARSING         | SQL parsing and syntax errors            | Invalid SQL, missing semicolons            |
-| VALIDATION      | Schema validation failures               | Schema mismatch, missing objects           |
-| DEPENDENCY      | Dependency resolution issues             | Circular dependencies, missing references  |
-| CONSOLIDATION   | Consolidation logic errors               | Conflicting rules, unsafe optimizations    |
-| TRANSFORMATION  | SQL transformation failures              | Backup/rollback generation errors          |
-| SYNTAX          | SQL syntax errors                        | PostgreSQL syntax violations               |
-| SEMANTIC        | SQL semantic errors                      | Invalid object references, type mismatches |
-| CONSTRAINT      | Constraint-related issues                | Constraint conflicts, validation failures  |
-| FUNCTION        | Function-related errors                  | Invalid function definitions               |
-| INDEX           | Index-related errors                     | Index creation failures                    |
-| POLICY          | RLS policy errors                        | Policy conflicts, invalid conditions       |
-| EXTENSION       | PostgreSQL extension errors              | Missing extensions, version mismatches     |
-| PERFORMANCE     | Performance optimization warnings        | Inefficient patterns, missing indexes      |
-| NAMING          | Naming convention issues                 | Reserved keywords, invalid identifiers     |
-| PERMISSION      | Permission and security errors           | Missing grants, RLS issues                 |
+| Category       | Description                       | Common Causes                              |
+| -------------- | --------------------------------- | ------------------------------------------ |
+| PARSING        | SQL parsing and syntax errors     | Invalid SQL, missing semicolons            |
+| VALIDATION     | Schema validation failures        | Schema mismatch, missing objects           |
+| DEPENDENCY     | Dependency resolution issues      | Circular dependencies, missing references  |
+| CONSOLIDATION  | Consolidation logic errors        | Conflicting rules, unsafe optimizations    |
+| TRANSFORMATION | SQL transformation failures       | Backup/rollback generation errors          |
+| SYNTAX         | SQL syntax errors                 | PostgreSQL syntax violations               |
+| SEMANTIC       | SQL semantic errors               | Invalid object references, type mismatches |
+| CONSTRAINT     | Constraint-related issues         | Constraint conflicts, validation failures  |
+| FUNCTION       | Function-related errors           | Invalid function definitions               |
+| INDEX          | Index-related errors              | Index creation failures                    |
+| POLICY         | RLS policy errors                 | Policy conflicts, invalid conditions       |
+| EXTENSION      | PostgreSQL extension errors       | Missing extensions, version mismatches     |
+| PERFORMANCE    | Performance optimization warnings | Inefficient patterns, missing indexes      |
+| NAMING         | Naming convention issues          | Reserved keywords, invalid identifiers     |
+| PERMISSION     | Permission and security errors    | Missing grants, RLS issues                 |
 
 ### Additional Categories
 
-| Category       | Description                       | When It Appears              |
-| -------------- | --------------------------------- | ---------------------------- |
-| CYCLE          | Circular dependency detection     | DDL cycle analysis           |
-| OPTIMIZATION   | Optimization opportunities        | Analysis and recommendations |
-| RISK           | Risk assessment warnings          | Safety level checks          |
-| BACKUP         | Backup generation issues          | `--backup` flag              |
-| ROLLBACK       | Rollback script generation issues | `--rollback` flag            |
-| TYPE           | Type system errors                | Type analysis and validation |
-| NORMALIZATION  | SQL normalization issues          | SQL transformation           |
+| Category      | Description                       | When It Appears              |
+| ------------- | --------------------------------- | ---------------------------- |
+| CYCLE         | Circular dependency detection     | DDL cycle analysis           |
+| OPTIMIZATION  | Optimization opportunities        | Analysis and recommendations |
+| RISK          | Risk assessment warnings          | Safety level checks          |
+| BACKUP        | Backup generation issues          | `--backup` flag              |
+| ROLLBACK      | Rollback script generation issues | `--rollback` flag            |
+| TYPE          | Type system errors                | Type analysis and validation |
+| NORMALIZATION | SQL normalization issues          | SQL transformation           |
 
 ---
 
@@ -93,24 +94,28 @@ pgsquash organizes errors into categories to help identify the source of the pro
 ### Parsing Errors
 
 #### `SYNTAX_ERROR`
+
 **Category:** PARSING
 **Severity:** ERROR
 
 **Cause:** Invalid SQL syntax detected during parsing.
 
 **Common Scenarios:**
+
 - Missing semicolons at end of statements
 - Unbalanced parentheses, brackets, or quotes
 - Invalid PostgreSQL syntax or keywords
 - Malformed CREATE/ALTER statements
 
 **How to Fix:**
+
 1. Run with `--verbose` to see the exact line number and context
 2. Check the SQL syntax against [PostgreSQL documentation](https://www.postgresql.org/docs/current/sql.html)
 3. Verify all statements end with semicolons
 4. Check for balanced parentheses and quotes
 
 **Example:**
+
 ```
 [ERROR:PARSING] code:SYNTAX_ERROR file:migrations/003_add_users.sql line:15
 Invalid SQL syntax detected
@@ -126,24 +131,28 @@ CREATE TABLE users (id UUID PRIMARY KEY);
 ---
 
 #### `SEMANTIC_ERROR`
+
 **Category:** PARSING
 **Severity:** ERROR
 
 **Cause:** SQL is syntactically valid but semantically incorrect.
 
 **Common Scenarios:**
+
 - Referencing non-existent tables or columns
 - Type mismatches in expressions
 - Invalid function calls or parameters
 - Constraint violations
 
 **How to Fix:**
+
 1. Verify all referenced objects exist in prior migrations
 2. Check data types match expected types
 3. Ensure function signatures are correct
 4. Review constraint definitions
 
 **Example:**
+
 ```
 [ERROR:PARSING] code:SEMANTIC_ERROR file:migrations/005_add_fk.sql line:8
 object:orders Reference to undefined table 'customers'
@@ -159,24 +168,28 @@ ALTER TABLE orders ADD FOREIGN KEY (customer_id) REFERENCES customers(id);
 ---
 
 #### `DEPENDENCY_ERROR`
+
 **Category:** DEPENDENCY
 **Severity:** ERROR
 
 **Cause:** Unable to resolve object dependencies or circular dependency detected.
 
 **Common Scenarios:**
+
 - Circular foreign key dependencies
 - Forward references to objects not yet created
 - Mutual dependencies between objects
 - DDL cycles (DROP → CREATE → DROP patterns)
 
 **How to Fix:**
+
 1. Run `pgsquash analyze --cycle-details` to see dependency graph
 2. Reorder migrations to satisfy dependencies
 3. Use two-phase constraint creation for circular foreign keys
 4. Review DDL cycles and remove unnecessary DROP/CREATE sequences
 
 **Example:**
+
 ```
 [ERROR:DEPENDENCY] code:DEPENDENCY_ERROR
 Circular dependency detected: users -> orders -> users
@@ -198,18 +211,21 @@ ALTER TABLE orders ADD COLUMN user_id UUID REFERENCES users(id);
 ### Validation Errors
 
 #### `VALIDATION_FAILED`
+
 **Category:** VALIDATION
 **Severity:** ERROR
 
 **Cause:** Schema validation detected differences between original and squashed migrations.
 
 **Common Scenarios:**
+
 - Squashed schema differs from original
 - Missing constraints in consolidated output
 - Index definition mismatch
 - Column order differences (may be acceptable)
 
 **How to Fix:**
+
 1. Run `pgsquash validate migrations/ clean/ --verbose` for detailed diff
 2. Review the schema differences in the output
 3. Try a more conservative safety level: `--safety conservative`
@@ -217,6 +233,7 @@ ALTER TABLE orders ADD COLUMN user_id UUID REFERENCES users(id);
 5. If unexpected differences, file a bug report with the diff
 
 **Example:**
+
 ```
 [ERROR:VALIDATION] code:VALIDATION_FAILED
 Schema mismatch detected between original and squashed migrations
@@ -236,23 +253,27 @@ pgsquash squash migrations/*.sql --safety conservative
 ---
 
 #### `SCHEMA_NOT_FOUND`
+
 **Category:** VALIDATION
 **Severity:** ERROR
 
 **Cause:** Referenced schema does not exist.
 
 **Common Scenarios:**
+
 - Schema created in migration not being tracked
 - Cross-schema references to missing schemas
 - Plugin schemas (auth, storage) not detected
 
 **How to Fix:**
+
 1. Ensure all schema creation statements are in migrations
 2. Check `include_schemas` in config includes the schema
 3. For plugin schemas (Supabase auth, storage), enable the plugin
 4. Verify schema exists in earlier migration
 
 **Example:**
+
 ```
 [ERROR:VALIDATION] code:SCHEMA_NOT_FOUND schema:reporting
 Schema 'reporting' referenced but not found
@@ -272,17 +293,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ### Transformation Errors
 
 #### `ROLLBACK_GENERATION_FAILED`
+
 **Category:** TRANSFORMATION
 **Severity:** ERROR
 
 **Cause:** Failed to generate rollback scripts when `--rollback` flag is used.
 
 **Common Scenarios:**
+
 - Complex transformations that can't be automatically reversed
 - Non-reversible operations (DROP without backup)
 - Insufficient information to generate reverse operation
 
 **How to Fix:**
+
 1. Review the specific operation that failed
 2. Manually create rollback scripts if needed
 3. Use `--backup` flag in addition to `--rollback`
@@ -291,17 +315,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ---
 
 #### `BACKUP_GENERATION_FAILED`
+
 **Category:** TRANSFORMATION
 **Severity:** ERROR
 
 **Cause:** Failed to generate backup when `--backup` flag is used.
 
 **Common Scenarios:**
+
 - Database connection issues (requires `prod_db_dsn`)
 - Insufficient permissions to read schema
 - Database unreachable
 
 **How to Fix:**
+
 1. Verify `prod_db_dsn` is set correctly:
    ```bash
    export PROD_DB_DSN="postgresql://user:pass@localhost:5432/db"
@@ -318,17 +345,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ### Consolidation Errors
 
 #### `CONSOLIDATION_FAILED`
+
 **Category:** CONSOLIDATION
 **Severity:** ERROR
 
 **Cause:** Consolidation rules failed to process an object.
 
 **Common Scenarios:**
+
 - Conflicting consolidation rules
 - Object state inconsistency
 - Unsupported SQL patterns
 
 **How to Fix:**
+
 1. Run with `--verbose` to see which rule failed
 2. Try lower safety level: `--safety conservative`
 3. Check for unusual SQL patterns or PostgreSQL extensions
@@ -337,17 +367,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ---
 
 #### `SQL_GENERATION_FAILED`
+
 **Category:** CONSOLIDATION
 **Severity:** ERROR
 
 **Cause:** Failed to generate valid SQL from consolidated objects.
 
 **Common Scenarios:**
+
 - Complex object transformations
 - Missing metadata
 - Unsupported PostgreSQL features
 
 **How to Fix:**
+
 1. Review the specific object that failed
 2. Try `--dry-run` to preview without writing
 3. Use more conservative safety level
@@ -358,17 +391,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ### Type Errors
 
 #### `INVALID_TYPE`
+
 **Category:** TYPE
 **Severity:** ERROR
 
 **Cause:** Invalid data type specified or type not supported.
 
 **Common Scenarios:**
+
 - Typo in type name (e.g., `INTGER` instead of `INTEGER`)
 - Custom types not defined
 - PostgreSQL version mismatch
 
 **How to Fix:**
+
 1. Verify type spelling matches PostgreSQL documentation
 2. Ensure custom types are created before use
 3. Check `postgresql_features.target_version` in config
@@ -377,17 +413,20 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 ---
 
 #### `TYPE_NOT_FOUND`
+
 **Category:** TYPE
 **Severity:** ERROR
 
 **Cause:** Referenced type does not exist.
 
 **Common Scenarios:**
+
 - Custom ENUM or COMPOSITE type not created
 - Extension type not loaded (e.g., `vector` type)
 - Type defined in different schema
 
 **How to Fix:**
+
 1. Create the type before using it
 2. Load required extensions:
    ```sql
@@ -402,16 +441,16 @@ CREATE SCHEMA IF NOT EXISTS reporting;
 
 pgsquash uses standard exit codes for scripting and CI/CD integration:
 
-| Exit Code | Meaning                 | Description                              |
-| --------- | ----------------------- | ---------------------------------------- |
-| 0         | Success                 | Operation completed successfully         |
-| 1         | General error           | Unspecified error occurred               |
-| 2         | Parse error             | SQL parsing failed                       |
-| 3         | Validation failed       | Schema validation detected differences   |
-| 4         | Circular dependency     | Unresolvable circular dependency         |
-| 5         | Configuration error     | Invalid configuration                    |
-| 6         | File I/O error          | Cannot read/write migration files        |
-| 7         | Database error          | Database connection or query failed      |
+| Exit Code | Meaning             | Description                            |
+| --------- | ------------------- | -------------------------------------- |
+| 0         | Success             | Operation completed successfully       |
+| 1         | General error       | Unspecified error occurred             |
+| 2         | Parse error         | SQL parsing failed                     |
+| 3         | Validation failed   | Schema validation detected differences |
+| 4         | Circular dependency | Unresolvable circular dependency       |
+| 5         | Configuration error | Invalid configuration                  |
+| 6         | File I/O error      | Cannot read/write migration files      |
+| 7         | Database error      | Database connection or query failed    |
 
 **Usage in Scripts:**
 
@@ -440,17 +479,20 @@ echo "Validation passed!"
 ### Scenario 1: "Parse error: unexpected token"
 
 **Error:**
+
 ```
 [ERROR:PARSING] code:SYNTAX_ERROR
 Unexpected token at position 45
 ```
 
 **Causes:**
+
 - Missing semicolon at end of statement
 - PostgreSQL-specific syntax not recognized
 - Incomplete statement
 
 **Solutions:**
+
 ```bash
 # 1. Run with verbose to see exact location
 pgsquash analyze migrations/*.sql --verbose
@@ -467,12 +509,14 @@ pgsquash analyze migrations/*.sql --verbose
 ### Scenario 2: "Validation failed: schema mismatch"
 
 **Error:**
+
 ```
 [ERROR:VALIDATION] code:VALIDATION_FAILED
 Schema mismatch detected
 ```
 
 **Solutions:**
+
 ```bash
 # 1. See detailed diff
 pgsquash validate migrations/ clean/ --verbose
@@ -492,12 +536,14 @@ docker ps
 ### Scenario 3: "Circular dependency detected"
 
 **Error:**
+
 ```
 [ERROR:DEPENDENCY] code:DEPENDENCY_ERROR
 Circular dependency: table_a -> table_b -> table_a
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Analyze dependency graph
 pgsquash analyze migrations/*.sql --detect-cycles --cycle-details
@@ -514,12 +560,14 @@ pgsquash squash migrations/*.sql --detect-cycles
 ### Scenario 4: "Extension not found"
 
 **Error:**
+
 ```
 [ERROR:EXTENSION] code:VALIDATION_FAILED
 Extension 'vector' not available
 ```
 
 **Solutions:**
+
 ```bash
 # 1. Enable extension auto-detection
 # In pgsquash.config.json:
@@ -552,16 +600,19 @@ Extension 'vector' not available
 ### Getting More Information
 
 **Enable verbose mode:**
+
 ```bash
 pgsquash [command] --verbose
 ```
 
 **Check specific file:**
+
 ```bash
 pgsquash analyze migrations/003_problem_file.sql --verbose
 ```
 
 **Analyze dependencies:**
+
 ```bash
 pgsquash analyze migrations/*.sql --detect-cycles --cycle-details
 ```
@@ -660,6 +711,7 @@ pgsquash analyze migrations/*.sql --config pgsquash.config.json
 **JSON syntax errors:**
 
 The config loader provides detailed error messages with line numbers and context. Look for:
+
 - Missing or extra commas
 - Unbalanced brackets
 - Invalid JSON types

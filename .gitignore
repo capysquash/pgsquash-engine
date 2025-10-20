@@ -220,3 +220,5 @@ bin/api-server
 .env.example
 bin/pgsquash
 docs/FLYIO_DEPLOYMENT.md
+docs/internal/FLYIO_DEPLOYMENT.md
+docs/internal/GITHUB_ALIGNMENT_SUMMARY.md

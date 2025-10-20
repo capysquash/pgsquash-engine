@@ -623,3 +623,4 @@ const response = await fetch(`${GO_ENGINE_URL}/analyze`, {
 - Deployment guides – root `docker-compose.yml`, `capysquash-platform/docker-compose.yml`, `pgsquash-engine/docker/`
 
 Keep this overview updated whenever new services, integrations, or plans land so teams can navigate the ecosystem without spelunking through multiple repositories.
+````

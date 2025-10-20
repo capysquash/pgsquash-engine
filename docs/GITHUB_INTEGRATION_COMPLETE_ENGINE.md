@@ -4,13 +4,14 @@
 
 This document summarizes the comprehensive GitHub integration features implemented for 100% GitHub-based functionality coverage.
 
-**Integration Modes**: The engine supports both **standalone operation** (direct webhooks) and **platform integration** (API service). See [GITHUB_INTEGRATION.md](./GITHUB_INTEGRATION.md) for architecture details.
+**Integration Modes**: The engine supports both **standalone operation** (direct webhooks) and **platform integration** (API service). See [GITHUB\_INTEGRATION.md](./GITHUB_INTEGRATION.md) for architecture details.
 
 ## 1. GitHub App Authentication (✅ Complete)
 
 **File**: `internal/github/app.go`
 
 ### Features Implemented:
+
 - ✅ JWT-based GitHub App authentication
 - ✅ Installation token generation
 - ✅ Multi-repository support
@@ -21,6 +22,7 @@ This document summarizes the comprehensive GitHub integration features implement
 - ✅ Rate limit tracking per installation
 
 ### Key Functions:
+
 ```go
 // Create App client from environment variables
 appClient, err := github.NewAppClientFromEnv()
@@ -39,6 +41,7 @@ run, err := installationClient.CreateCheckRun(ctx, owner, repo, checkRun)
 ```
 
 ### Environment Variables:
+
 ```bash
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
@@ -51,6 +54,7 @@ GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
 **File**: `cmd/api-server/main.go`
 
 ### Features Implemented:
+
 - ✅ Automatic detection of GitHub App credentials
 - ✅ Priority-based authentication (GitHub App > Personal Token)
 - ✅ Fallback to personal access tokens
@@ -58,6 +62,7 @@ GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
 - ✅ Clear guidance on missing configuration
 
 ### Authentication Priority:
+
 1. **GitHub App** (if `GITHUB_APP_ID` + private key present) - Preferred
 2. **Personal Access Token** (if `GITHUB_TOKEN` present) - Fallback
 3. **None** - Clear error messages with setup instructions
@@ -67,6 +72,7 @@ GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
 **File**: `.github/workflows/pgsquash-analysis.yml`
 
 ### Features Implemented:
+
 - ✅ Multi-path migration directory support
   - `migrations/`, `db/migrations/`, `supabase/migrations/`, `prisma/migrations/`
 - ✅ Automatic PR comment posting with analysis results
@@ -82,6 +88,7 @@ GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
   - Actionable recommendations
 
 ### Example PR Comment:
+
 ```markdown
 ## ✅ pgsquash Migration Analysis
 
@@ -91,15 +98,18 @@ GITHUB_APP_PRIVATE_KEY_PATH=/path/to/private-key.pem
 
 ### Analysis Output
 ```
-[Analysis details here]
-```
+
+\[Analysis details here]
+
+````
 
 ### 💡 Recommendation
 You have 23 migration files. Consider using `pgsquash squash` to consolidate them.
 ```bash
 pgsquash squash migrations/*.sql --output consolidated/ --safety standard
-```
-```
+````
+
+````
 
 ## 4. Commit Status & Check Run Support (✅ Complete)
 
@@ -136,15 +146,17 @@ status := &github.CommitStatus{
     Description: "Analysis completed successfully",
     TargetURL: "https://capysquash.dev/results/123",
 }
-```
+````
 
 ## 5. GitHub App Setup Documentation (✅ Complete)
 
 **Files**:
+
 - `.github/github-app-manifest.json` - App manifest for quick setup
 - `docs/github-app-setup.md` - Comprehensive setup guide
 
 ### Documentation Includes:
+
 - ✅ Quick 5-minute setup guide
 - ✅ Detailed step-by-step instructions
 - ✅ GitHub App vs Personal Token comparison
@@ -157,6 +169,7 @@ status := &github.CommitStatus{
 - ✅ Rate limit handling
 
 ### Quick Setup Steps:
+
 1. Create GitHub App (2 min)
 2. Generate private key (1 min)
 3. Install on repositories (1 min)
@@ -166,12 +179,14 @@ status := &github.CommitStatus{
 ## 6. Standardized Configuration (✅ Complete)
 
 **Files**:
+
 - `.capysquash.yml.example` - YAML configuration for per-repository settings
 - `.github/pgsquash.config.schema.json` - JSON Schema for validation
 - `.github/pgsquash.config.example.json` - Example configuration (legacy)
 - `internal/config/capysquash.go` - Configuration loader and structure
 
 ### Features:
+
 - ✅ YAML-based per-repository configuration (`.capysquash.yml`)
 - ✅ Single, consistent configuration format
 - ✅ JSON Schema for IDE autocomplete and validation
@@ -188,6 +203,7 @@ status := &github.CommitStatus{
   - Monorepo project support
 
 ### Configuration Sections (`.capysquash.yml`):
+
 ```yaml
 enabled: true
 safety_level: standard
@@ -213,9 +229,11 @@ See [.capysquash.yml.example](../.capysquash.yml.example) for complete configura
 The engine supports three integration architectures:
 
 #### **Platform Mode** (Recommended for hosted users)
+
 ```
 GitHub → CAPYSQUASH Platform → Engine API → Results → Platform → GitHub
 ```
+
 - Platform receives webhooks
 - Platform orchestrates engine analysis via API
 - Platform manages auth, projects, teams, history
@@ -223,9 +241,11 @@ GitHub → CAPYSQUASH Platform → Engine API → Results → Platform → GitHu
 - Users get web UI + automation
 
 #### **Direct Mode** (Self-hosted users)
+
 ```
 GitHub → Engine Webhook → Engine Logic → Results → GitHub
 ```
+
 - Engine receives webhooks directly
 - Engine handles everything independently
 - No platform dependency
@@ -233,10 +253,12 @@ GitHub → Engine Webhook → Engine Logic → Results → GitHub
 - Uses `.capysquash.yml` from repositories
 
 #### **Hybrid Mode** (Best of both)
+
 ```
 Platform: Web UI, Projects, Manual Analysis
 Engine: Direct webhooks for automation
 ```
+
 - Platform provides web interface
 - Engine handles webhook automation
 - Can use both simultaneously
@@ -254,18 +276,21 @@ Priority: `.capysquash.yml` > Platform settings > Engine defaults
 ## 🔄 In Progress / Future Enhancements
 
 ### 7. Webhook Signature Verification Tests (📋 Planned)
+
 - Comprehensive test coverage for webhook handling
 - Signature verification tests
 - Event parsing tests
 - Mock GitHub responses
 
 ### 8. Rate Limiting Implementation (📋 Planned)
+
 - Exponential backoff for rate limits
 - Per-installation rate limit tracking
 - Automatic retry logic
 - Rate limit warnings in logs
 
 ### 9. Deployment Guide (📋 Planned)
+
 - Complete Fly.io deployment walkthrough
 - Railway deployment guide
 - Self-hosted systemd service setup
@@ -273,6 +298,7 @@ Priority: `.capysquash.yml` > Platform settings > Engine defaults
 - Kubernetes manifests
 
 ### 10. GitHub App Installation Flow (📋 Planned)
+
 - Web UI for GitHub App installation
 - Repository selection interface
 - Configuration wizard
@@ -281,17 +307,17 @@ Priority: `.capysquash.yml` > Platform settings > Engine defaults
 
 ## 📊 Coverage Summary
 
-| Feature Category | Status | Coverage |
-|-----------------|--------|----------|
-| **Authentication** | ✅ Complete | 100% |
-| **GitHub API Integration** | ✅ Complete | 100% |
-| **Webhook Handling** | ✅ Complete | 90% (tests pending) |
-| **GitHub Actions** | ✅ Complete | 100% |
-| **Documentation** | ✅ Complete | 100% |
-| **Configuration** | ✅ Complete | 100% |
-| **Deployment** | 🔄 In Progress | 70% (guides pending) |
-| **Testing** | 📋 Planned | 40% (unit tests needed) |
-| **Web UI** | 📋 Planned | 0% (future) |
+| Feature Category           | Status         | Coverage                |
+| -------------------------- | -------------- | ----------------------- |
+| **Authentication**         | ✅ Complete     | 100%                    |
+| **GitHub API Integration** | ✅ Complete     | 100%                    |
+| **Webhook Handling**       | ✅ Complete     | 90% (tests pending)     |
+| **GitHub Actions**         | ✅ Complete     | 100%                    |
+| **Documentation**          | ✅ Complete     | 100%                    |
+| **Configuration**          | ✅ Complete     | 100%                    |
+| **Deployment**             | 🔄 In Progress | 70% (guides pending)    |
+| **Testing**                | 📋 Planned     | 40% (unit tests needed) |
+| **Web UI**                 | 📋 Planned     | 0% (future)             |
 
 **Overall GitHub Functionality Coverage: 85%** ✅
 
@@ -300,6 +326,7 @@ Priority: `.capysquash.yml` > Platform settings > Engine defaults
 ### For Users
 
 **1. Install GitHub App:**
+
 ```bash
 # Visit your repository settings
 https://github.com/your-org/your-repo/settings/installations
@@ -309,6 +336,7 @@ https://github.com/your-org/your-repo/settings/installations
 ```
 
 **2. Configure repository:**
+
 ```bash
 # Create config file
 cat > .github/pgsquash.config.json << EOF
@@ -327,6 +355,7 @@ git push
 ```
 
 **3. Create PR with migrations:**
+
 ```bash
 # Add some migrations
 echo "CREATE TABLE users (id serial PRIMARY KEY);" > migrations/001_users.sql
@@ -340,6 +369,7 @@ git push origin feature-branch
 ### For Developers
 
 **1. Deploy API Server with GitHub App:**
+
 ```bash
 # Set environment variables
 export GITHUB_APP_ID=123456
@@ -352,6 +382,7 @@ go run cmd/api-server/main.go
 ```
 
 **2. Test webhook locally:**
+
 ```bash
 # Use ngrok for local testing
 ngrok http 8080
@@ -365,12 +396,14 @@ ngrok http 8080
 ### From Personal Access Token to GitHub App
 
 **Before:**
+
 ```bash
 GITHUB_TOKEN=ghp_xxxxx
 GITHUB_WEBHOOK_SECRET=xxxxx
 ```
 
 **After:**
+
 ```bash
 GITHUB_APP_ID=123456
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----..."
@@ -378,6 +411,7 @@ GITHUB_WEBHOOK_SECRET=xxxxx  # Same webhook secret
 ```
 
 **Benefits:**
+
 - ✅ 3x higher rate limits (15k vs 5k requests/hour)
 - ✅ Better security (app credentials vs user credentials)
 - ✅ Multi-repository support without configuration
@@ -387,6 +421,7 @@ GITHUB_WEBHOOK_SECRET=xxxxx  # Same webhook secret
 ## 🔒 Security Considerations
 
 ### Implemented Security Features:
+
 1. ✅ HMAC-SHA256 webhook signature verification
 2. ✅ Private key encryption at rest
 3. ✅ Environment-based secret management
@@ -395,6 +430,7 @@ GITHUB_WEBHOOK_SECRET=xxxxx  # Same webhook secret
 6. ✅ Audit trail through GitHub App actions
 
 ### Best Practices:
+
 - Rotate private keys every 90 days
 - Use GitHub Secrets or secure secret management
 - Never commit private keys to repository
@@ -405,12 +441,14 @@ GITHUB_WEBHOOK_SECRET=xxxxx  # Same webhook secret
 ## 📚 Additional Resources
 
 ### Documentation:
+
 - [GitHub Integration Architecture](./GITHUB_INTEGRATION.md) - Ecosystem alignment and deployment modes
 - [GitHub App Setup Guide](./github-app-setup.md) - Complete setup instructions
 - [.capysquash.yml Example](../.capysquash.yml.example) - Repository configuration template
 - [Platform Integration Guide](../ecosystem%20docs/GITHUB_INTEGRATION.md) - CAPYSQUASH platform workflow
 
 ### External Links:
+
 - [GitHub Apps Documentation](https://docs.github.com/en/developers/apps)
 - [GitHub Webhooks Documentation](https://docs.github.com/en/developers/webhooks-and-events/webhooks)
 - [GitHub REST API](https://docs.github.com/en/rest)
@@ -431,6 +469,7 @@ GITHUB_WEBHOOK_SECRET=xxxxx  # Same webhook secret
 ## 🙌 Contributing
 
 Want to help complete the remaining features? Check out:
+
 - [Issue Tracker](https://github.com/capysquash/pgsquash-engine/issues)
 - [GitHub Discussions](https://github.com/capysquash/pgsquash-engine/discussions)
 

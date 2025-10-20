@@ -2,7 +2,7 @@
 
 **The definitive reference for the pgsquash ecosystem - architecture, components, integrations, development, deployment, and business model.**
 
-**Last Updated**: October 20, 2025  
+**Last Updated**: October 20, 2025\
 **Version**: 1.0
 
 ---
@@ -44,18 +44,21 @@
 ### Value Proposition
 
 **For Developers**: "Autopilot for your Postgres migrations"
+
 - Reduce migration files by 60-80%
 - Cut deployment time by 40-70%
 - Docker-validated safety guarantees
 - Zero database access required
 
 **For Teams**: Collaboration, automation, and governance
+
 - GitHub PR automation
 - Team analytics dashboards
 - Role-based access control
 - Scheduled cleanups
 
 **For Enterprises**: Compliance and control
+
 - On-premise deployment
 - SSO/SAML integration
 - Audit logs
@@ -70,6 +73,7 @@
 - **Enterprise** (Custom): SSO, compliance, on-premise
 
 **Revenue Targets**:
+
 - Year 1: $100-150k ARR
 - Year 2: $400-600k ARR
 
@@ -149,9 +153,9 @@ Cron → Platform → GitHub API → Go API → Processing → PR Creation
 
 ### 1. pgsquash-engine (Migration Engine)
 
-**Location**: `/pgsquash-engine`  
-**Language**: Go 1.22+  
-**License**: MIT (Open Source)  
+**Location**: `/pgsquash-engine`\
+**Language**: Go 1.22+\
+**License**: MIT (Open Source)\
 **Current Version**: 0.8.5
 
 #### Purpose
@@ -194,7 +198,7 @@ docker/                 # Dockerfiles and compose configs
 
 #### Key Technologies
 
-- **pg_query_go**: Official PostgreSQL parser bindings
+- **pg\_query\_go**: Official PostgreSQL parser bindings
 - **Cobra**: CLI framework
 - **Viper**: Configuration management
 - **Bubble Tea**: Terminal UI framework
@@ -231,16 +235,16 @@ docker/                 # Dockerfiles and compose configs
 
 - **Awareness**: Free tier drives top-of-funnel adoption
 - **Trust**: Open source builds transparency and community
-- **Differentiation**: Technical moat (pg_query parser)
+- **Differentiation**: Technical moat (pg\_query parser)
 - **Viral Growth**: CLI-to-web conversion funnel
 
 ---
 
 ### 2. capysquash-platform (SaaS Application)
 
-**Location**: `/capysquash-platform`  
-**Language**: TypeScript (Next.js 15, React 19)  
-**License**: Proprietary  
+**Location**: `/capysquash-platform`\
+**Language**: TypeScript (Next.js 15, React 19)\
+**License**: Proprietary\
 **Current Version**: 1.0
 
 #### Purpose
@@ -349,6 +353,7 @@ docker/                            # Docker configurations
 #### Database Schema (26 Tables)
 
 **Core** (6):
+
 - `organizations` - Team/company accounts
 - `users` - User profiles
 - `projects` - Connected repositories
@@ -357,47 +362,57 @@ docker/                            # Docker configurations
 - `organization_memberships` - User-org relationships
 
 **Payments** (4):
+
 - `subscriptions` - Stripe subscriptions
 - `usage_tracking` - Metered usage
 - `subscription_plans` - Plan definitions
 - `stripe_events` - Webhook event log
 
 **GitHub** (2):
+
 - `github_installations` - GitHub App installations
 - `github_webhook_events` - Webhook event log
 
 **Settings** (3):
+
 - `organization_settings` - Org preferences
 - `user_preferences` - User preferences
 - `notification_rules` - Alert configuration
 
 **Audit** (4):
+
 - `activity_log` - Action audit trail
 - `comments` - Project comments
 - `favorites` - Starred projects
 - `notification_history` - Sent notifications
 
 **API** (2):
+
 - `api_keys` - API authentication tokens
 - `database_connections` - Saved DB configs
 
 **Templates** (2):
+
 - `project_templates` - Reusable project templates
 - `feature_flags` - Feature toggles
 
 **Configuration** (1):
+
 - `subscription_plan_limits` - Plan limit definitions
 
 #### API Endpoints (56 Total)
 
 **Engine Integration** (2):
+
 - `POST /api/engine/analyze` - Analyze migrations
 - `POST /api/engine/squash` - Consolidate migrations
 
 **Dashboard** (1):
+
 - `GET /api/dashboard/metrics` - Dashboard overview
 
 **Organizations** (17):
+
 - CRUD operations for organizations
 - Settings management
 - API key management
@@ -406,28 +421,33 @@ docker/                            # Docker configurations
 - Notification configuration
 
 **Projects** (8):
+
 - CRUD operations for projects
 - Analysis runs
 - File management
 - GitHub repository connections
 
 **Users** (4):
+
 - Preferences
 - Recent projects
 - Favorite projects
 - Activity feed
 
 **Stripe** (3):
+
 - `POST /api/stripe/checkout` - Create checkout session
 - `POST /api/stripe/portal` - Customer portal
 - `POST /api/stripe/webhook` - Webhook handler
 
 **GitHub** (3):
+
 - `POST /api/github/webhook` - Webhook handler
 - `GET /api/github/installation` - Installation status
 - `GET /api/github/repositories` - Connected repos
 
 **Admin** (15):
+
 - Platform overview
 - Revenue metrics
 - Usage statistics
@@ -437,18 +457,22 @@ docker/                            # Docker configurations
 - Health checks
 
 **Webhooks** (2):
+
 - `POST /api/webhooks/clerk` - Clerk user lifecycle
 - `POST /api/webhooks/github` - GitHub events
 
 **Demo** (1):
+
 - `POST /api/demo/setup` - Create demo project
 
 **Debug** (1):
+
 - `GET /api/debug/session` - Session diagnostics
 
 #### Key Technologies
 
 **Frontend**:
+
 - **Next.js 15**: App Router, Server Components, API Routes
 - **React 19**: Latest React features
 - **TailwindCSS 4**: Utility-first styling
@@ -458,6 +482,7 @@ docker/                            # Docker configurations
 - **TypeScript 5**: Strict mode
 
 **Backend**:
+
 - **Drizzle ORM**: Type-safe database queries
 - **Clerk**: Authentication and user management
 - **Stripe**: Payment processing
@@ -465,13 +490,14 @@ docker/                            # Docker configurations
 - **Upstash Redis**: Caching and rate limiting (optional)
 
 **Developer Experience**:
+
 - **Biome**: Linting and formatting (replaces ESLint + Prettier)
 - **pnpm**: Fast package manager
 - **tsx**: TypeScript execution for scripts
 
 #### Distribution
 
-- **Web UI**: https://capysquash.dev (Vercel hosted)
+- **Web UI**: <https://capysquash.dev> (Vercel hosted)
 - **GitHub App**: GitHub Marketplace
 - **Platform Partnerships**: Neon, Supabase integrations
 
@@ -486,8 +512,8 @@ docker/                            # Docker configurations
 
 ### 3. capysquash-docs (Documentation Hub)
 
-**Location**: `/capysquash-docs`  
-**Framework**: Next.js + Fumadocs  
+**Location**: `/capysquash-docs`\
+**Framework**: Next.js + Fumadocs\
 **License**: Proprietary
 
 #### Purpose
@@ -568,7 +594,7 @@ src/                               # Fumadocs application
 
 ### 4. Branding & Business Documentation
 
-**Location**: `/branding and business docs`  
+**Location**: `/branding and business docs`\
 **Format**: Markdown knowledge base
 
 #### Purpose
@@ -578,6 +604,7 @@ Strategic playbooks for positioning, pricing, go-to-market, partnerships, and gr
 #### Key Documents
 
 **Strategy & Positioning**:
+
 - **`pgsquash-complete-strategy.md`** (2,016 lines)
   - Complete market validation
   - Competitive landscape analysis
@@ -588,6 +615,7 @@ Strategic playbooks for positioning, pricing, go-to-market, partnerships, and gr
   - Implementation roadmap
 
 **Brand Identity**:
+
 - **`capysquash-complete-brand-guide.md`**
   - Visual identity guidelines
   - Voice and tone
@@ -595,6 +623,7 @@ Strategic playbooks for positioning, pricing, go-to-market, partnerships, and gr
   - Marketing materials
 
 **Product Roadmap**:
+
 - **`CapySquash Feature Roadmap - MoSCoW.md`**
   - Must-have features
   - Should-have features
@@ -607,6 +636,7 @@ Strategic playbooks for positioning, pricing, go-to-market, partnerships, and gr
   - Partnership strategy
 
 **Integration Strategy**:
+
 - **`pgsquash-integration-roadmap.md`**
   - Platform partnership priorities
   - Integration specifications
@@ -615,25 +645,30 @@ Strategic playbooks for positioning, pricing, go-to-market, partnerships, and gr
 #### Key Strategic Insights
 
 **Positioning**: "Autopilot for your Postgres migrations"
+
 - Target "vibe coders" (frontend devs using Next.js + Supabase/Neon)
 - Emphasis on speed and automation over power/control
 - "Zero-config first run" philosophy
 
 **Pricing Strategy**:
+
 ```
 Free → Creator ($12) → Professional ($29) → Agency ($99) → Enterprise (Custom)
 ```
 
 **Target Markets**:
+
 1. **Primary**: Indie hackers, startup teams (Next.js + Supabase/Neon stack)
 2. **Secondary**: Agencies building client projects
 3. **Future**: Enterprise teams with compliance needs
 
 **Revenue Targets**:
+
 - Year 1: $100-150k ARR
 - Year 2: $400-600k ARR
 
 **Distribution Priorities**:
+
 1. GitHub App (highest priority)
 2. Supabase CLI plugin
 3. Neon integration
@@ -656,14 +691,17 @@ Free → Creator ($12) → Professional ($29) → Agency ($99) → Enterprise (C
 **Purpose**: Deploy Go API server only (for production)
 
 **Services**:
+
 - `api-server` - Go engine HTTP API
 
 **Use Cases**:
+
 - Fly.io deployment
 - Cloud container platforms
 - Standalone API hosting
 
 **Typical Setup**:
+
 ```bash
 # Production API deployment
 docker compose up -d
@@ -697,6 +735,7 @@ docker compose up -d
    ```
 
 **Services**:
+
 - `api-server` - Go API from pgsquash-engine
 - `webapp` - Next.js application
 - `postgres` - PostgreSQL 17 database
@@ -704,6 +743,7 @@ docker compose up -d
 - `nginx` - Reverse proxy (production profile only)
 
 **Business Function**:
+
 - **Hosted SaaS**: Powers production capysquash.dev
 - **Enterprise**: Enables on-premise deployments
 - **Partners**: Supports white-label/reseller models
@@ -715,11 +755,11 @@ docker compose up -d
 
 ### Language & Framework Summary
 
-| Component | Language | Framework | Version |
-|-----------|----------|-----------|---------|
-| **pgsquash-engine** | Go | Cobra (CLI) | 1.22+ |
-| **capysquash-platform** | TypeScript | Next.js | 15 |
-| **capysquash-docs** | TypeScript | Next.js + Fumadocs | 15 |
+| Component               | Language   | Framework          | Version |
+| ----------------------- | ---------- | ------------------ | ------- |
+| **pgsquash-engine**     | Go         | Cobra (CLI)        | 1.22+   |
+| **capysquash-platform** | TypeScript | Next.js            | 15      |
+| **capysquash-docs**     | TypeScript | Next.js + Fumadocs | 15      |
 
 ### Core Dependencies by Component
 
@@ -744,6 +784,7 @@ require (
 ```
 
 **Build Commands**:
+
 ```bash
 go build -o pgsquash cmd/pgsquash/main.go
 go build -o api-server cmd/api-server/main.go
@@ -790,6 +831,7 @@ go test ./... -cover
 ```
 
 **Build Commands**:
+
 ```bash
 pnpm install
 pnpm dev
@@ -879,6 +921,7 @@ Results to terminal
 ```
 
 **Characteristics**:
+
 - No network calls
 - No authentication
 - Local file system only
@@ -907,6 +950,7 @@ Dashboard displays metrics
 ```
 
 **Characteristics**:
+
 - Authenticated via Clerk JWT
 - Usage tracked for billing
 - Results persisted
@@ -933,6 +977,7 @@ Bot comments with metrics
 ```
 
 **Characteristics**:
+
 - Triggered automatically
 - No user intervention
 - Async processing
@@ -959,6 +1004,7 @@ For each project:
 ```
 
 **Characteristics**:
+
 - Weekly/monthly schedule
 - Pro tier and above
 - Email/Slack notifications
@@ -968,11 +1014,12 @@ For each project:
 
 #### Platform → Engine
 
-**Method**: HTTP REST API  
-**Authentication**: Shared secret header (`X-API-Secret`)  
+**Method**: HTTP REST API\
+**Authentication**: Shared secret header (`X-API-Secret`)\
 **Base URL**: `${GO_ENGINE_URL}` (env var)
 
 **Example Request**:
+
 ```typescript
 const response = await fetch(`${process.env.GO_ENGINE_URL}/analyze`, {
   method: 'POST',
@@ -993,18 +1040,20 @@ const result = await response.json();
 
 #### Engine → Platform
 
-**Method**: Callback URLs (for async operations)  
-**Authentication**: Signed payloads (HMAC)  
+**Method**: Callback URLs (for async operations)\
+**Authentication**: Signed payloads (HMAC)\
 **Use Cases**: Long-running analysis, validation results
 
 #### GitHub Integration
 
 **Inbound** (GitHub → System):
+
 - Webhook events delivered to `/github/webhook`
 - Signature verification via `X-Hub-Signature-256`
-- Events: push, pull_request, installation
+- Events: push, pull\_request, installation
 
 **Outbound** (System → GitHub):
+
 - PR creation via GitHub API
 - PR comments via GitHub API
 - Status checks via GitHub API
@@ -1013,6 +1062,7 @@ const result = await response.json();
 #### Clerk (Authentication)
 
 **Integration Points**:
+
 - Next.js middleware for route protection
 - JWT verification in API routes
 - Webhook for user lifecycle events (`/api/webhooks/clerk`)
@@ -1021,6 +1071,7 @@ const result = await response.json();
 #### Stripe (Billing)
 
 **Integration Points**:
+
 - Checkout session creation
 - Customer portal redirect
 - Webhook for subscription events (`/api/webhooks/stripe` or `/api/stripe/webhook`)
@@ -1029,12 +1080,14 @@ const result = await response.json();
 #### Neon/Supabase (Database)
 
 **Platform Connection**:
+
 - PostgreSQL via `DATABASE_URL`
 - SSL required (`sslmode=require`)
 - Connection pooling via Neon proxy
 - Drizzle ORM for queries
 
 **Engine Usage**:
+
 - Pattern recognition for Supabase/Neon-specific constructs
 - No direct database connection
 
@@ -1136,7 +1189,7 @@ pnpm dev
 # API restarts only when rebuilding container
 ```
 
-**Pros**: Fast frontend iteration, realistic API environment  
+**Pros**: Fast frontend iteration, realistic API environment\
 **Cons**: API changes require container rebuild
 
 #### Option 2: All Local (Recommended for Engine Dev)
@@ -1153,7 +1206,7 @@ pnpm dev
 # Both have hot reload
 ```
 
-**Pros**: Fastest iteration for both  
+**Pros**: Fastest iteration for both\
 **Cons**: Need to manage both processes
 
 #### Option 3: All Docker
@@ -1165,7 +1218,7 @@ docker compose --profile full-stack up -d
 # Access at http://localhost:3000
 ```
 
-**Pros**: Production-like environment  
+**Pros**: Production-like environment\
 **Cons**: Slower iteration (no hot reload)
 
 ### Testing Strategy
@@ -1230,12 +1283,14 @@ pnpm build
 #### Go (Engine)
 
 **Formatting**:
+
 ```bash
 go fmt ./...
 goimports -w .  # If available
 ```
 
 **Style**:
+
 - Tabs for indentation (gofmt standard)
 - UpperCamelCase for exported symbols
 - lowerCamelCase for package-private
@@ -1244,6 +1299,7 @@ goimports -w .  # If available
 - No naked returns in complex functions
 
 **Example**:
+
 ```go
 // AnalyzeFiles processes migration files and returns dependency graph.
 // It returns an error if parsing fails or dependencies cannot be resolved.
@@ -1260,6 +1316,7 @@ func AnalyzeFiles(files []string, config *Config) (*AnalysisResult, error) {
 **Formatting**: Biome (2 spaces, single quotes, 100-char lines)
 
 **Style**:
+
 - PascalCase for components: `AnalysisResults.tsx`
 - camelCase for functions: `getUserProjects()`
 - kebab-case for files: `api-client.ts`
@@ -1268,6 +1325,7 @@ func AnalyzeFiles(files []string, config *Config) (*AnalysisResult, error) {
 - Prefer Server Components, use Client only when needed
 
 **Example**:
+
 ```typescript
 // components/dashboard/ProjectCard.tsx
 import type { Project } from '@/types/database';
@@ -1285,6 +1343,7 @@ export function ProjectCard({ project, onAnalyze }: ProjectCardProps) {
 ### Git Workflow
 
 **Branch Strategy**:
+
 - `main` - Production-ready code
 - `refactor` - Major refactoring (current branch)
 - `feature/*` - Feature branches
@@ -1388,6 +1447,7 @@ Traffic Flow:
 #### 1. Hosted SaaS (Current Production)
 
 **Next.js Web Application**:
+
 - **Platform**: Vercel
 - **Domain**: capysquash.dev (and www)
 - **Build**: Automatic on push to `main`
@@ -1396,6 +1456,7 @@ Traffic Flow:
 - **Regions**: Auto (Vercel optimizes)
 
 **Go API Server**:
+
 - **Platform**: Fly.io (or alternative: Railway, Render, AWS ECS)
 - **Build**: Docker image from `pgsquash-engine/docker/api-server/Dockerfile`
 - **Scaling**: Auto-scale based on CPU/memory
@@ -1404,6 +1465,7 @@ Traffic Flow:
 - **Monitoring**: Fly.io metrics + optional DataDog
 
 **Database**:
+
 - **Provider**: Neon (Serverless PostgreSQL)
 - **Plan**: Pro or Business
 - **Connection**: Pooled via Neon proxy
@@ -1411,23 +1473,26 @@ Traffic Flow:
 - **Migrations**: Run via Drizzle during CI/CD
 
 **Caching**:
+
 - **Provider**: Upstash (Serverless Redis)
 - **Purpose**: Rate limiting, session storage, API caching
 - **Fallback**: Application continues without Redis (graceful degradation)
 
 **External Services**:
+
 - **Auth**: Clerk (managed SaaS)
 - **Payments**: Stripe (managed SaaS)
 - **GitHub**: GitHub App (managed SaaS)
 - **Monitoring**: Sentry (error tracking), Vercel Analytics
 
 **Cost Estimate (Monthly)**:
+
 - Vercel: $20-50 (Pro plan)
 - Fly.io: $30-100 (based on load)
 - Neon: $20-100 (based on usage)
 - Upstash: $10-30 (based on requests)
 - Clerk: $25-100 (based on MAU)
-- Total: ~$105-380/month
+- Total: \~$105-380/month
 
 #### 2. Enterprise On-Premise
 
@@ -1443,6 +1508,7 @@ docker compose --profile production up -d
 ```
 
 **Included Services**:
+
 - Next.js web application (port 3000)
 - Go API server (port 8080)
 - PostgreSQL 17 database (port 5432)
@@ -1450,6 +1516,7 @@ docker compose --profile production up -d
 - Nginx reverse proxy (ports 80, 443)
 
 **System Requirements**:
+
 - **CPU**: 4+ cores
 - **RAM**: 8GB+ (16GB recommended)
 - **Disk**: 50GB+ SSD
@@ -1457,11 +1524,13 @@ docker compose --profile production up -d
 - **Docker**: 20.10+ and Docker Compose 2.0+
 
 **Network Requirements**:
+
 - Outbound HTTPS (443) for external services (if not airgapped)
 - SSL certificate for custom domain
 - Firewall rules for internal access
 
 **Customization Options**:
+
 - White-label branding
 - Custom domain
 - SSO/SAML integration
@@ -1469,6 +1538,7 @@ docker compose --profile production up -d
 - Custom retention policies
 
 **Support**:
+
 - Dedicated Slack channel
 - Video call support
 - Quarterly reviews
@@ -1479,18 +1549,21 @@ docker compose --profile production up -d
 **Use Case**: Partners host web app, use centralized API
 
 **Configuration**:
+
 - Web app: Partner-hosted (Vercel or their infrastructure)
 - API server: Centrally hosted by pgsquash
 - Database: Partner-managed (their Neon/PostgreSQL)
 - Branding: White-label with partner logo/domain
 
 **Partner Benefits**:
+
 - Lower infrastructure costs
 - Automatic API updates
 - Shared security responsibility
 - Revenue sharing model
 
 **Partner Responsibilities**:
+
 - Customer support (Tier 1)
 - Branding and customization
 - Database management
@@ -1614,6 +1687,7 @@ DOCKER_HOST=unix:///var/run/docker.sock
 **Trigger**: Push to `main` branch
 
 **Automatic Steps**:
+
 1. Vercel detects git push
 2. Install dependencies (`pnpm install`)
 3. Run build checks
@@ -1632,12 +1706,14 @@ DOCKER_HOST=unix:///var/run/docker.sock
 **Trigger**: Manual or automated via GitHub Actions
 
 **Manual Deployment**:
+
 ```bash
 cd pgsquash-engine
 fly deploy
 ```
 
 **Automated via GitHub Actions** (example):
+
 ```yaml
 # .github/workflows/deploy-api.yml
 name: Deploy API to Fly.io
@@ -1665,6 +1741,7 @@ jobs:
 #### Database Migrations
 
 **Automatic in CI**:
+
 ```yaml
 # .github/workflows/migrate-db.yml
 name: Run Database Migrations
@@ -1692,6 +1769,7 @@ jobs:
 ```
 
 **Manual Migrations**:
+
 ```bash
 cd capysquash-platform
 pnpm db:migrate
@@ -1699,4 +1777,4 @@ pnpm db:migrate
 
 ---
 
-*(Continuing in next message due to length...)*
+_(Continuing in next message due to length...)_
