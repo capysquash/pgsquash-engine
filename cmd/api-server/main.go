@@ -429,6 +429,42 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		reduction = 0 // Safety check
 	}
 
+	// Count operations by type from original migrations
+	createCount := 0
+	alterCount := 0
+	dropCount := 0
+
+	for _, content := range migrationMap {
+		contentUpper := strings.ToUpper(content)
+		// Count CREATE statements
+		createCount += strings.Count(contentUpper, "CREATE TABLE")
+		createCount += strings.Count(contentUpper, "CREATE INDEX")
+		createCount += strings.Count(contentUpper, "CREATE FUNCTION")
+		createCount += strings.Count(contentUpper, "CREATE TRIGGER")
+		createCount += strings.Count(contentUpper, "CREATE VIEW")
+		createCount += strings.Count(contentUpper, "CREATE TYPE")
+		createCount += strings.Count(contentUpper, "CREATE SEQUENCE")
+		createCount += strings.Count(contentUpper, "CREATE EXTENSION")
+		createCount += strings.Count(contentUpper, "CREATE POLICY")
+		createCount += strings.Count(contentUpper, "CREATE SCHEMA")
+
+		// Count ALTER statements
+		alterCount += strings.Count(contentUpper, "ALTER TABLE")
+		alterCount += strings.Count(contentUpper, "ALTER TYPE")
+		alterCount += strings.Count(contentUpper, "ALTER SEQUENCE")
+		alterCount += strings.Count(contentUpper, "ALTER SCHEMA")
+
+		// Count DROP statements
+		dropCount += strings.Count(contentUpper, "DROP TABLE")
+		dropCount += strings.Count(contentUpper, "DROP INDEX")
+		dropCount += strings.Count(contentUpper, "DROP FUNCTION")
+		dropCount += strings.Count(contentUpper, "DROP TRIGGER")
+		dropCount += strings.Count(contentUpper, "DROP VIEW")
+		dropCount += strings.Count(contentUpper, "DROP TYPE")
+		dropCount += strings.Count(contentUpper, "DROP SEQUENCE")
+		dropCount += strings.Count(contentUpper, "DROP POLICY")
+	}
+
 	// Build response
 	processingTime := time.Since(startTime).Milliseconds()
 
@@ -437,11 +473,16 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		OptimizedCount:       optimizedStatements,
 		EstimatedTimeSavings: fmt.Sprintf("~%d statements reduced", reduction),
 		SafetyLevel:          safetyLevel,
-		Operations:           map[string]int{"analyzed": len(migrationMap)},
-		Warnings:             warnings,
-		Recommendations:      []string{"Review consolidation results before applying"},
-		ProcessingTimeMs:     processingTime,
-		FileSizeReduction:    fmt.Sprintf("%.1f%%", calculateReductionPercentage(originalStatements, optimizedStatements)),
+		Operations: map[string]int{
+			"creates":      createCount,
+			"alters":       alterCount,
+			"drops":        dropCount,
+			"consolidated": reduction,
+		},
+		Warnings:          warnings,
+		Recommendations:   []string{"Review consolidation results before applying"},
+		ProcessingTimeMs:  processingTime,
+		FileSizeReduction: fmt.Sprintf("%.1f%%", calculateReductionPercentage(originalStatements, optimizedStatements)),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

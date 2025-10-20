@@ -187,8 +187,7 @@ release:
 
     #### Homebrew (macOS & Linux)
     ```bash
-    # Coming soon
-    # brew install CAPYSQUASH/tap/pgsquash
+    brew install CAPYSQUASH/tap/pgsquash
     ```
 
     #### Go Install
@@ -237,23 +236,23 @@ release:
     - 🐛 [Report Issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues)
     - 💬 [Discussions](https://github.com/CAPYSQUASH/pgsquash-engine/discussions)
 
-# Homebrew tap (optional - uncomment if you have a tap repository)
-# brews:
-#   - name: pgsquash
-#     description: "PostgreSQL migration squasher and optimizer"
-#     homepage: "https://github.com/CAPYSQUASH/pgsquash-engine"
-#     license: "MIT"
-#     repository:
-#       owner: CAPYSQUASH
-#       name: homebrew-tap
-#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-#     directory: Formula
-#     commit_author:
-#       name: goreleaserbot
-#       email: bot@goreleaser.com
-#     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
-#     install: |
-#       bin.install "pgsquash"
+# Homebrew tap
+brews:
+  - name: pgsquash
+    description: "PostgreSQL migration squasher and optimizer"
+    homepage: "https://github.com/CAPYSQUASH/pgsquash-engine"
+    license: "MIT"
+    repository:
+      owner: CAPYSQUASH
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    install: |
+      bin.install "pgsquash"
 
 # Snapcraft (Linux) - optional
 # snapcrafts:
