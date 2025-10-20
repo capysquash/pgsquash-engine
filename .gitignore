@@ -9,7 +9,7 @@ pgsquash-*
 
 # Test binary, built with `go test -c`
 *.test
-docs/internal
+docs/internal/
 docs/internal/audits
 docs/internal/decisions
 docs/internal/deployments
