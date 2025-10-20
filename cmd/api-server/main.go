@@ -126,7 +126,7 @@ func NewServer() *Server {
 
 	// Priority 1: Try GitHub App authentication (preferred)
 	if githubAppID != "" && (githubAppPrivateKey != "" || githubAppPrivateKeyPath != "") {
-		appClient, err := github.NewAppClientFromEnv()
+		_, err := github.NewAppClientFromEnv()
 		if err != nil {
 			logger.Info("⚠ GitHub App authentication failed: %v", err)
 			logger.Info("Falling back to personal access token if available...")
