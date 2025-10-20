@@ -2,12 +2,12 @@ package providers
 
 import (
     "context"
-    "fmt"
     "net/http"
     "strings"
     "time"
 
     "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+    "github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
     "github.com/openai/openai-go"
     "github.com/openai/openai-go/azure"
     "github.com/openai/openai-go/option"
@@ -23,11 +23,21 @@ type AzureOpenAIProvider struct {
 // NewAzureOpenAIProvider creates a new Azure OpenAI provider instance
 func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error) {
     if config.Endpoint == "" {
-        return nil, fmt.Errorf("azure OpenAI endpoint is required")
+        return nil, errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "azure OpenAI endpoint is required",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithSuggestion("set AZURE_OPENAI_ENDPOINT environment variable")
     }
 
     if config.AzureDeployment == "" {
-        return nil, fmt.Errorf("azure deployment name is required")
+        return nil, errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "azure deployment name is required",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithSuggestion("set AZURE_OPENAI_DEPLOYMENT environment variable")
     }
 
     timeout := 60 * time.Second
@@ -64,7 +74,12 @@ func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error
             // Use Azure AD authentication
             credential, err := azidentity.NewDefaultAzureCredential(nil)
             if err != nil {
-                return nil, fmt.Errorf("failed to create Azure AD credential: %w", err)
+                return nil, errors.NewError(
+                    errors.ErrorCodeValidationFailed,
+                    "failed to create Azure AD credential",
+                    errors.SeverityError,
+                    errors.CategoryValidation,
+                ).WithInnerError(err).WithSuggestion("ensure Azure AD authentication is configured")
             }
 
             client = openai.NewClient(
@@ -75,7 +90,12 @@ func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error
         } else {
             // Use API key authentication
             if config.APIKey == "" {
-                return nil, fmt.Errorf("azure OpenAI API key is required when not using Azure AD")
+                return nil, errors.NewError(
+                    errors.ErrorCodeValidationFailed,
+                    "azure OpenAI API key is required when not using Azure AD",
+                    errors.SeverityError,
+                    errors.CategoryValidation,
+                ).WithSuggestion("set AZURE_OPENAI_API_KEY environment variable")
             }
 
             client = openai.NewClient(
@@ -85,27 +105,44 @@ func NewAzureOpenAIProvider(config *ProviderConfig) (*AzureOpenAIProvider, error
             )
         }
     } else {
-        // Legacy API: Use Azure-specific endpoint format with api-version
+        // v0 API (legacy): Use deployment-specific endpoint format
+        // Format: https://{resource}.openai.azure.com/openai/deployments/{deployment}/...
+        // The SDK handles deployment in the request path for v0 API
+        baseURL := config.Endpoint
+        if !strings.HasSuffix(baseURL, "/") {
+            baseURL += "/"
+        }
+
         if config.UseAzureAD {
             // Use Azure AD authentication
             credential, err := azidentity.NewDefaultAzureCredential(nil)
             if err != nil {
-                return nil, fmt.Errorf("failed to create Azure AD credential: %w", err)
+                return nil, errors.NewError(
+                    errors.ErrorCodeValidationFailed,
+                    "failed to create Azure AD credential",
+                    errors.SeverityError,
+                    errors.CategoryValidation,
+                ).WithInnerError(err).WithSuggestion("ensure Azure AD authentication is configured")
             }
 
             client = openai.NewClient(
-                azure.WithEndpoint(config.Endpoint, config.AzureAPIVersion),
+                azure.WithEndpoint(baseURL, config.AzureAPIVersion),
                 azure.WithTokenCredential(credential),
                 option.WithHTTPClient(httpClient),
             )
         } else {
             // Use API key authentication
             if config.APIKey == "" {
-                return nil, fmt.Errorf("azure OpenAI API key is required when not using Azure AD")
+                return nil, errors.NewError(
+                    errors.ErrorCodeValidationFailed,
+                    "azure OpenAI API key is required when not using Azure AD",
+                    errors.SeverityError,
+                    errors.CategoryValidation,
+                ).WithSuggestion("set AZURE_OPENAI_API_KEY environment variable")
             }
 
             client = openai.NewClient(
-                azure.WithEndpoint(config.Endpoint, config.AzureAPIVersion),
+                azure.WithEndpoint(baseURL, config.AzureAPIVersion),
                 azure.WithAPIKey(config.APIKey),
                 option.WithHTTPClient(httpClient),
             )
@@ -195,8 +232,8 @@ func (a *AzureOpenAIProvider) HealthCheck(ctx context.Context) error {
 func (a *AzureOpenAIProvider) Analyze(ctx context.Context, req *AnalysisRequest) (*AnalysisResponse, error) {
     startTime := time.Now()
 
-    systemPrompt := a.getSystemPromptForType(req.Type)
-    userPrompt := a.buildUserPrompt(req)
+    systemPrompt := GetSystemPromptForType(req.Type)
+    userPrompt := BuildUserPrompt(req)
 
     maxTokens := int64(1000)
     if req.MaxTokens > 0 {
@@ -235,11 +272,21 @@ func (a *AzureOpenAIProvider) Analyze(ctx context.Context, req *AnalysisRequest)
     })
 
     if err != nil {
-        return nil, fmt.Errorf("azure OpenAI API call failed: %w", err)
+        return nil, errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "azure OpenAI API call failed",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithSuggestion("check Azure OpenAI endpoint and credentials")
     }
 
     if len(resp.Choices) == 0 {
-        return nil, fmt.Errorf("no choices in Azure OpenAI response")
+        return nil, errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "no choices in Azure OpenAI response",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithSuggestion("check API request parameters")
     }
 
     content := resp.Choices[0].Message.Content
@@ -251,7 +298,7 @@ func (a *AzureOpenAIProvider) Analyze(ctx context.Context, req *AnalysisRequest)
 
     return &AnalysisResponse{
         Result:     content,
-        Confidence: a.calculateConfidence(req.Type, content),
+        Confidence: CalculateConfidence(req.Type, content),
         Metadata: map[string]interface{}{
             "deployment":        a.config.AzureDeployment,
             "api_version":       a.config.AzureAPIVersion,
@@ -265,11 +312,21 @@ func (a *AzureOpenAIProvider) Analyze(ctx context.Context, req *AnalysisRequest)
 }
 
 func (a *AzureOpenAIProvider) SubmitBatch(ctx context.Context, batch *BatchRequest) (*BatchResponse, error) {
-    return nil, fmt.Errorf("batch processing not supported by Azure OpenAI provider")
+    return nil, errors.NewError(
+        errors.ErrorCodeValidationFailed,
+        "batch processing not supported by Azure OpenAI provider",
+        errors.SeverityError,
+        errors.CategoryValidation,
+    ).WithSuggestion("use Claude provider for batch processing")
 }
 
 func (a *AzureOpenAIProvider) GetBatchStatus(ctx context.Context, batchID string) (*BatchResponse, error) {
-    return nil, fmt.Errorf("batch processing not supported by Azure OpenAI provider")
+    return nil, errors.NewError(
+        errors.ErrorCodeValidationFailed,
+        "batch processing not supported by Azure OpenAI provider",
+        errors.SeverityError,
+        errors.CategoryValidation,
+    ).WithSuggestion("use Claude provider for batch processing")
 }
 
 func (a *AzureOpenAIProvider) SupportsStreaming() bool {
@@ -284,111 +341,5 @@ func (a *AzureOpenAIProvider) SupportsBatch() bool {
     return a.capabilities.SupportsBatch
 }
 
-// Helper methods (reusing from OpenAI provider)
-
-func (a *AzureOpenAIProvider) getSystemPromptForType(analysisType AnalysisType) string {
-    basePrompt := "You are a PostgreSQL expert specializing in database optimization, migration analysis, and SQL best practices. Provide precise, accurate responses."
-
-    switch analysisType {
-    case AnalysisFunctionEquivalence:
-        return basePrompt + " Focus on semantic equivalence of PostgreSQL functions, considering inputs, outputs, and side effects."
-    case AnalysisDeadCode:
-        return basePrompt + " Analyze PostgreSQL schemas to identify unused functions, triggers, and database objects."
-    case AnalysisFunctionComplexity:
-        return basePrompt + " Evaluate PostgreSQL function complexity, maintainability, and performance characteristics."
-    case AnalysisAuthPatterns:
-        return basePrompt + " Identify authentication and authorization patterns in PostgreSQL schemas, including RLS, JWT, and third-party integrations."
-    case AnalysisOptimizations:
-        return basePrompt + " Suggest performance and maintainability optimizations for PostgreSQL migrations and schemas."
-    case AnalysisSQLComplexity:
-        return basePrompt + " Analyze SQL statement complexity, performance implications, and best practice adherence."
-    default:
-        return basePrompt
-    }
-}
-
-func (a *AzureOpenAIProvider) buildUserPrompt(req *AnalysisRequest) string {
-    switch req.Type {
-    case AnalysisFunctionEquivalence:
-        parts := strings.Split(req.Content, "|||")
-        if len(parts) == 2 {
-            return fmt.Sprintf(`Analyze these two PostgreSQL functions and determine if they are semantically equivalent.
-
-Two functions are semantically equivalent if they:
-1. Have the same input parameters (names can differ, but types and order must match)
-2. Produce identical outputs for all possible inputs
-3. Have the same side effects (or lack thereof)
-4. Handle edge cases identically
-
-Function 1:
-%s
-
-Function 2:
-%s
-
-Respond with only 'true' if they are semantically equivalent, or 'false' if they are not.`, parts[0], parts[1])
-        }
-        return req.Content
-
-    case AnalysisDeadCode:
-        return fmt.Sprintf(`Analyze this PostgreSQL schema and determine if the specified function is dead code.
-
-A function is considered dead code if:
-1. It's not called by any other functions in the schema
-2. It's not referenced in any triggers
-3. It's not used in any policies or constraints
-4. It's not referenced in any views
-5. It appears to be unused application entry point
-
-Schema and Analysis Request:
-%s
-
-Context (if provided):
-%s
-
-Respond with only 'true' if the function appears to be dead code, or 'false' if it's used.`, req.Content, req.Context)
-
-    case AnalysisAuthPatterns:
-        return fmt.Sprintf(`Analyze this SQL content and identify authentication/authorization patterns.
-
-Look for:
-1. JWT token processing (auth.jwt(), claims extraction)
-2. RLS (Row Level Security) policies
-3. User/role-based access patterns
-4. Supabase auth patterns
-5. Clerk auth patterns
-6. Custom authentication schemes
-
-SQL Content:
-%s
-
-List the detected patterns, one per line, or 'NONE' if no auth patterns found.`, req.Content)
-
-    default:
-        prompt := req.Content
-        if req.Context != "" {
-            prompt += "\n\nContext:\n" + req.Context
-        }
-        return prompt
-    }
-}
-
-func (a *AzureOpenAIProvider) calculateConfidence(analysisType AnalysisType, result string) float64 {
-    // Simple confidence calculation based on result characteristics
-    result = strings.TrimSpace(strings.ToLower(result))
-
-    switch analysisType {
-    case AnalysisFunctionEquivalence, AnalysisDeadCode:
-        // For boolean responses, high confidence if it's a clear true/false
-        if result == "true" || result == "false" {
-            return 0.95
-        }
-        return 0.7
-    default:
-        // For other types, base confidence on result length and structure
-        if len(result) > 50 && strings.Contains(result, "\n") {
-            return 0.85
-        }
-        return 0.75
-    }
-}
+// Note: Shared helper functions (GetSystemPromptForType, BuildUserPrompt, CalculateConfidence)
+// are now in common.go and used by all AI providers for consistency

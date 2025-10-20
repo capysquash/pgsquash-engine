@@ -11,7 +11,7 @@ Spin up ephemeral PostgreSQL containers to validate migration squashing results 
 
 ## How It Works
 
-1. pg-squash runs with Docker socket access
+1. pgsquash runs with Docker socket access
 2. Creates two PostgreSQL containers on-demand
 3. Applies original migrations to container 1
 4. Applies squashed migration to container 2
@@ -52,11 +52,13 @@ docker compose -f docker/validation/with-validation.yml run --rm pgsquash workfl
 Located in `docker/scripts/`:
 
 ### `quick-validate.sh` - Fastest validation
+
 ```bash
 ./docker/scripts/quick-validate.sh my-migrations/
 ```
 
 ### `validate.sh` - Comprehensive validation
+
 ```bash
 # Full validation with detailed reports
 ./docker/scripts/validate.sh
@@ -66,6 +68,7 @@ Located in `docker/scripts/`:
 ```
 
 ### `setup-validation.sh` - Custom validation environment
+
 ```bash
 # Setup validation with auto-detected extensions
 ./docker/scripts/setup-validation.sh migrations/ /tmp/validation
@@ -76,6 +79,7 @@ cd /tmp/validation
 ```
 
 ### `multi-version-test.sh` - Test multiple PostgreSQL versions
+
 ```bash
 # All versions
 ./docker/scripts/multi-version-test.sh
@@ -85,6 +89,7 @@ cd /tmp/validation
 ```
 
 ### `cleanup.sh` - Clean up validation containers
+
 ```bash
 # Clean validation containers only
 ./docker/scripts/cleanup.sh
@@ -121,18 +126,21 @@ export POSTGRES_VERSION=17  # Default validation version
 ## Validation Approaches
 
 ### 1. Two Containers (Default)
+
 - Spins up 2 PostgreSQL containers
 - Container 1: Original migrations
 - Container 2: Squashed migration
 - Compares schemas via SQL queries
 
 ### 2. Two Databases
+
 - Single PostgreSQL container
 - Database 1: Original migrations
 - Database 2: Squashed migration
 - Faster but less isolated
 
 ### 3. Schema Diff
+
 - Generates SQL schema dumps
 - Uses diff tool for comparison
 - Useful for detailed analysis
@@ -142,6 +150,7 @@ export POSTGRES_VERSION=17  # Default validation version
 **Important**: This use case requires Docker socket access for creating validation containers.
 
 Security considerations:
+
 - Only grant to trusted environments
 - Use Unix socket (`/var/run/docker.sock`)
 - Consider using [Docker socket proxy](https://github.com/Tecnativa/docker-socket-proxy)
@@ -149,18 +158,20 @@ Security considerations:
 ## Validation Resources
 
 ### `init-scripts/`
+
 - `supabase-compat.sql` - Supabase auth compatibility
 - `init-postgres.sql` - Basic PostgreSQL setup
 - `validation-init.sql` - Validation-specific setup
 
 ### `validation/`
+
 - Validation-specific Dockerfile (optimized)
 - Custom PostgreSQL images with extensions
 - Validation helpers
 
 ## Container Lifecycle
 
-1. **Creation**: Containers created with labels (`pg-squash.type=validation`)
+1. **Creation**: Containers created with labels (`pgsquash.type=validation`)
 2. **Execution**: Migrations applied, schemas compared
 3. **Cleanup**: Automatic cleanup via labels (no AutoRemove)
 4. **Inspection**: Use `--keep-container` to inspect manually
@@ -173,7 +184,7 @@ If you see "port already in use":
 
 ```bash
 # Check running validation containers
-docker ps -a -f "label=pg-squash.type=validation"
+docker ps -a -f "label=pgsquash.type=validation"
 
 # Clean up
 ./docker/scripts/cleanup.sh
@@ -185,7 +196,7 @@ If extensions fail to install:
 
 ```bash
 # Check available extensions
-docker run --rm postgres:17-alpine psql -U postgres -c "SELECT name FROM pg_available_extensions ORDER BY name;"
+docker run --rm postgres:17 psql -U postgres -c "SELECT name FROM pg_available_extensions ORDER BY name;"
 
 # Create custom image with extensions
 # See validation/custom-postgres.dockerfile
@@ -218,20 +229,22 @@ docker exec -it pgsquash-validation-postgres psql -U postgres -d squashed_migrat
 
 ## Performance
 
-- **Container startup**: ~2-5 seconds
+- **Container startup**: \~2-5 seconds
 - **Migration application**: Varies by size
 - **Schema comparison**: <1 second
-- **Total validation**: ~10-30 seconds typical
+- **Total validation**: \~10-30 seconds typical
 
 ## Use Cases
 
 ✅ **Good for**:
+
 - CI/CD validation pipelines
 - Pre-production verification
 - Multi-version compatibility testing
 - Regression testing
 
 ❌ **Not suitable for**:
+
 - Production deployments
 - Environments without Docker
 - Restricted Docker socket access
@@ -241,6 +254,7 @@ docker exec -it pgsquash-validation-postgres psql -U postgres -d squashed_migrat
 ### Container Isolation
 
 Validation containers are:
+
 - ✅ Isolated in separate network
 - ✅ Labeled for tracking
 - ✅ Resource limited (512MB memory, 1 CPU)
@@ -258,5 +272,5 @@ Validation containers are:
 ## Next Steps
 
 - **For simple CLI**: See [Engine](../engine)
-- **For web app**: See [Web App](../web-app)
+- **For API server**: See [API Server](../api-server)
 - **For development**: See [dev-environment](../dev-environment)

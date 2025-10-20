@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/ai/providers"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // Analyzer provides AI-powered analysis using the modular provider system
@@ -17,7 +18,12 @@ type Analyzer struct {
 func NewAnalyzer() (*Analyzer, error) {
 	manager, err := NewProviderManager(nil) // Use default config
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider manager: %w", err)
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"failed to create provider manager",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("ensure AI provider API keys are configured")
 	}
 
 	return &Analyzer{
@@ -26,9 +32,15 @@ func NewAnalyzer() (*Analyzer, error) {
 }
 
 // AreFunctionsSemanticallyEquivalent checks if two functions are semantically equivalent
-func (a *Analyzer) AreFunctionsSemanticallyEquivalent(func1, func2 string) (bool, error) {
+// Returns: equivalent (bool), confidence (0.0-1.0), error
+func (a *Analyzer) AreFunctionsSemanticallyEquivalent(ctx context.Context, func1, func2 string) (bool, float64, error) {
 	if a.manager == nil {
-		return false, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return false, 0.0, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	content := func1 + "|||" + func2 // Use separator for function pairs
@@ -40,19 +52,35 @@ func (a *Analyzer) AreFunctionsSemanticallyEquivalent(func1, func2 string) (bool
 		MaxTokens:   1000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
-		return false, err
+		return false, 0.0, err
 	}
 
+	// Try to parse as structured response first
+	structured, err := ParseStructuredResponse[FunctionEquivalenceResponse](response.Result)
+	if err == nil {
+		return structured.Equivalent, structured.Confidence, nil
+	}
+
+	// Fallback to plain text parsing for backward compatibility
 	result := strings.TrimSpace(strings.ToLower(response.Result))
-	return result == "true", nil
+	if result == "true" {
+		return true, 0.8, nil // Assume moderate confidence for plain text responses
+	}
+	return false, 0.8, nil
 }
 
 // IsDeadCode determines if a function is unused/dead code
-func (a *Analyzer) IsDeadCode(schema, functionName string) (bool, error) {
+// Returns: isDeadCode (bool), confidence (0.0-1.0), error
+func (a *Analyzer) IsDeadCode(ctx context.Context, schema, functionName string) (bool, float64, error) {
 	if a.manager == nil {
-		return false, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return false, 0.0, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -62,19 +90,35 @@ func (a *Analyzer) IsDeadCode(schema, functionName string) (bool, error) {
 		MaxTokens:   1000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
-		return false, err
+		return false, 0.0, err
 	}
 
+	// Try to parse as structured response first
+	structured, err := ParseStructuredResponse[DeadCodeResponse](response.Result)
+	if err == nil {
+		return structured.IsDeadCode, structured.Confidence, nil
+	}
+
+	// Fallback to plain text parsing
 	result := strings.TrimSpace(strings.ToLower(response.Result))
-	return result == "true", nil
+	if result == "true" {
+		return true, 0.8, nil
+	}
+	return false, 0.8, nil
 }
 
 // AnalyzeFunctionComplexity analyzes the complexity of a PostgreSQL function
-func (a *Analyzer) AnalyzeFunctionComplexity(functionSQL string) (string, error) {
+// Returns structured complexity analysis with score, maintainability, and recommendations
+func (a *Analyzer) AnalyzeFunctionComplexity(ctx context.Context, functionSQL string) (*FunctionComplexityResponse, error) {
 	if a.manager == nil {
-		return "", fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -84,18 +128,37 @@ func (a *Analyzer) AnalyzeFunctionComplexity(functionSQL string) (string, error)
 		MaxTokens:   2000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return response.Result, nil
+	// Try to parse as structured response
+	structured, err := ParseStructuredResponse[FunctionComplexityResponse](response.Result)
+	if err == nil {
+		return structured, nil
+	}
+
+	// Fallback: return basic response from plain text
+	return &FunctionComplexityResponse{
+		ComplexityScore:  5, // Default moderate complexity
+		Maintainability:  "medium",
+		PerformanceIssues: []string{},
+		Recommendations:  []string{response.Result},
+		Reasoning:        response.Result,
+	}, nil
 }
 
 // DetectAuthPatterns identifies authentication/authorization patterns in SQL
-func (a *Analyzer) DetectAuthPatterns(sqlContent string) ([]string, error) {
+// Returns structured auth pattern analysis with types and descriptions
+func (a *Analyzer) DetectAuthPatterns(ctx context.Context, sqlContent string) (*AuthPatternsResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -105,31 +168,53 @@ func (a *Analyzer) DetectAuthPatterns(sqlContent string) ([]string, error) {
 		MaxTokens:   2000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
+	// Try to parse as structured response
+	structured, err := ParseStructuredResponse[AuthPatternsResponse](response.Result)
+	if err == nil {
+		return structured, nil
+	}
+
+	// Fallback: parse plain text line by line
 	if strings.TrimSpace(strings.ToUpper(response.Result)) == "NONE" {
-		return []string{}, nil
+		return &AuthPatternsResponse{
+			Patterns: []AuthPattern{},
+			Summary:  "No authentication patterns detected",
+		}, nil
 	}
 
 	lines := strings.Split(response.Result, "\n")
-	var patterns []string
+	var patterns []AuthPattern
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
-			patterns = append(patterns, line)
+			patterns = append(patterns, AuthPattern{
+				Type:        "unknown",
+				Description: line,
+			})
 		}
 	}
 
-	return patterns, nil
+	return &AuthPatternsResponse{
+		Patterns: patterns,
+		Summary:  fmt.Sprintf("Detected %d authentication patterns", len(patterns)),
+	}, nil
 }
 
 // SuggestOptimizations suggests performance and maintainability improvements
-func (a *Analyzer) SuggestOptimizations(migrationSQL string) ([]string, error) {
+// Returns structured optimization suggestions with priorities and impact assessment
+func (a *Analyzer) SuggestOptimizations(ctx context.Context, migrationSQL string) (*OptimizationsResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -139,31 +224,57 @@ func (a *Analyzer) SuggestOptimizations(migrationSQL string) ([]string, error) {
 		MaxTokens:   2000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
+	// Try to parse as structured response
+	structured, err := ParseStructuredResponse[OptimizationsResponse](response.Result)
+	if err == nil {
+		return structured, nil
+	}
+
+	// Fallback: parse plain text line by line
 	if strings.TrimSpace(strings.ToUpper(response.Result)) == "NONE" {
-		return []string{}, nil
+		return &OptimizationsResponse{
+			Optimizations: []Optimization{},
+			OverallScore:  10,
+			Summary:       "No optimizations needed",
+		}, nil
 	}
 
 	lines := strings.Split(response.Result, "\n")
-	var suggestions []string
+	var optimizations []Optimization
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
-			suggestions = append(suggestions, line)
+			optimizations = append(optimizations, Optimization{
+				Type:        "maintainability",
+				Priority:    "medium",
+				Description: line,
+				Impact:      "moderate",
+				Suggestion:  line,
+			})
 		}
 	}
 
-	return suggestions, nil
+	return &OptimizationsResponse{
+		Optimizations: optimizations,
+		OverallScore:  7,
+		Summary:       fmt.Sprintf("Found %d optimization opportunities", len(optimizations)),
+	}, nil
 }
 
 // AnalyzeCodeCoverage analyzes function usage and determines if code is dead
-func (a *Analyzer) AnalyzeCodeCoverage(functionSQL, usageContext string) (string, error) {
+func (a *Analyzer) AnalyzeCodeCoverage(ctx context.Context, functionSQL, usageContext string) (string, error) {
 	if a.manager == nil {
-		return "", fmt.Errorf("AI analyzer not initialized - no providers available")
+		return "", errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -174,7 +285,7 @@ func (a *Analyzer) AnalyzeCodeCoverage(functionSQL, usageContext string) (string
 		MaxTokens:   1500,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -183,9 +294,15 @@ func (a *Analyzer) AnalyzeCodeCoverage(functionSQL, usageContext string) (string
 }
 
 // ValidateSchemaConsistency compares original vs squashed schemas
-func (a *Analyzer) ValidateSchemaConsistency(originalSchema, squashedSchema string) ([]string, error) {
+// Returns structured schema consistency analysis with categorized differences
+func (a *Analyzer) ValidateSchemaConsistency(ctx context.Context, originalSchema, squashedSchema string) (*SchemaConsistencyResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	content := fmt.Sprintf("ORIGINAL SCHEMA:\n%s\n\nSQUASHED SCHEMA:\n%s", originalSchema, squashedSchema)
@@ -197,31 +314,58 @@ func (a *Analyzer) ValidateSchemaConsistency(originalSchema, squashedSchema stri
 		MaxTokens:   3000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
+	// Try to parse as structured response
+	structured, err := ParseStructuredResponse[SchemaConsistencyResponse](response.Result)
+	if err == nil {
+		return structured, nil
+	}
+
+	// Fallback: parse plain text
 	if strings.TrimSpace(strings.ToUpper(response.Result)) == "IDENTICAL" {
-		return []string{}, nil
+		return &SchemaConsistencyResponse{
+			IsConsistent: true,
+			Differences:  []SchemaDifference{},
+			Summary:      "Schemas are identical",
+		}, nil
 	}
 
 	lines := strings.Split(response.Result, "\n")
-	var differences []string
+	var differences []SchemaDifference
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line != "" && !strings.HasPrefix(line, "#") {
-			differences = append(differences, line)
+			differences = append(differences, SchemaDifference{
+				Type:        "modified",
+				ObjectType:  "unknown",
+				ObjectName:  "",
+				Description: line,
+				Severity:    "warning",
+			})
 		}
 	}
 
-	return differences, nil
+	return &SchemaConsistencyResponse{
+		IsConsistent: len(differences) == 0,
+		Differences:  differences,
+		Summary:      fmt.Sprintf("Found %d schema differences", len(differences)),
+	}, nil
 }
 
 // AnalyzeSQLComplexity analyzes the complexity of SQL statements
-func (a *Analyzer) AnalyzeSQLComplexity(sqlStatement string) (string, error) {
+// Returns structured SQL complexity analysis with score and best practices
+func (a *Analyzer) AnalyzeSQLComplexity(ctx context.Context, sqlStatement string) (*SQLComplexityResponse, error) {
 	if a.manager == nil {
-		return "", fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	req := &AnalysisRequest{
@@ -231,50 +375,82 @@ func (a *Analyzer) AnalyzeSQLComplexity(sqlStatement string) (string, error) {
 		MaxTokens:   2000,
 	}
 
-	response, err := a.manager.Analyze(context.Background(), req)
+	response, err := a.manager.Analyze(ctx, req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return response.Result, nil
+	// Try to parse as structured response
+	structured, err := ParseStructuredResponse[SQLComplexityResponse](response.Result)
+	if err == nil {
+		return structured, nil
+	}
+
+	// Fallback: return basic response from plain text
+	return &SQLComplexityResponse{
+		ComplexityScore: 5,
+		Issues:          []string{},
+		BestPractices:   []string{},
+		Reasoning:       response.Result,
+	}, nil
 }
 
 // AnalyzeWithTools performs analysis using tool-enhanced capabilities
-func (a *Analyzer) AnalyzeWithTools(req *AnalysisRequest, tools []*ToolDefinition) (*AnalysisResponse, error) {
+func (a *Analyzer) AnalyzeWithTools(ctx context.Context, req *AnalysisRequest, tools []*ToolDefinition) (*AnalysisResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeAnalysisError,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
-	return a.manager.AnalyzeWithTools(context.Background(), req, tools)
+	return a.manager.AnalyzeWithTools(ctx, req, tools)
 }
 
 // SubmitBatch submits a batch of analysis requests
-func (a *Analyzer) SubmitBatch(batch *BatchRequest) (*BatchResponse, error) {
+func (a *Analyzer) SubmitBatch(ctx context.Context, batch *BatchRequest) (*BatchResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
-	return a.manager.SubmitBatch(context.Background(), batch)
+	return a.manager.SubmitBatch(ctx, batch)
 }
 
 // GetBatchStatus retrieves the status of a batch analysis
-func (a *Analyzer) GetBatchStatus(batchID string) (*BatchResponse, error) {
+func (a *Analyzer) GetBatchStatus(ctx context.Context, batchID string) (*BatchResponse, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized - no providers available")
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized - no providers available",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
-	return a.manager.GetBatchStatus(context.Background(), batchID)
+	return a.manager.GetBatchStatus(ctx, batchID)
 }
 
 // HealthCheck performs health check on all providers
-func (a *Analyzer) HealthCheck() map[ProviderType]error {
+func (a *Analyzer) HealthCheck(ctx context.Context) map[ProviderType]error {
 	if a.manager == nil {
 		return map[ProviderType]error{
-			"unknown": fmt.Errorf("AI analyzer not initialized"),
+			"unknown": errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				"AI analyzer not initialized",
+				errors.SeverityError,
+				errors.CategoryValidation,
+			),
 		}
 	}
 
-	return a.manager.HealthCheck(context.Background())
+	return a.manager.HealthCheck(ctx)
 }
 
 // GetCapabilities returns capabilities of all available providers
@@ -298,8 +474,18 @@ func (a *Analyzer) GetAvailableProviders() []ProviderType {
 // GetProvider returns a specific provider for advanced usage
 func (a *Analyzer) GetProvider(providerType ProviderType) (Provider, error) {
 	if a.manager == nil {
-		return nil, fmt.Errorf("AI analyzer not initialized")
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"AI analyzer not initialized",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("check that AI provider API keys are configured")
 	}
 
 	return a.manager.GetProvider(providerType)
+}
+
+// GetManager returns the underlying provider manager for advanced usage
+func (a *Analyzer) GetManager() *ProviderManager {
+	return a.manager
 }

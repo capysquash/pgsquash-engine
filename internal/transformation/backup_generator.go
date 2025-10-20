@@ -1,15 +1,19 @@
 package transformation
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/patterns"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // BackupType defines the type of backup to generate
@@ -136,7 +140,12 @@ func findPgDumpPath() string {
 // SetWorkingDirectory sets the working directory for backup operations
 func (bg *BackupGenerator) SetWorkingDirectory(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create working directory: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"failed to create working directory",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
 	}
 	bg.workDir = dir
 	return nil
@@ -199,7 +208,12 @@ func (bg *BackupGenerator) generateBackup(ctx context.Context, dbURL, name, desc
 	info, err := os.Stat(backupPath)
 	if err != nil {
 		result.Error = fmt.Sprintf("Failed to get backup info: %v", err)
-		return result, err
+		return result, errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"failed to get backup info",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
 	}
 
 	result.Size = info.Size()
@@ -304,16 +318,42 @@ func (bg *BackupGenerator) buildPgDumpArgs(dbURL, outputPath string) []string {
 
 // executePgDump runs the pg_dump command
 func (bg *BackupGenerator) executePgDump(ctx context.Context, args []string) error {
-	// This would typically use os/exec to run pg_dump
-	// For now, we'll simulate the operation
-	fmt.Printf("Would execute: %s\n", strings.Join(args, " "))
+	// Use os/exec to run pg_dump with proper context cancellation
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 
-	// Simulate some processing time
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(100 * time.Millisecond):
-		// Backup completed
+	// Capture stdout and stderr for error reporting
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if bg.config.VerboseOutput {
+		fmt.Printf("Executing pg_dump: %s\n", strings.Join(args, " "))
+	}
+
+	// Execute the command
+	err := cmd.Run()
+	if err != nil {
+		// Include stderr output in error message
+		stderrStr := stderr.String()
+		if stderrStr != "" {
+			return errors.NewError(
+				errors.ErrorCodeBackupGenerationFailed,
+				fmt.Sprintf("pg_dump failed\nError output: %s", stderrStr),
+				errors.SeverityError,
+				errors.CategoryBackup,
+			).WithInnerError(err)
+		}
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"pg_dump failed",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
+	}
+
+	// Log any warnings from stderr even if command succeeded
+	if stderr.Len() > 0 && bg.config.VerboseOutput {
+		fmt.Printf("pg_dump warnings: %s\n", stderr.String())
 	}
 
 	return nil
@@ -332,13 +372,18 @@ func (bg *BackupGenerator) analyzeBackup(backupPath string, result *BackupResult
 }
 
 // GenerateRollbackScript creates rollback scripts for migrations
-func (bg *BackupGenerator) GenerateRollbackScript(ctx context.Context, statements []parser.Statement) ([]*RollbackScript, error) {
+func (bg *BackupGenerator) GenerateRollbackScript(ctx context.Context, statements []types.Statement) ([]*RollbackScript, error) {
 	rollbacks := make([]*RollbackScript, 0)
 
 	for i, stmt := range statements {
 		rollback, err := bg.generateRollbackForStatement(stmt, i)
 		if err != nil {
-			return nil, fmt.Errorf("failed to generate rollback for statement %d: %w", i, err)
+			return nil, errors.NewError(
+				errors.ErrorCodeBackupGenerationFailed,
+				fmt.Sprintf("failed to generate rollback for statement %d", i),
+				errors.SeverityError,
+				errors.CategoryBackup,
+			).WithInnerError(err)
 		}
 
 		if rollback != nil {
@@ -361,7 +406,7 @@ func (bg *BackupGenerator) GenerateRollbackScript(ctx context.Context, statement
 }
 
 // generateRollbackForStatement creates a rollback script for a single statement
-func (bg *BackupGenerator) generateRollbackForStatement(stmt parser.Statement, order int) (*RollbackScript, error) {
+func (bg *BackupGenerator) generateRollbackForStatement(stmt types.Statement, order int) (*RollbackScript, error) {
 	rollback := &RollbackScript{
 		ID:        fmt.Sprintf("rollback_%d_%d", time.Now().Unix(), order),
 		CreatedAt: time.Now(),
@@ -369,15 +414,15 @@ func (bg *BackupGenerator) generateRollbackForStatement(stmt parser.Statement, o
 	}
 
 	switch stmt.Operation {
-	case parser.OpCreate:
+	case types.OpCreate:
 		switch stmt.ObjectType {
-		case parser.TypeTable:
+		case types.TypeTable:
 			rollback.Description = fmt.Sprintf("Drop table %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("DROP TABLE IF EXISTS %s CASCADE;", stmt.ObjectName)
-		case parser.TypeIndex:
+		case types.TypeIndex:
 			rollback.Description = fmt.Sprintf("Drop index %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("DROP INDEX IF EXISTS %s;", stmt.ObjectName)
-		case parser.TypeFunction:
+		case types.TypeFunction:
 			rollback.Description = fmt.Sprintf("Drop function %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("DROP FUNCTION IF EXISTS %s CASCADE;", stmt.ObjectName)
 		default:
@@ -385,15 +430,15 @@ func (bg *BackupGenerator) generateRollbackForStatement(stmt parser.Statement, o
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback CREATE %s %s", stmt.ObjectType, stmt.ObjectName)
 		}
 
-	case parser.OpDrop:
+	case types.OpDrop:
 		switch stmt.ObjectType {
-		case parser.TypeTable:
+		case types.TypeTable:
 			rollback.Description = fmt.Sprintf("Recreate table %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP TABLE %s (requires backup restore)", stmt.ObjectName)
-		case parser.TypeIndex:
+		case types.TypeIndex:
 			rollback.Description = fmt.Sprintf("Recreate index %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP INDEX %s (requires original definition)", stmt.ObjectName)
-		case parser.TypeFunction:
+		case types.TypeFunction:
 			rollback.Description = fmt.Sprintf("Recreate function %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP FUNCTION %s (requires backup restore)", stmt.ObjectName)
 		default:
@@ -401,19 +446,19 @@ func (bg *BackupGenerator) generateRollbackForStatement(stmt parser.Statement, o
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP %s %s", stmt.ObjectType, stmt.ObjectName)
 		}
 
-	case parser.OpAlter:
+	case types.OpAlter:
 		rollback.Description = fmt.Sprintf("Reverse ALTER %s %s", stmt.ObjectType, stmt.ObjectName)
 		rollback.SQL = bg.generateAlterTableRollback(stmt)
 
-	case parser.OpInsert:
+	case types.OpInsert:
 		rollback.Description = fmt.Sprintf("Delete inserted data from %s", stmt.ObjectName)
 		rollback.SQL = bg.generateInsertRollback(stmt)
 
-	case parser.OpUpdate:
+	case types.OpUpdate:
 		rollback.Description = fmt.Sprintf("Reverse UPDATE on %s", stmt.ObjectName)
 		rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback UPDATE on %s (requires pre-change snapshot)", stmt.ObjectName)
 
-	case parser.OpDelete:
+	case types.OpDelete:
 		rollback.Description = fmt.Sprintf("Restore deleted data to %s", stmt.ObjectName)
 		rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DELETE from %s (requires backup restore)", stmt.ObjectName)
 
@@ -426,14 +471,135 @@ func (bg *BackupGenerator) generateRollbackForStatement(stmt parser.Statement, o
 }
 
 // generateAlterTableRollback creates rollback for ALTER TABLE statements
-func (bg *BackupGenerator) generateAlterTableRollback(stmt parser.Statement) string {
-	// This would analyze the specific ALTER TABLE operation and generate the reverse
-	// For now, return a placeholder
-	return fmt.Sprintf("-- Manual rollback required for ALTER TABLE %s", stmt.ObjectName)
+func (bg *BackupGenerator) generateAlterTableRollback(stmt types.Statement) string {
+	// Parse the ALTER TABLE command to extract operation type
+	sql := strings.ToUpper(strings.TrimSpace(stmt.SQL))
+	tableName := stmt.ObjectName
+
+	// Handle ADD COLUMN
+	if strings.Contains(sql, "ADD COLUMN") {
+		// Extract column name
+		matches := patterns.AddColumnPattern.FindStringSubmatch(sql)
+		if len(matches) > 1 {
+			columnName := matches[1]
+			return fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s;", tableName, columnName)
+		}
+		return fmt.Sprintf("-- Rollback ADD COLUMN: DROP COLUMN %s.<column_name>;", tableName)
+	}
+
+	// Handle DROP COLUMN
+	if strings.Contains(sql, "DROP COLUMN") {
+		matches := patterns.DropColumnBackupPattern.FindStringSubmatch(sql)
+		if len(matches) > 1 {
+			columnName := matches[1]
+			return fmt.Sprintf("-- Rollback DROP COLUMN: ADD COLUMN %s (requires column definition from backup)", columnName)
+		}
+		return fmt.Sprintf("-- Rollback DROP COLUMN: requires column definition from backup")
+	}
+
+	// Handle ADD CONSTRAINT
+	if strings.Contains(sql, "ADD CONSTRAINT") {
+		matches := patterns.AddConstraintPattern.FindStringSubmatch(sql)
+		if len(matches) > 1 {
+			constraintName := matches[1]
+			return fmt.Sprintf("ALTER TABLE %s DROP CONSTRAINT IF EXISTS %s;", tableName, constraintName)
+		}
+		return fmt.Sprintf("-- Rollback ADD CONSTRAINT: DROP CONSTRAINT %s.<constraint_name>;", tableName)
+	}
+
+	// Handle DROP CONSTRAINT
+	if strings.Contains(sql, "DROP CONSTRAINT") {
+		matches := patterns.DropConstraintPattern.FindStringSubmatch(sql)
+		if len(matches) > 1 {
+			constraintName := matches[1]
+			return fmt.Sprintf("-- Rollback DROP CONSTRAINT %s: requires constraint definition from backup", constraintName)
+		}
+		return fmt.Sprintf("-- Rollback DROP CONSTRAINT: requires constraint definition from backup")
+	}
+
+	// Handle ALTER COLUMN TYPE
+	if strings.Contains(sql, "ALTER COLUMN") && strings.Contains(sql, "TYPE") {
+		matches := patterns.AlterColumnTypePattern.FindStringSubmatch(sql)
+		if len(matches) > 2 {
+			columnName := matches[1]
+			return fmt.Sprintf("-- Rollback ALTER COLUMN TYPE for %s.%s: requires previous type from backup", tableName, columnName)
+		}
+		return fmt.Sprintf("-- Rollback ALTER COLUMN TYPE: requires previous column type from backup")
+	}
+
+	// Handle ALTER COLUMN SET/DROP NOT NULL
+	if strings.Contains(sql, "ALTER COLUMN") && strings.Contains(sql, "NOT NULL") {
+		matches := patterns.AlterColumnNullPattern.FindStringSubmatch(sql)
+		if len(matches) > 2 {
+			columnName := matches[1]
+			operation := matches[2]
+			if operation == "SET" {
+				return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP NOT NULL;", tableName, columnName)
+			}
+			return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s SET NOT NULL;", tableName, columnName)
+		}
+	}
+
+	// Handle ALTER COLUMN SET/DROP DEFAULT
+	if strings.Contains(sql, "ALTER COLUMN") && strings.Contains(sql, "DEFAULT") {
+		matches := patterns.AlterColumnDefaultPattern.FindStringSubmatch(sql)
+		if len(matches) > 2 {
+			columnName := matches[1]
+			operation := matches[2]
+			if operation == "SET" {
+				return fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT;", tableName, columnName)
+			}
+			return fmt.Sprintf("-- Rollback DROP DEFAULT for %s.%s: requires previous default value from backup", tableName, columnName)
+		}
+	}
+
+	// Handle RENAME TABLE
+	if strings.Contains(sql, "RENAME TO") {
+		matches := patterns.RenameTablePattern.FindStringSubmatch(sql)
+		if len(matches) > 1 {
+			newName := matches[1]
+			return fmt.Sprintf("ALTER TABLE %s RENAME TO %s;", newName, tableName)
+		}
+	}
+
+	// Handle RENAME COLUMN
+	if strings.Contains(sql, "RENAME COLUMN") {
+		matches := patterns.RenameColumnPattern.FindStringSubmatch(sql)
+		if len(matches) > 2 {
+			oldName := matches[1]
+			newName := matches[2]
+			return fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s;", tableName, newName, oldName)
+		}
+	}
+
+	// Handle OWNER TO
+	if strings.Contains(sql, "OWNER TO") {
+		return fmt.Sprintf("-- Rollback OWNER TO: requires previous owner information from backup")
+	}
+
+	// Handle ENABLE/DISABLE TRIGGER
+	if strings.Contains(sql, "TRIGGER") {
+		if strings.Contains(sql, "ENABLE") {
+			matches := patterns.EnableTriggerPattern.FindStringSubmatch(sql)
+			if len(matches) > 1 {
+				triggerName := matches[1]
+				return fmt.Sprintf("ALTER TABLE %s DISABLE TRIGGER %s;", tableName, triggerName)
+			}
+		} else if strings.Contains(sql, "DISABLE") {
+			matches := patterns.DisableTriggerPattern.FindStringSubmatch(sql)
+			if len(matches) > 1 {
+				triggerName := matches[1]
+				return fmt.Sprintf("ALTER TABLE %s ENABLE TRIGGER %s;", tableName, triggerName)
+			}
+		}
+	}
+
+	// Default fallback
+	return fmt.Sprintf("-- Manual rollback required for ALTER TABLE %s\n-- Original SQL: %s", tableName, stmt.SQL)
 }
 
 // generateInsertRollback creates rollback for INSERT statements
-func (bg *BackupGenerator) generateInsertRollback(stmt parser.Statement) string {
+func (bg *BackupGenerator) generateInsertRollback(stmt types.Statement) string {
 	// For INSERT statements, we could generate DELETE statements
 	// This would require parsing the INSERT to extract the data
 	return fmt.Sprintf("-- DELETE rollback for INSERT into %s (implement based on INSERT values)", stmt.ObjectName)
@@ -444,11 +610,21 @@ func (bg *BackupGenerator) ValidateBackup(ctx context.Context, backupPath string
 	// Check if backup file exists and is readable
 	info, err := os.Stat(backupPath)
 	if err != nil {
-		return fmt.Errorf("backup file not accessible: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"backup file not accessible",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
 	}
 
 	if info.Size() == 0 {
-		return fmt.Errorf("backup file is empty")
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"backup file is empty",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		)
 	}
 
 	// For SQL format, do basic syntax validation
@@ -463,14 +639,24 @@ func (bg *BackupGenerator) ValidateBackup(ctx context.Context, backupPath string
 func (bg *BackupGenerator) validateSQLBackup(backupPath string) error {
 	content, err := os.ReadFile(backupPath)
 	if err != nil {
-		return fmt.Errorf("failed to read backup file: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"failed to read backup file",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
 	}
 
 	// Basic checks
 	contentStr := string(content)
 
 	if !strings.Contains(contentStr, "PostgreSQL database dump") {
-		return fmt.Errorf("backup does not appear to be a PostgreSQL dump")
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"backup does not appear to be a PostgreSQL dump",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		)
 	}
 
 	// Check for common dump sections
@@ -478,7 +664,12 @@ func (bg *BackupGenerator) validateSQLBackup(backupPath string) error {
 	hasData := strings.Contains(contentStr, "COPY ") || strings.Contains(contentStr, "INSERT INTO")
 
 	if !hasSchema && !hasData {
-		return fmt.Errorf("backup appears to be empty (no schema or data found)")
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"backup appears to be empty (no schema or data found)",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		)
 	}
 
 	return nil
@@ -488,7 +679,12 @@ func (bg *BackupGenerator) validateSQLBackup(backupPath string) error {
 func (bg *BackupGenerator) CleanupOldBackups(maxAge time.Duration, maxCount int) error {
 	files, err := filepath.Glob(filepath.Join(bg.workDir, "*backup*.sql"))
 	if err != nil {
-		return fmt.Errorf("failed to list backup files: %w", err)
+		return errors.NewError(
+			errors.ErrorCodeBackupGenerationFailed,
+			"failed to list backup files",
+			errors.SeverityError,
+			errors.CategoryBackup,
+		).WithInnerError(err)
 	}
 
 	// Sort by modification time
@@ -508,13 +704,31 @@ func (bg *BackupGenerator) CleanupOldBackups(maxAge time.Duration, maxCount int)
 
 	// Remove files older than maxAge
 	cutoff := time.Now().Add(-maxAge)
+	var remainingFiles []fileInfo
 	for _, info := range fileInfos {
 		if info.modTime.Before(cutoff) {
 			_ = os.Remove(info.path)
+		} else {
+			remainingFiles = append(remainingFiles, info)
 		}
 	}
 
-	// TODO: Implement maxCount logic
+	// Implement maxCount logic - keep only the N most recent backups
+	if maxCount > 0 && len(remainingFiles) > maxCount {
+		// Sort by modification time (newest first)
+		for i := 0; i < len(remainingFiles)-1; i++ {
+			for j := i + 1; j < len(remainingFiles); j++ {
+				if remainingFiles[i].modTime.Before(remainingFiles[j].modTime) {
+					remainingFiles[i], remainingFiles[j] = remainingFiles[j], remainingFiles[i]
+				}
+			}
+		}
+
+		// Remove files beyond maxCount
+		for i := maxCount; i < len(remainingFiles); i++ {
+			_ = os.Remove(remainingFiles[i].path)
+		}
+	}
 
 	return nil
 }

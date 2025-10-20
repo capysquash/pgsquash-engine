@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Comprehensive Docker Setup Test Script
-# Tests all aspects of the pg-squash Docker environment
+# Tests all aspects of the pgsquash Docker environment
 
 # Colors
 GREEN='\033[0;32m'
@@ -138,8 +138,8 @@ EOF
     [[ $exit_code -eq 0 ]]
 }
 
-# Test multi-platform build capability
-test_multiplatform_support() {
+# Test multi-Platform build capability
+test_multiPlatform_support() {
     # Check if buildx is available
     docker buildx inspect >/dev/null 2>&1 || return 1
 
@@ -195,9 +195,9 @@ cleanup() {
 # Main test execution
 main() {
     cat << 'EOF'
-🐳 pg-squash Docker Setup Test Suite
+🐳 pgsquash Docker Setup Test Suite
 
-This script tests all aspects of the Docker-based pg-squash setup
+This script tests all aspects of the Docker-based pgsquash setup
 to ensure everything works correctly like Supabase's initialization.
 
 EOF
@@ -212,7 +212,7 @@ EOF
 
     # Build tests
     run_test "Docker build" "test_docker_build"
-    run_test "Multi-platform support" "test_multiplatform_support"
+    run_test "Multi-Platform support" "test_multiPlatform_support"
 
     # Runtime tests
     run_test "Docker run basic" "test_docker_run_basic"
@@ -244,11 +244,11 @@ EOF
         exit 1
     else
         echo
-        log_success "✅ All tests passed! pg-squash Docker setup is working correctly."
+        log_success "✅ All tests passed! pgsquash Docker setup is working correctly."
 
         cat << 'EOF'
 
-🎉 Your pg-squash Docker environment is ready!
+🎉 Your pgsquash Docker environment is ready!
 
 Next steps:
   1. Run the full setup: ./scripts/init-pgsquash.sh

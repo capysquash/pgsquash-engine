@@ -5,8 +5,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 )
 
 // RuleMetadata provides descriptive information about a consolidation rule

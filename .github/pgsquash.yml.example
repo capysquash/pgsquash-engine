@@ -1,4 +1,4 @@
-# pg-squash Repository Configuration
+# pgsquash Repository Configuration
 # Copy this file to .github/pgsquash.yml in your repository
 
 # Automatically analyze migrations on PR events (opened, synchronize)

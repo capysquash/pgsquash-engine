@@ -2,30 +2,113 @@ package github
 
 import (
     "context"
+    "crypto/rand"
+    "encoding/base64"
     "encoding/json"
     "fmt"
     "net/http"
     "net/url"
     "strings"
+    "sync"
+    "time"
+
+    "github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
-// OAuthHandler handles GitHub OAuth flow
+// OAuthHandler handles GitHub OAuth flow with CSRF protection
 type OAuthHandler struct {
     clientID     string
     clientSecret string
     redirectURL  string
+    states       map[string]stateEntry // CSRF state tokens
+    stateMutex   sync.RWMutex
 }
 
-// NewOAuthHandler creates a new OAuth handler
+// stateEntry tracks CSRF state tokens with expiration
+type stateEntry struct {
+    createdAt time.Time
+    expiresAt time.Time
+}
+
+// NewOAuthHandler creates a new OAuth handler with CSRF protection
 func NewOAuthHandler(clientID, clientSecret, redirectURL string) *OAuthHandler {
-    return &OAuthHandler{
+    handler := &OAuthHandler{
         clientID:     clientID,
         clientSecret: clientSecret,
         redirectURL:  redirectURL,
+        states:       make(map[string]stateEntry),
+    }
+
+    // Start background cleanup of expired states
+    go handler.cleanupExpiredStates()
+
+    return handler
+}
+
+// GenerateState generates a cryptographically secure CSRF state token
+func (h *OAuthHandler) GenerateState() (string, error) {
+    b := make([]byte, 32)
+    if _, err := rand.Read(b); err != nil {
+        return "", errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "failed to generate random state token",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithInnerError(err).WithSuggestion("Ensure system entropy source is available")
+    }
+
+    state := base64.URLEncoding.EncodeToString(b)
+
+    // Store state with 10-minute expiration
+    h.stateMutex.Lock()
+    h.states[state] = stateEntry{
+        createdAt: time.Now(),
+        expiresAt: time.Now().Add(10 * time.Minute),
+    }
+    h.stateMutex.Unlock()
+
+    return state, nil
+}
+
+// ValidateState validates and consumes a CSRF state token
+func (h *OAuthHandler) ValidateState(state string) bool {
+    h.stateMutex.Lock()
+    defer h.stateMutex.Unlock()
+
+    entry, exists := h.states[state]
+    if !exists {
+        return false
+    }
+
+    // Check if expired
+    if time.Now().After(entry.expiresAt) {
+        delete(h.states, state)
+        return false
+    }
+
+    // Consume the state token (one-time use)
+    delete(h.states, state)
+    return true
+}
+
+// cleanupExpiredStates removes expired state tokens every minute
+func (h *OAuthHandler) cleanupExpiredStates() {
+    ticker := time.NewTicker(1 * time.Minute)
+    defer ticker.Stop()
+
+    for range ticker.C {
+        h.stateMutex.Lock()
+        now := time.Now()
+        for state, entry := range h.states {
+            if now.After(entry.expiresAt) {
+                delete(h.states, state)
+            }
+        }
+        h.stateMutex.Unlock()
     }
 }
 
-// GetAuthorizationURL returns the GitHub OAuth authorization URL
+// GetAuthorizationURL returns the GitHub OAuth authorization URL with CSRF protection
 func (h *OAuthHandler) GetAuthorizationURL(state string) string {
     params := url.Values{
         "client_id":    {h.clientID},
@@ -73,13 +156,18 @@ func (h *OAuthHandler) ExchangeCodeForToken(ctx context.Context, code string) (s
     }
 
     if result.AccessToken == "" {
-        return "", fmt.Errorf("no access token received")
+        return "", errors.NewError(
+            errors.ErrorCodeValidationFailed,
+            "no access token received from GitHub",
+            errors.SeverityError,
+            errors.CategoryValidation,
+        ).WithSuggestion("Check OAuth app configuration and authorization")
     }
 
     return result.AccessToken, nil
 }
 
-// HandleCallback handles the OAuth callback
+// HandleCallback handles the OAuth callback with CSRF validation
 func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
     code := r.URL.Query().Get("code")
     state := r.URL.Query().Get("state")
@@ -89,10 +177,14 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Verify state parameter for CSRF protection
-    // In production, validate against stored state
     if state == "" {
-        http.Error(w, "Invalid state", http.StatusBadRequest)
+        http.Error(w, "No state provided", http.StatusBadRequest)
+        return
+    }
+
+    // Validate CSRF state token
+    if !h.ValidateState(state) {
+        http.Error(w, "Invalid or expired CSRF state token", http.StatusUnauthorized)
         return
     }
 
@@ -102,12 +194,16 @@ func (h *OAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Store token (implement your storage logic)
-    // For now, just return success
+    // Store token securely
+    if err := StoreToken("github", token); err != nil {
+        http.Error(w, fmt.Sprintf("Failed to store token: %v", err), http.StatusInternalServerError)
+        return
+    }
+
     w.Header().Set("Content-Type", "application/json")
     if err := json.NewEncoder(w).Encode(map[string]string{
         "status": "success",
-        "token":  token,
+        "message": "GitHub OAuth token stored successfully",
     }); err != nil {
         http.Error(w, fmt.Sprintf("Failed to encode response: %v", err), http.StatusInternalServerError)
     }
@@ -145,5 +241,10 @@ func (h *AppAuthHandler) GetInstallationToken(ctx context.Context) (string, erro
     // 3. Use JWT to request installation access token
     // 4. Return installation access token
 
-    return "", fmt.Errorf("GitHub App authentication not fully implemented - use OAuth token")
+    return "", errors.NewError(
+        errors.ErrorCodeValidationFailed,
+        "GitHub App authentication not fully implemented",
+        errors.SeverityError,
+        errors.CategoryValidation,
+    ).WithSuggestion("Use OAuth token authentication instead")
 }

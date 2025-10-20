@@ -1,10 +1,8 @@
 package clerk
 
 import (
-	"strings"
-
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // GetConsolidationRules returns Clerk-specific consolidation rules
@@ -14,7 +12,7 @@ func (cp *ClerkPlugin) GetConsolidationRules() []plugins.ConsolidationRule {
             Name:        "clerk_jwt_v2_policies",
             Priority:    100,
             ObjectType:  types.TypePolicy,
-            AuthPattern: types.AuthPatternClerkJWTV2,
+            AuthPattern: types.AuthPatternType(AuthPatternClerkJWTV2),
             Conflicts:   []string{"general_policy_consolidation"},
             CanMerge:    cp.canMergeJWTV2Policies,
             Merge:       cp.mergeJWTV2Policies,
@@ -23,7 +21,7 @@ func (cp *ClerkPlugin) GetConsolidationRules() []plugins.ConsolidationRule {
             Name:        "clerk_auth_functions",
             Priority:    95,
             ObjectType:  types.TypeFunction,
-            AuthPattern: types.AuthPatternClerk,
+            AuthPattern: types.AuthPatternType(AuthPatternClerk),
             Conflicts:   []string{"function_deduplication"},
             CanMerge:    cp.canMergeAuthFunctions,
             Merge:       cp.mergeAuthFunctions,
@@ -34,94 +32,24 @@ func (cp *ClerkPlugin) GetConsolidationRules() []plugins.ConsolidationRule {
 // canMergeJWTV2Policies checks if Clerk JWT v2 RLS policies can be merged
 // Conservative approach: Only merge if policies are identical
 func (cp *ClerkPlugin) canMergeJWTV2Policies(statements []*types.Statement) bool {
+    consolidator := plugins.NewPolicyConsolidator("clerk")
+
+    // Check basic requirements
     if len(statements) < 2 {
         return false
     }
 
-    // All statements must be policies with same target table
-    firstPolicy := statements[0]
-    for _, stmt := range statements[1:] {
-        if stmt.ObjectType != types.TypePolicy {
-            return false
-        }
-        if stmt.ObjectName != firstPolicy.ObjectName {
-            return false
-        }
+    // All statements must be policies with same object name
+    if !consolidator.AllSameObjectType(statements, types.TypePolicy) {
+        return false
+    }
+
+    if !consolidator.AllSameObjectName(statements) {
+        return false
     }
 
     // Check if policy definitions are semantically identical
-    // (Different CREATE vs ALTER, but same USING/WITH CHECK clauses)
-    return cp.haveSamePolicyLogic(statements)
-}
-
-// haveSamePolicyLogic checks if policies have the same security logic
-func (cp *ClerkPlugin) haveSamePolicyLogic(statements []*types.Statement) bool {
-    // Extract USING and WITH CHECK clauses
-    var usingClauses []string
-    var withCheckClauses []string
-
-    for _, stmt := range statements {
-        sqlUpper := strings.ToUpper(stmt.SQL)
-
-        // Extract USING clause
-        if strings.Contains(sqlUpper, "USING (") {
-            usingStart := strings.Index(sqlUpper, "USING (")
-            usingClause := cp.extractBalancedParens(stmt.SQL[usingStart:])
-            usingClauses = append(usingClauses, usingClause)
-        }
-
-        // Extract WITH CHECK clause
-        if strings.Contains(sqlUpper, "WITH CHECK (") {
-            checkStart := strings.Index(sqlUpper, "WITH CHECK (")
-            checkClause := cp.extractBalancedParens(stmt.SQL[checkStart:])
-            withCheckClauses = append(withCheckClauses, checkClause)
-        }
-    }
-
-    // All USING clauses must be identical
-    if len(usingClauses) > 0 {
-        first := strings.TrimSpace(usingClauses[0])
-        for _, clause := range usingClauses[1:] {
-            if strings.TrimSpace(clause) != first {
-                return false
-            }
-        }
-    }
-
-    // All WITH CHECK clauses must be identical
-    if len(withCheckClauses) > 0 {
-        first := strings.TrimSpace(withCheckClauses[0])
-        for _, clause := range withCheckClauses[1:] {
-            if strings.TrimSpace(clause) != first {
-                return false
-            }
-        }
-    }
-
-    return true
-}
-
-// extractBalancedParens extracts text within balanced parentheses
-func (cp *ClerkPlugin) extractBalancedParens(text string) string {
-    depth := 0
-    start := strings.Index(text, "(")
-    if start == -1 {
-        return ""
-    }
-
-    for i := start; i < len(text); i++ {
-        switch text[i] {
-        case '(':
-            depth++
-        case ')':
-            depth--
-            if depth == 0 {
-                return text[start : i+1]
-            }
-        }
-    }
-
-    return text[start:]
+    return consolidator.HaveSamePolicyLogic(statements)
 }
 
 // mergeJWTV2Policies merges identical Clerk JWT v2 policies

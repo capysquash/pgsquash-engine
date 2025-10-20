@@ -3,93 +3,24 @@ package parser
 import (
 	"context"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
-// Type aliases for backward compatibility
-// All types now live in internal/types to avoid import cycles
-type Migration = types.Migration
-type Statement = types.Statement
-type ObjectType = types.ObjectType
-type Operation = types.Operation
-type Category = types.Category
-type CrossSchemaRef = types.CrossSchemaRef
-type AuthPatternType = types.AuthPatternType
-
-// Re-export constants from types package for backward compatibility
-const (
-	TypeTable           = types.TypeTable
-	TypeIndex           = types.TypeIndex
-	TypeFunction        = types.TypeFunction
-	TypeTrigger         = types.TypeTrigger
-	TypeView            = types.TypeView
-	TypeSequence        = types.TypeSequence
-	TypeConstraint      = types.TypeConstraint
-	TypePolicy          = types.TypePolicy
-	TypeRole            = types.TypeRole
-	TypeSchema          = types.TypeSchema
-	TypeExtension       = types.TypeExtension
-	TypePublication     = types.TypePublication
-	TypeComment         = types.TypeComment
-	TypeDoBlock         = types.TypeDoBlock
-	TypeType            = types.TypeType
-	TypeDomain          = types.TypeDomain
-	TypeEnum            = types.TypeEnum
-	TypeComposite       = types.TypeComposite
-	TypeSubscription    = types.TypeSubscription
-	TypeStatistic       = types.TypeStatistic
-	TypeGeneratedColumn = types.TypeGeneratedColumn
-	TypeMultirangeType  = types.TypeMultirangeType
-	TypeVectorIndex     = types.TypeVectorIndex
-	TypeEventTrigger    = types.TypeEventTrigger
-	TypeUnknown         = types.TypeUnknown
-
-	AuthPatternNone       = types.AuthPatternNone
-	AuthPatternSupabase   = types.AuthPatternSupabase
-	AuthPatternClerk      = types.AuthPatternClerk
-	AuthPatternClerkJWTV2 = types.AuthPatternClerkJWTV2
-	AuthPatternAuth0      = types.AuthPatternAuth0
-	AuthPatternNextAuth   = types.AuthPatternNextAuth
-	AuthPatternFirebase   = types.AuthPatternFirebase
-	AuthPatternRLS        = types.AuthPatternRLS
-	AuthPatternStorage    = types.AuthPatternStorage
-	AuthPatternCustomJWT  = types.AuthPatternCustomJWT
-
-	OpCreate  = types.OpCreate
-	OpAlter   = types.OpAlter
-	OpDrop    = types.OpDrop
-	OpInsert  = types.OpInsert
-	OpUpdate  = types.OpUpdate
-	OpDelete  = types.OpDelete
-	OpGrant   = types.OpGrant
-	OpRevoke  = types.OpRevoke
-	OpComment = types.OpComment
-
-	CategoryFoundation  = types.CategoryFoundation
-	CategoryConstraints = types.CategoryConstraints
-	CategoryIndexes     = types.CategoryIndexes
-	CategoryFunctions   = types.CategoryFunctions
-	CategoryTriggers    = types.CategoryTriggers
-	CategorySecurity    = types.CategorySecurity
-	CategoryData        = types.CategoryData
-	CategoryExtensions  = types.CategoryExtensions
-	CategoryCritical    = types.CategoryCritical
-)
-
 // ParseMigration parses a migration file with enhanced PostgreSQL-specific processing
-func ParseMigration(content string, filename string) (*Migration, error) {
+func ParseMigration(content string, filename string) (*types.Migration, error) {
 	ctx := context.Background()
 	return ParseMigrationWithContext(ctx, content, filename)
 }
 
 // ParseMigrationWithContext parses a migration file with context and enhanced error handling
-func ParseMigrationWithContext(ctx context.Context, content string, filename string) (*Migration, error) {
+func ParseMigrationWithContext(ctx context.Context, content string, filename string) (*types.Migration, error) {
 	// Initialize error handler
 	errorHandler := NewErrorHandler(ctx)
 	defer errorHandler.Recovery(filename, 0)
@@ -109,16 +40,27 @@ func ParseMigrationWithContext(ctx context.Context, content string, filename str
 		parseCtx := errorHandler.CreateContext(filename, 0, nil)
 		_ = errorHandler.HandleParseError(err, parseCtx) // Log the error for tracking
 		if !errorHandler.ShouldContinue() {
-			return nil, fmt.Errorf("failed to split statements: %w", err)
+			return nil, errors.Wrap(err, errors.ErrorCodeSyntaxError, errors.CategoryParsing, "failed to split statements", nil)
 		}
 		// If we should continue, create empty stmts slice
 		stmts = []string{}
 	}
 
-	migration := &Migration{
-		Filename:   filename,
-		Statements: make([]Statement, 0),
-		Size:       int64(len(content)),
+	// If splitting returned no statements but we have content, try parsing to detect syntax errors
+	if len(stmts) == 0 && strings.TrimSpace(cleanContent) != "" {
+		_, parseErr := pg_query.Parse(cleanContent)
+		if parseErr != nil {
+			parseCtx := errorHandler.CreateContext(filename, 0, nil)
+			parseCtx.StatementText = cleanContent
+			_ = errorHandler.HandleParseError(parseErr, parseCtx)
+		}
+	}
+
+	migration := &types.Migration{
+		Filename:    filename,
+		Statements:  make([]types.Statement, 0),
+		Size:        int64(len(content)),
+		ParseErrors: make([]string, 0),
 	}
 
 	for i, stmtStr := range stmts {
@@ -142,20 +84,35 @@ func ParseMigrationWithContext(ctx context.Context, content string, filename str
 		migration.Statements = append(migration.Statements, *stmt)
 	}
 
-	// Log summary of any errors or warnings
-	errorHandler.LogSummary()
-
-	// Return migration even if there were warnings
-	if errorHandler.GetCollector().HasErrors() && !errorHandler.ShouldContinue() {
-		return migration, fmt.Errorf("parsing failed with errors")
+	// Collect parse errors from error handler (but don't log summary yet - caller will aggregate)
+	for _, parseErr := range errorHandler.GetCollector().GetErrors() {
+		migration.ParseErrors = append(migration.ParseErrors, parseErr.Error())
 	}
 
-	// migration is never nil here since it was initialized at line 120
+	// Return migration with errors attached even when parsing fails
+	// This allows partial parsing with error warnings instead of complete failure
+	if errorHandler.GetCollector().HasErrors() {
+		utils.GetDefaultLogger().WithPrefix("PARSER").Info("Warning: Parsed %d statements with %d errors in %s",
+			len(migration.Statements), len(migration.ParseErrors), filename)
+
+		// CRITICAL: If we have parse errors but NO statements were successfully parsed,
+		// and we have content, this indicates complete parsing failure (e.g., missing semicolons)
+		if len(migration.Statements) == 0 && len(migration.ParseErrors) > 0 {
+			// Return error to indicate catastrophic failure
+			return migration, errors.New(errors.ErrorCodeSyntaxError, errors.CategoryParsing, fmt.Sprintf("fatal: all statements failed to parse in %s: %d parse errors, 0 statements recovered", filename, len(migration.ParseErrors)), nil)
+		}
+
+		// Return migration with statements that did parse successfully
+		// Callers can check migration.ParseErrors to see what failed
+		return migration, nil
+	}
+
+	// migration is never nil here since it was initialized above
 	return migration, nil
 }
 
 // parseStatementWithNormalizationAndContext parses a statement with context and error handling
-func parseStatementWithNormalizationAndContext(sql string, line int, normalizer *ContextualNormalizer, errorHandler *ErrorHandler, filename string) (*Statement, error) {
+func parseStatementWithNormalizationAndContext(sql string, line int, normalizer *ContextualNormalizer, errorHandler *ErrorHandler, filename string) (*types.Statement, error) {
 	defer errorHandler.Recovery(filename, line)
 
 	parsed, err := pg_query.Parse(sql)
@@ -169,15 +126,21 @@ func parseStatementWithNormalizationAndContext(sql string, line int, normalizer 
 	if len(parsed.Stmts) == 0 {
 		parseCtx := errorHandler.CreateContext(filename, line, nil)
 		parseCtx.StatementText = sql
-		err := fmt.Errorf("no statements found")
+		err := errors.New(errors.ErrorCodeSyntaxError, errors.CategoryParsing, "no statements found", nil)
 		_ = errorHandler.HandleValidationError(err.Error(), parseCtx) // Log the validation error
 		return nil, err
 	}
 
-	stmt := &Statement{
+	// Use actual statement location from pg_query instead of loop index
+	statementLine := line // Default to passed line (loop index) as fallback
+	if len(parsed.Stmts) > 0 && parsed.Stmts[0].StmtLocation > 0 {
+		statementLine = int(parsed.Stmts[0].StmtLocation)
+	}
+
+	stmt := &types.Statement{
 		SQL:       strings.TrimSpace(sql),
 		ParseTree: parsed,
-		Line:      line,
+		Line:      statementLine,
 	}
 
 	// Analyze first statement with normalization
@@ -215,24 +178,24 @@ func parseStatementWithNormalizationAndContext(sql string, line int, normalizer 
 }
 
 // analyzeStatementWithNormalization analyzes statements with PostgreSQL-specific normalization
-func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, normalizer *ContextualNormalizer) {
+func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *types.Statement, normalizer *ContextualNormalizer) {
 	switch node := raw.Stmt.Node.(type) {
 	case *pg_query.Node_CreateStmt:
-		stmt.ObjectType = TypeTable
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeTable
+		stmt.Operation = types.OpCreate
 		stmt.ObjectName = getTableNameWithNormalization(node.CreateStmt.Relation, normalizer)
 		stmt.Dependencies = extractTableDependenciesWithNormalization(node.CreateStmt, normalizer)
 
 	case *pg_query.Node_AlterTableStmt:
-		stmt.ObjectType = TypeTable
-		stmt.Operation = OpAlter
+		stmt.ObjectType = types.TypeTable
+		stmt.Operation = types.OpAlter
 		stmt.ObjectName = getTableNameWithNormalization(node.AlterTableStmt.Relation, normalizer)
 
 		// Extract constraint information from ALTER TABLE commands
 		stmt.Dependencies = extractAlterTableConstraints(node.AlterTableStmt, normalizer)
 
 	case *pg_query.Node_DropStmt:
-		stmt.Operation = OpDrop
+		stmt.Operation = types.OpDrop
 		if len(node.DropStmt.Objects) > 0 {
 			stmt.ObjectType = mapObjectType(node.DropStmt.RemoveType)
 			if list := node.DropStmt.Objects[0]; list != nil {
@@ -241,38 +204,57 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, n
 		}
 
 	case *pg_query.Node_IndexStmt:
-		stmt.ObjectType = TypeIndex
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeIndex
+		stmt.Operation = types.OpCreate
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.IndexStmt.Idxname)
 		if node.IndexStmt.Relation != nil {
 			stmt.Dependencies = []string{getTableNameWithNormalization(node.IndexStmt.Relation, normalizer)}
 		}
 
 	case *pg_query.Node_CreateFunctionStmt:
-		stmt.ObjectType = TypeFunction
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeFunction
+		stmt.Operation = types.OpCreate
 		if node.CreateFunctionStmt.Funcname != nil {
 			stmt.ObjectName = extractFunctionNameWithNormalization(node.CreateFunctionStmt.Funcname, normalizer)
 		}
 
 	case *pg_query.Node_CreateTrigStmt:
-		stmt.ObjectType = TypeTrigger
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeTrigger
+		stmt.Operation = types.OpCreate
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreateTrigStmt.Trigname)
 		if node.CreateTrigStmt.Relation != nil {
 			stmt.Dependencies = []string{getTableNameWithNormalization(node.CreateTrigStmt.Relation, normalizer)}
 		}
 
 	case *pg_query.Node_ViewStmt:
-		stmt.ObjectType = TypeView
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeView
+		stmt.Operation = types.OpCreate
 		if node.ViewStmt.View != nil {
 			stmt.ObjectName = getTableNameWithNormalization(node.ViewStmt.View, normalizer)
 		}
+		// CRITICAL FIX: Extract table dependencies from the view's SELECT query
+		// This ensures views are placed AFTER the tables they reference
+		if node.ViewStmt.Query != nil {
+			stmt.Dependencies = extractQueryDependencies(node.ViewStmt.Query, normalizer)
+		}
+
+	case *pg_query.Node_CreateTableAsStmt:
+		// Handle CREATE MATERIALIZED VIEW (and CREATE TABLE AS)
+		// MATERIALIZED VIEW is parsed as CreateTableAsStmt with Objtype = OBJECT_MATVIEW
+		stmt.ObjectType = types.TypeView // Treat materialized views as views
+		stmt.Operation = types.OpCreate
+		if node.CreateTableAsStmt.Into != nil && node.CreateTableAsStmt.Into.Rel != nil {
+			stmt.ObjectName = getTableNameWithNormalization(node.CreateTableAsStmt.Into.Rel, normalizer)
+		}
+		// Extract table dependencies from the SELECT query
+		if node.CreateTableAsStmt.Query != nil {
+			stmt.Dependencies = extractQueryDependencies(node.CreateTableAsStmt.Query, normalizer)
+		}
+		// Note: Regular CREATE TABLE AS SELECT would also come here, but is uncommon in migrations
 
 	case *pg_query.Node_CreatePolicyStmt:
-		stmt.ObjectType = TypePolicy
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypePolicy
+		stmt.Operation = types.OpCreate
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreatePolicyStmt.PolicyName)
 		if node.CreatePolicyStmt.Table != nil {
 			stmt.Dependencies = []string{getTableNameWithNormalization(node.CreatePolicyStmt.Table, normalizer)}
@@ -283,7 +265,7 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, n
 		}
 
 	case *pg_query.Node_InsertStmt:
-		stmt.Operation = OpInsert
+		stmt.Operation = types.OpInsert
 		stmt.IsDataOp = true
 		stmt.ObjectName = getTableNameWithNormalization(node.InsertStmt.Relation, normalizer)
 		// Check for ON CONFLICT clause
@@ -292,17 +274,17 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, n
 		}
 
 	case *pg_query.Node_UpdateStmt:
-		stmt.Operation = OpUpdate
+		stmt.Operation = types.OpUpdate
 		stmt.IsDataOp = true
 		stmt.ObjectName = getTableNameWithNormalization(node.UpdateStmt.Relation, normalizer)
 
 	case *pg_query.Node_DeleteStmt:
-		stmt.Operation = OpDelete
+		stmt.Operation = types.OpDelete
 		stmt.IsDataOp = true
 		stmt.ObjectName = getTableNameWithNormalization(node.DeleteStmt.Relation, normalizer)
 
 	case *pg_query.Node_GrantStmt:
-		stmt.Operation = OpGrant
+		stmt.Operation = types.OpGrant
 		stmt.ObjectType = mapGrantObjectType(node.GrantStmt.Objtype)
 		if len(node.GrantStmt.Objects) > 0 {
 			stmt.ObjectName = extractObjectNameWithNormalization(node.GrantStmt.Objects[0], normalizer)
@@ -312,33 +294,38 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, n
 
 	case *pg_query.Node_GrantRoleStmt:
 		if node.GrantRoleStmt.IsGrant {
-			stmt.Operation = OpGrant
+			stmt.Operation = types.OpGrant
 		} else {
-			stmt.Operation = OpRevoke
+			stmt.Operation = types.OpRevoke
 		}
-		stmt.ObjectType = TypeRole
+		stmt.ObjectType = types.TypeRole
 		if len(node.GrantRoleStmt.GrantedRoles) > 0 {
 			stmt.ObjectName = extractRoleNameWithNormalization(node.GrantRoleStmt.GrantedRoles[0], normalizer)
 		}
 		stmt.Grantees = extractGranteeRolesWithNormalization(node.GrantRoleStmt.GranteeRoles, normalizer)
 
 	case *pg_query.Node_CreateExtensionStmt:
-		stmt.ObjectType = TypeExtension
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeExtension
+		stmt.Operation = types.OpCreate
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreateExtensionStmt.Extname)
 
 	case *pg_query.Node_CommentStmt:
-		stmt.ObjectType = TypeUnknown // Will be determined by objtype
-		stmt.Operation = OpComment
+		stmt.ObjectType = types.TypeUnknown // Will be determined by objtype
+		stmt.Operation = types.OpComment
 		// Extract object name and type from comment statement
 		if node.CommentStmt.Object != nil {
 			stmt.ObjectName = extractCommentObjectNameWithNormalization(node.CommentStmt, normalizer)
 			stmt.ObjectType = mapCommentObjectType(node.CommentStmt.Objtype)
 		}
 
+	case *pg_query.Node_CreatePublicationStmt:
+		stmt.ObjectType = types.TypePublication
+		stmt.Operation = types.OpCreate
+		stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreatePublicationStmt.Pubname)
+
 	case *pg_query.Node_AlterPublicationStmt:
-		stmt.ObjectType = TypePublication
-		stmt.Operation = OpAlter
+		stmt.ObjectType = types.TypePublication
+		stmt.Operation = types.OpAlter
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.AlterPublicationStmt.Pubname)
 
 	case *pg_query.Node_DoStmt:
@@ -346,75 +333,99 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *Statement, n
 		if nestedTypes := extractNestedTypesFromDoBlock(stmt.SQL); len(nestedTypes) > 0 {
 			// Treat DO blocks with CREATE TYPE as TYPE statements
 			if len(nestedTypes) == 1 {
-				stmt.ObjectType = TypeEnum
-				stmt.Operation = OpCreate
+				stmt.ObjectType = types.TypeEnum
+				stmt.Operation = types.OpCreate
 				stmt.ObjectName = normalizer.NormalizeIdentifier(nestedTypes[0])
 			} else {
 				// Multiple types - treat as generic TYPE block
-				stmt.ObjectType = TypeType
-				stmt.Operation = OpCreate
+				stmt.ObjectType = types.TypeType
+				stmt.Operation = types.OpCreate
 				stmt.ObjectName = "multiple_types_block"
 				stmt.Dependencies = nestedTypes
 			}
 		} else {
 			// Regular DO block without types
-			stmt.ObjectType = TypeDoBlock
-			stmt.Operation = Operation("DO_BLOCK")
+			stmt.ObjectType = types.TypeDoBlock
+			stmt.Operation = types.Operation("DO_BLOCK")
 			stmt.ObjectName = "anonymous_block"
 		}
 
 	case *pg_query.Node_CreateEnumStmt:
-		stmt.ObjectType = TypeEnum
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeEnum
+		stmt.Operation = types.OpCreate
 		if len(node.CreateEnumStmt.TypeName) > 0 {
 			stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreateEnumStmt.TypeName[len(node.CreateEnumStmt.TypeName)-1].GetString_().Sval)
 		}
 
+	case *pg_query.Node_AlterEnumStmt:
+		// Handle ALTER TYPE ... ADD VALUE statements
+		stmt.ObjectType = types.TypeEnum
+		stmt.Operation = types.OpAlter
+		if len(node.AlterEnumStmt.TypeName) > 0 {
+			stmt.ObjectName = normalizer.NormalizeIdentifier(node.AlterEnumStmt.TypeName[len(node.AlterEnumStmt.TypeName)-1].GetString_().Sval)
+		}
+		// Store the new value being added for consolidation
+		if node.AlterEnumStmt.NewVal != "" {
+			stmt.AlterTypeNewValue = node.AlterEnumStmt.NewVal
+		}
+
 	case *pg_query.Node_CompositeTypeStmt:
-		stmt.ObjectType = TypeComposite
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeComposite
+		stmt.Operation = types.OpCreate
 		if node.CompositeTypeStmt.Typevar != nil {
 			stmt.ObjectName = normalizer.NormalizeIdentifier(node.CompositeTypeStmt.Typevar.Relname)
 		}
 
 	case *pg_query.Node_CreateDomainStmt:
-		stmt.ObjectType = TypeDomain
-		stmt.Operation = OpCreate
+		stmt.ObjectType = types.TypeDomain
+		stmt.Operation = types.OpCreate
 		if len(node.CreateDomainStmt.Domainname) > 0 {
 			stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreateDomainStmt.Domainname[len(node.CreateDomainStmt.Domainname)-1].GetString_().Sval)
 		}
 
+	case *pg_query.Node_SelectStmt:
+		// Handle SELECT statements to track function calls and data reads
+		// Mark as data operation so they're tracked even without an object name
+		stmt.ObjectType = types.TypeUnknown
+		stmt.Operation = types.Operation("SELECT")
+		stmt.IsDataOp = true
+		stmt.ObjectName = "select_statement" // Generic name for tracking purposes
+
 	default:
-		stmt.ObjectType = TypeUnknown
-		stmt.Operation = Operation("UNKNOWN")
+		stmt.ObjectType = types.TypeUnknown
+		stmt.Operation = types.Operation("UNKNOWN")
 	}
 }
 
-func categorizeStatement(stmt Statement) Category {
+func categorizeStatement(stmt types.Statement) types.Category {
 	if stmt.IsDataOp {
-		return CategoryData
+		return types.CategoryData
 	}
 
 	switch stmt.ObjectType {
-	case TypeTable, TypeSequence, TypeType, TypeEnum, TypeComposite, TypeDomain:
-		return CategoryFoundation
-	case TypeConstraint:
-		return CategoryConstraints
-	case TypeIndex:
-		return CategoryIndexes
-	case TypeFunction, TypeDoBlock:
-		return CategoryFunctions
-	case TypeTrigger:
-		return CategoryTriggers
-	case TypePolicy, TypeRole, TypePublication:
-		return CategorySecurity
-	case TypeExtension:
-		return CategoryExtensions
-	case TypeComment:
+	case types.TypeTable, types.TypeSequence, types.TypeType, types.TypeEnum, types.TypeComposite, types.TypeDomain:
+		return types.CategoryFoundation
+	case types.TypeView:
+		// Views (including materialized views) are foundational objects
+		// They must be created before indexes and triggers can reference them
+		return types.CategoryFoundation
+	case types.TypeConstraint:
+		return types.CategoryConstraints
+	case types.TypeIndex:
+		return types.CategoryIndexes
+	case types.TypeFunction, types.TypeDoBlock:
+		return types.CategoryFunctions
+	case types.TypeTrigger:
+		return types.CategoryTriggers
+	case types.TypePolicy, types.TypeRole, types.TypePublication:
+		return types.CategorySecurity
+	case types.TypeExtension:
+		return types.CategoryExtensions
+	case types.TypeComment:
 		// Comments follow the object they're commenting on
-		return CategoryFoundation // Default, could be enhanced
+		return types.CategoryFoundation // Default, could be enhanced
 	default:
-		return CategoryFoundation
+		return types.CategoryFoundation
 	}
 }
 
@@ -453,6 +464,15 @@ func extractTableDependenciesWithNormalization(createStmt *pg_query.CreateStmt, 
 
 		// Check column-level constraints (inline REFERENCES clauses)
 		if columnDef := tableElt.GetColumnDef(); columnDef != nil {
+			// Extract type dependencies from column type
+			if columnDef.TypeName != nil {
+				typeName := extractTypeNameFromTypeName(columnDef.TypeName, normalizer)
+				if typeName != "" && !isBuiltInType(typeName) {
+					// This is a custom type (ENUM, COMPOSITE, DOMAIN, etc.)
+					deps = append(deps, typeName)
+				}
+			}
+
 			for _, colConstraint := range columnDef.Constraints {
 				if constraint := colConstraint.GetConstraint(); constraint != nil {
 					if constraint.Contype == pg_query.ConstrType_CONSTR_FOREIGN {
@@ -465,6 +485,121 @@ func extractTableDependenciesWithNormalization(createStmt *pg_query.CreateStmt, 
 					}
 				}
 			}
+		}
+	}
+
+	return deps
+}
+
+// extractTypeNameFromTypeName extracts the type name from a TypeName node
+func extractTypeNameFromTypeName(typeName *pg_query.TypeName, normalizer *ContextualNormalizer) string {
+	if len(typeName.Names) == 0 {
+		return ""
+	}
+	// Get the last component of the type name (the actual type)
+	typeNode := typeName.Names[len(typeName.Names)-1]
+	if strNode := typeNode.GetString_(); strNode != nil {
+		return normalizer.NormalizeIdentifier(strNode.Sval)
+	}
+	return ""
+}
+
+// isBuiltInType checks if a type name is a built-in PostgreSQL type
+func isBuiltInType(typeName string) bool {
+	builtInTypes := map[string]bool{
+		// Numeric types
+		"smallint": true, "integer": true, "bigint": true, "int2": true, "int4": true, "int8": true,
+		"decimal": true, "numeric": true, "real": true, "double precision": true,
+		"smallserial": true, "serial": true, "bigserial": true,
+		"float4": true, "float8": true,
+		// Monetary types
+		"money": true,
+		// Character types
+		"character varying": true, "varchar": true, "character": true, "char": true, "text": true,
+		// Binary types
+		"bytea": true,
+		// Date/Time types
+		"timestamp": true, "timestamp without time zone": true, "timestamp with time zone": true,
+		"timestamptz": true, "date": true, "time": true, "time without time zone": true,
+		"time with time zone": true, "timetz": true, "interval": true,
+		// Boolean type
+		"boolean": true, "bool": true,
+		// Geometric types
+		"point": true, "line": true, "lseg": true, "box": true, "path": true, "polygon": true, "circle": true,
+		// Network types
+		"cidr": true, "inet": true, "macaddr": true, "macaddr8": true,
+		// Bit string types
+		"bit": true, "bit varying": true, "varbit": true,
+		// Text search types
+		"tsvector": true, "tsquery": true,
+		// UUID type
+		"uuid": true,
+		// XML type
+		"xml": true,
+		// JSON types
+		"json": true, "jsonb": true,
+		// Arrays
+		"int[]": true, "text[]": true, "varchar[]": true,
+		// Range types
+		"int4range": true, "int8range": true, "numrange": true,
+		"tsrange": true, "tstzrange": true, "daterange": true,
+		// Special types
+		"void": true, "record": true, "trigger": true,
+	}
+	return builtInTypes[strings.ToLower(typeName)]
+}
+
+// extractQueryDependencies extracts table dependencies from a SELECT query (for views)
+func extractQueryDependencies(queryNode *pg_query.Node, normalizer *ContextualNormalizer) []string {
+	var deps []string
+
+	// Handle SelectStmt (most common case for views)
+	if selectStmt := queryNode.GetSelectStmt(); selectStmt != nil {
+		// Extract FROM clause tables
+		for _, fromClause := range selectStmt.FromClause {
+			if rangeVar := fromClause.GetRangeVar(); rangeVar != nil {
+				tableName := getTableNameWithNormalization(rangeVar, normalizer)
+				if tableName != "" {
+					deps = append(deps, tableName)
+				}
+			}
+			// Handle JOINs (JoinExpr)
+			if joinExpr := fromClause.GetJoinExpr(); joinExpr != nil {
+				deps = append(deps, extractJoinDependencies(joinExpr, normalizer)...)
+			}
+		}
+	}
+
+	return deps
+}
+
+// extractJoinDependencies recursively extracts table names from JOIN expressions
+func extractJoinDependencies(joinExpr *pg_query.JoinExpr, normalizer *ContextualNormalizer) []string {
+	var deps []string
+
+	// Left side of JOIN
+	if joinExpr.Larg != nil {
+		if rangeVar := joinExpr.Larg.GetRangeVar(); rangeVar != nil {
+			tableName := getTableNameWithNormalization(rangeVar, normalizer)
+			if tableName != "" {
+				deps = append(deps, tableName)
+			}
+		}
+		if nestedJoin := joinExpr.Larg.GetJoinExpr(); nestedJoin != nil {
+			deps = append(deps, extractJoinDependencies(nestedJoin, normalizer)...)
+		}
+	}
+
+	// Right side of JOIN
+	if joinExpr.Rarg != nil {
+		if rangeVar := joinExpr.Rarg.GetRangeVar(); rangeVar != nil {
+			tableName := getTableNameWithNormalization(rangeVar, normalizer)
+			if tableName != "" {
+				deps = append(deps, tableName)
+			}
+		}
+		if nestedJoin := joinExpr.Rarg.GetJoinExpr(); nestedJoin != nil {
+			deps = append(deps, extractJoinDependencies(nestedJoin, normalizer)...)
 		}
 	}
 
@@ -580,37 +715,37 @@ func extractGranteeRolesWithNormalization(granteeRoles []*pg_query.Node, normali
 	return names
 }
 
-func mapGrantObjectType(objType pg_query.ObjectType) ObjectType {
+func mapGrantObjectType(objType pg_query.ObjectType) types.ObjectType {
 	switch objType {
 	case pg_query.ObjectType_OBJECT_TABLE:
-		return TypeTable
+		return types.TypeTable
 	case pg_query.ObjectType_OBJECT_SEQUENCE:
-		return TypeSequence
+		return types.TypeSequence
 	case pg_query.ObjectType_OBJECT_SCHEMA:
-		return TypeSchema
+		return types.TypeSchema
 	case pg_query.ObjectType_OBJECT_FUNCTION:
-		return TypeFunction
+		return types.TypeFunction
 	default:
-		return TypeUnknown
+		return types.TypeUnknown
 	}
 }
 
-func mapObjectType(removeType pg_query.ObjectType) ObjectType {
+func mapObjectType(removeType pg_query.ObjectType) types.ObjectType {
 	switch removeType {
 	case pg_query.ObjectType_OBJECT_TABLE:
-		return TypeTable
+		return types.TypeTable
 	case pg_query.ObjectType_OBJECT_INDEX:
-		return TypeIndex
+		return types.TypeIndex
 	case pg_query.ObjectType_OBJECT_FUNCTION:
-		return TypeFunction
+		return types.TypeFunction
 	case pg_query.ObjectType_OBJECT_TRIGGER:
-		return TypeTrigger
+		return types.TypeTrigger
 	case pg_query.ObjectType_OBJECT_VIEW:
-		return TypeView
+		return types.TypeView
 	case pg_query.ObjectType_OBJECT_SEQUENCE:
-		return TypeSequence
+		return types.TypeSequence
 	default:
-		return TypeUnknown
+		return types.TypeUnknown
 	}
 }
 
@@ -667,16 +802,16 @@ func extractCommentObjectNameWithNormalization(commentStmt *pg_query.CommentStmt
 	return ""
 }
 
-func mapCommentObjectType(objtype pg_query.ObjectType) ObjectType {
+func mapCommentObjectType(objtype pg_query.ObjectType) types.ObjectType {
 	switch objtype {
 	case pg_query.ObjectType_OBJECT_TABLE:
-		return TypeTable
+		return types.TypeTable
 	case pg_query.ObjectType_OBJECT_COLUMN:
-		return TypeTable // Column comments are table-related
+		return types.TypeTable // Column comments are table-related
 	case pg_query.ObjectType_OBJECT_FUNCTION:
-		return TypeFunction
+		return types.TypeFunction
 	default:
-		return TypeComment
+		return types.TypeComment
 	}
 }
 
@@ -684,37 +819,161 @@ func mapCommentObjectType(objtype pg_query.ObjectType) ObjectType {
 type StatementProcessingState struct {
 	StatementID      string
 	ProcessedBy      []string
-	FinalState       *Statement
+	FinalState       *types.Statement
 	ConflictFlags    []string
 	DependencySource string // Which function detected the dependencies
 }
 
-// extractSchemaWithNormalization extracts schema names with normalization
-func extractSchemaWithNormalization(stmt *Statement, normalizer *ContextualNormalizer) string {
-	sql := strings.ToLower(stmt.SQL)
-
-	// Check for explicit schema qualification
-	schemaPattern := regexp.MustCompile(`(?i)(storage|auth|public|extensions)\.`)
-	if matches := schemaPattern.FindStringSubmatch(sql); len(matches) > 1 {
-		return matches[1]
+// extractSchemaWithNormalization extracts schema names from AST with normalization
+// Uses AST data instead of regex heuristics for accurate schema extraction
+func extractSchemaWithNormalization(stmt *types.Statement, normalizer *ContextualNormalizer) string {
+	if stmt.ParseTree == nil {
+		return "public" // Default if no parse tree available
 	}
 
-	// Storage-specific patterns
-	if strings.Contains(sql, "storage.buckets") || strings.Contains(sql, "storage.objects") {
-		return "storage"
+	// Type assert to pg_query.ParseResult
+	parseResult, ok := stmt.ParseTree.(*pg_query.ParseResult)
+	if !ok || parseResult == nil || len(parseResult.Stmts) == 0 {
+		return "public"
 	}
 
-	// Auth-specific patterns
-	if strings.Contains(sql, "auth.jwt()") || strings.Contains(sql, "auth.uid()") {
-		return "auth"
+	rawStmt := parseResult.Stmts[0]
+	schema := extractSchemaFromAST(rawStmt, normalizer)
+
+	if schema != "" {
+		return schema
 	}
 
-	// Default to public schema
+	// Default to public schema if no explicit schema found in AST
 	return "public"
 }
 
+// extractSchemaFromAST extracts schema name from AST node
+func extractSchemaFromAST(rawStmt *pg_query.RawStmt, normalizer *ContextualNormalizer) string {
+	if rawStmt == nil || rawStmt.Stmt == nil {
+		return ""
+	}
+
+	switch node := rawStmt.Stmt.Node.(type) {
+	case *pg_query.Node_CreateStmt:
+		if node.CreateStmt.Relation != nil && node.CreateStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CreateStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_AlterTableStmt:
+		if node.AlterTableStmt.Relation != nil && node.AlterTableStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.AlterTableStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_DropStmt:
+		if len(node.DropStmt.Objects) > 0 {
+			return extractSchemaFromObjectList(node.DropStmt.Objects[0], normalizer)
+		}
+
+	case *pg_query.Node_IndexStmt:
+		if node.IndexStmt.Relation != nil && node.IndexStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.IndexStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_CreateFunctionStmt:
+		if len(node.CreateFunctionStmt.Funcname) > 1 {
+			// First element is schema for schema-qualified functions
+			if strNode := node.CreateFunctionStmt.Funcname[0].GetString_(); strNode != nil {
+				return normalizer.NormalizeSchemaName(strNode.Sval)
+			}
+		}
+
+	case *pg_query.Node_CreateTrigStmt:
+		if node.CreateTrigStmt.Relation != nil && node.CreateTrigStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CreateTrigStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_ViewStmt:
+		if node.ViewStmt.View != nil && node.ViewStmt.View.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.ViewStmt.View.Schemaname)
+		}
+
+	case *pg_query.Node_CreatePolicyStmt:
+		if node.CreatePolicyStmt.Table != nil && node.CreatePolicyStmt.Table.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CreatePolicyStmt.Table.Schemaname)
+		}
+
+	case *pg_query.Node_InsertStmt:
+		if node.InsertStmt.Relation != nil && node.InsertStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.InsertStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_UpdateStmt:
+		if node.UpdateStmt.Relation != nil && node.UpdateStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.UpdateStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_DeleteStmt:
+		if node.DeleteStmt.Relation != nil && node.DeleteStmt.Relation.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.DeleteStmt.Relation.Schemaname)
+		}
+
+	case *pg_query.Node_GrantStmt:
+		if len(node.GrantStmt.Objects) > 0 {
+			return extractSchemaFromObjectList(node.GrantStmt.Objects[0], normalizer)
+		}
+
+	case *pg_query.Node_CreateSchemaStmt:
+		if node.CreateSchemaStmt.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CreateSchemaStmt.Schemaname)
+		}
+
+	case *pg_query.Node_CreateSeqStmt:
+		if node.CreateSeqStmt.Sequence != nil && node.CreateSeqStmt.Sequence.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CreateSeqStmt.Sequence.Schemaname)
+		}
+
+	case *pg_query.Node_CreateEnumStmt:
+		if len(node.CreateEnumStmt.TypeName) > 1 {
+			// First element is schema for schema-qualified types
+			if strNode := node.CreateEnumStmt.TypeName[0].GetString_(); strNode != nil {
+				return normalizer.NormalizeSchemaName(strNode.Sval)
+			}
+		}
+
+	case *pg_query.Node_CompositeTypeStmt:
+		if node.CompositeTypeStmt.Typevar != nil && node.CompositeTypeStmt.Typevar.Schemaname != "" {
+			return normalizer.NormalizeSchemaName(node.CompositeTypeStmt.Typevar.Schemaname)
+		}
+
+	case *pg_query.Node_CreateDomainStmt:
+		if len(node.CreateDomainStmt.Domainname) > 1 {
+			// First element is schema for schema-qualified domains
+			if strNode := node.CreateDomainStmt.Domainname[0].GetString_(); strNode != nil {
+				return normalizer.NormalizeSchemaName(strNode.Sval)
+			}
+		}
+	}
+
+	return "" // No explicit schema found in AST
+}
+
+// extractSchemaFromObjectList extracts schema from pg_query object list node
+func extractSchemaFromObjectList(objNode *pg_query.Node, normalizer *ContextualNormalizer) string {
+	if objNode == nil {
+		return ""
+	}
+
+	if listNode := objNode.GetList(); listNode != nil && len(listNode.Items) > 0 {
+		// Schema is typically the first element in qualified names
+		if strNode := listNode.Items[0].GetString_(); strNode != nil {
+			// Check if there are more elements (indicating schema.object format)
+			if len(listNode.Items) > 1 {
+				return normalizer.NormalizeSchemaName(strNode.Sval)
+			}
+		}
+	}
+
+	return ""
+}
+
 // validateNamingConventions checks object names against PostgreSQL naming conventions
-func validateNamingConventions(stmt *Statement, collector *ErrorCollector, ctx *ParseContext) {
+func validateNamingConventions(stmt *types.Statement, collector *ErrorCollector, ctx *ParseContext) {
 	if stmt.ObjectName == "" {
 		return
 	}
@@ -742,15 +1001,15 @@ func validateNamingConventions(stmt *Statement, collector *ErrorCollector, ctx *
 
 	// Check naming conventions based on object type
 	switch stmt.ObjectType {
-	case TypeTable:
+	case types.TypeTable:
 		validateTableNaming(objectName, collector, ctx)
-	case TypeIndex:
+	case types.TypeIndex:
 		validateIndexNaming(objectName, collector, ctx)
-	case TypeFunction:
+	case types.TypeFunction:
 		validateFunctionNaming(objectName, collector, ctx)
-	case TypeConstraint:
+	case types.TypeConstraint:
 		validateConstraintNaming(objectName, collector, ctx)
-	case TypePolicy:
+	case types.TypePolicy:
 		validatePolicyNaming(objectName, collector, ctx)
 	}
 }
@@ -841,23 +1100,23 @@ func validatePolicyNaming(name string, collector *ErrorCollector, ctx *ParseCont
 }
 
 // extractCrossSchemaReferences finds references to objects in other schemas
-func extractCrossSchemaReferences(stmt *Statement) []CrossSchemaRef {
-	var refs []CrossSchemaRef
+func extractCrossSchemaReferences(stmt *types.Statement) []types.CrossSchemaRef {
+	var refs []types.CrossSchemaRef
 	sql := strings.ToLower(stmt.SQL)
 
 	// Storage schema references
 	if strings.Contains(sql, "storage.buckets") {
-		refs = append(refs, CrossSchemaRef{
+		refs = append(refs, types.CrossSchemaRef{
 			Schema:     "storage",
-			ObjectType: TypeTable,
+			ObjectType: types.TypeTable,
 			ObjectName: "buckets",
 		})
 	}
 
 	if strings.Contains(sql, "storage.objects") {
-		refs = append(refs, CrossSchemaRef{
+		refs = append(refs, types.CrossSchemaRef{
 			Schema:     "storage",
-			ObjectType: TypeTable,
+			ObjectType: types.TypeTable,
 			ObjectName: "objects",
 		})
 	}
@@ -867,9 +1126,9 @@ func extractCrossSchemaReferences(stmt *Statement) []CrossSchemaRef {
 	for _, authFunc := range authFuncs {
 		if strings.Contains(sql, authFunc) {
 			funcName := strings.TrimSuffix(strings.TrimPrefix(authFunc, "auth."), "()")
-			refs = append(refs, CrossSchemaRef{
+			refs = append(refs, types.CrossSchemaRef{
 				Schema:     "auth",
-				ObjectType: TypeFunction,
+				ObjectType: types.TypeFunction,
 				ObjectName: funcName,
 			})
 		}
@@ -879,67 +1138,52 @@ func extractCrossSchemaReferences(stmt *Statement) []CrossSchemaRef {
 }
 
 // detectAuthPattern identifies authentication and authorization patterns
-func detectAuthPattern(stmt *Statement) AuthPatternType {
+// detectAuthPattern detects generic authentication patterns.
+// Vendor-specific patterns are detected by plugins via DetectAuthPattern().
+// This function only sets generic categories for statements that weren't enriched by plugins.
+func detectAuthPattern(stmt *types.Statement) types.AuthPatternType {
 	sql := strings.ToLower(stmt.SQL)
 
-	// JWT v2 patterns (Clerk with organization claims)
-	jwtV2Patterns := []string{
-		"auth.jwt()->'o'->",  // Organization claims
-		"auth.jwt()->'v'",    // Version claim
-		"auth.jwt()->'fva'",  // Factor verification age (MFA)
-		"auth.jwt()->>'sub'", // Subject ID
-		"clerk_user_id()",    // Clerk user functions
-		"clerk_org_id()",
-		"validate_jwt_version()",
+	// JWT-based authentication (generic)
+	jwtPatterns := []string{
+		"auth.jwt()",
+		"jwt_claim",
+		"validate_jwt",
 	}
-
-	for _, pattern := range jwtV2Patterns {
+	for _, pattern := range jwtPatterns {
 		if strings.Contains(sql, pattern) {
-			return AuthPatternClerkJWTV2
+			return types.AuthPatternJWT
 		}
 	}
 
-	// Storage policies
-	if strings.Contains(sql, "storage.objects") && strings.Contains(sql, "create policy") {
-		return AuthPatternStorage
+	// Storage policies (generic)
+	if strings.Contains(sql, "storage.") && strings.Contains(sql, "create policy") {
+		return types.AuthPatternStorage
 	}
 
-	// RLS policies
-	if strings.Contains(sql, "row level security") || strings.Contains(sql, "create policy") {
-		return AuthPatternRLS
+	// RLS policies (generic)
+	if strings.Contains(sql, "row level security") ||
+	   (strings.Contains(sql, "create policy") && stmt.ObjectType == types.TypePolicy) {
+		return types.AuthPatternRLS
 	}
 
-	// Basic Clerk patterns
-	clerkPatterns := []string{
-		"clerk_is_admin()",
-		"is_authenticated()",
-		"handle_clerk_user(",
+	// Session-based authentication (generic)
+	sessionPatterns := []string{
+		"current_user",
+		"session_user",
+		"current_role",
 	}
-
-	for _, pattern := range clerkPatterns {
+	for _, pattern := range sessionPatterns {
 		if strings.Contains(sql, pattern) {
-			return AuthPatternClerk
+			return types.AuthPatternSession
 		}
 	}
 
-	// Legacy Supabase patterns
-	supabasePatterns := []string{
-		"auth.uid()",
-		"auth.role()",
-		"current_setting('request.jwt.claims'",
-	}
-
-	for _, pattern := range supabasePatterns {
-		if strings.Contains(sql, pattern) {
-			return AuthPatternSupabase
-		}
-	}
-
-	return AuthPatternNone
+	return types.AuthPatternNone
 }
 
 // isDynamicSQL detects dynamic SQL generation patterns
-func isDynamicSQL(stmt *Statement) bool {
+func isDynamicSQL(stmt *types.Statement) bool {
 	sql := strings.ToLower(stmt.SQL)
 
 	// Dynamic SQL patterns
@@ -959,7 +1203,7 @@ func isDynamicSQL(stmt *Statement) bool {
 	}
 
 	// DO blocks with complex logic
-	if stmt.ObjectType == TypeDoBlock && containsComplexLogic(sql) {
+	if stmt.ObjectType == types.TypeDoBlock && containsComplexLogic(sql) {
 		return true
 	}
 
@@ -1036,7 +1280,7 @@ func extractNestedTypesFromDoBlock(doBlockSQL string) []string {
 //   - Add auth pattern information (Clerk JWT v2, Supabase auth.uid())
 //   - Mark critical statements (preserve auth functions, RLS policies)
 //   - Add plugin-specific metadata for validation and consolidation
-func enrichStatementWithPlugins(ctx context.Context, stmt *Statement) {
+func enrichStatementWithPlugins(ctx context.Context, stmt *types.Statement) {
 	registry := plugins.GlobalRegistry()
 
 	// Only enrich if plugins are initialized
@@ -1047,6 +1291,6 @@ func enrichStatementWithPlugins(ctx context.Context, stmt *Statement) {
 	// Call enrichment on all active plugins (ordered by priority)
 	if err := registry.EnrichStatement(ctx, stmt); err != nil {
 		// Log error but don't fail parsing
-		log.Printf("[parser] Plugin enrichment warning: %v", err)
+		utils.GetDefaultLogger().WithPrefix("PARSER").Info("[parser] Plugin enrichment warning: %v", err)
 	}
 }

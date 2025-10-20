@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Docker build and publish script for pg-squash
+# Docker build and publish script for pgsquash
 # This script builds, tests, and optionally publishes Docker images
 
 # Colors for output
@@ -46,7 +46,7 @@ VERSION=${GIT_TAG:-${BUILD_VERSION:-"dev-$GIT_COMMIT"}}
 # Default values
 REGISTRY=${DOCKER_REGISTRY:-""}
 REPOSITORY=${DOCKER_REPOSITORY:-"pgsquash"}
-PLATFORMS=${DOCKER_PLATFORMS:-"linux/amd64,linux/arm64"}
+PlatformS=${DOCKER_PlatformS:-"linux/amd64,linux/arm64"}
 PUSH=${DOCKER_PUSH:-false}
 LOAD=${DOCKER_LOAD:-true}
 NO_CACHE=${DOCKER_NO_CACHE:-false}
@@ -77,7 +77,7 @@ OPTIONS:
     -r, --registry REGISTRY     Docker registry (default: $REGISTRY)
     -p, --repository REPO       Repository name (default: $REPOSITORY)
     -v, --version VERSION       Version tag (default: $VERSION)
-    -t, --platforms PLATFORMS   Target platforms (default: $PLATFORMS)
+    -t, --Platforms PlatformS   Target Platforms (default: $PlatformS)
     --push                      Push to registry
     --no-load                   Don't load image locally
     --no-cache                  Build without cache
@@ -91,8 +91,8 @@ EXAMPLES:
     # Build and push to Docker Hub
     $0 --registry docker.io --repository myuser/pgsquash --push
 
-    # Build for multiple platforms
-    $0 --platforms "linux/amd64,linux/arm64,linux/arm/v7" --push
+    # Build for multiple Platforms
+    $0 --Platforms "linux/amd64,linux/arm64,linux/arm/v7" --push
 
     # Build specific version
     $0 --version v1.2.3 --push
@@ -100,7 +100,7 @@ EXAMPLES:
 ENVIRONMENT VARIABLES:
     DOCKER_REGISTRY     Default registry
     DOCKER_REPOSITORY   Default repository
-    DOCKER_PLATFORMS    Default platforms
+    DOCKER_PlatformS    Default Platforms
     DOCKER_PUSH         Push images (true/false)
     DOCKER_LOAD         Load images locally (true/false)
     DOCKER_NO_CACHE     Disable build cache (true/false)
@@ -124,8 +124,8 @@ while [[ $# -gt 0 ]]; do
             VERSION="$2"
             shift 2
             ;;
-        -t|--platforms)
-            PLATFORMS="$2"
+        -t|--Platforms)
+            PlatformS="$2"
             shift 2
             ;;
         --push)
@@ -210,7 +210,7 @@ build_image() {
     local build_args_list=""
     local cache_args=""
     local output_args=""
-    local platform_args=""
+    local Platform_args=""
 
     # Prepare build arguments
     build_args_list+=" --build-arg BUILD_VERSION=$VERSION"
@@ -230,17 +230,17 @@ build_image() {
     fi
 
     # Platform configuration
-    if [[ -n "$PLATFORMS" ]]; then
-        platform_args=" --platform $PLATFORMS"
+    if [[ -n "$PlatformS" ]]; then
+        Platform_args=" --Platform $PlatformS"
     fi
 
     # Output configuration
     if [[ "$PUSH" == "true" ]]; then
         output_args=" --push"
-    elif [[ "$LOAD" == "true" ]] && [[ "$PLATFORMS" == "linux/amd64" || "$PLATFORMS" =~ ^linux/amd64, || ! "$PLATFORMS" =~ , ]]; then
+    elif [[ "$LOAD" == "true" ]] && [[ "$PlatformS" == "linux/amd64" || "$PlatformS" =~ ^linux/amd64, || ! "$PlatformS" =~ , ]]; then
         output_args=" --load"
     else
-        log_warning "Multi-platform build detected. Images will not be loaded locally."
+        log_warning "Multi-Platform build detected. Images will not be loaded locally."
         output_args=""
     fi
 
@@ -255,12 +255,12 @@ build_image() {
 
     # Execute build
     log_info "Building with tags: $tags"
-    log_info "Platforms: $PLATFORMS"
+    log_info "Platforms: $PlatformS"
     log_info "Push: $PUSH"
     log_info "Load: $LOAD"
 
     eval docker buildx build \
-        "$platform_args" \
+        "$Platform_args" \
         "$cache_args" \
         "$build_args_list" \
         "$tags" \
@@ -335,7 +335,7 @@ generate_metadata() {
     "build_date": "$BUILD_DATE",
     "git_commit": "$GIT_COMMIT",
     "git_tag": "$GIT_TAG",
-    "platforms": "$PLATFORMS",
+    "Platforms": "$PlatformS",
     "registry": "$REGISTRY",
     "repository": "$REPOSITORY",
     "pushed": $PUSH,
@@ -360,7 +360,7 @@ show_summary() {
     echo
     log_info "📊 Build Summary:"
     log_info "  • Image: $FULL_IMAGE_NAME:$VERSION"
-    log_info "  • Platforms: $PLATFORMS"
+    log_info "  • Platforms: $PlatformS"
     log_info "  • Build Date: $BUILD_DATE"
     log_info "  • Git Commit: $GIT_COMMIT"
     if [[ -n "$GIT_TAG" ]]; then
@@ -391,7 +391,7 @@ main() {
     log_info "  • Registry: ${REGISTRY:-"(none)"}"
     log_info "  • Repository: $REPOSITORY"
     log_info "  • Version: $VERSION"
-    log_info "  • Platforms: $PLATFORMS"
+    log_info "  • Platforms: $PlatformS"
     log_info "  • Push: $PUSH"
     log_info "  • Load: $LOAD"
     echo

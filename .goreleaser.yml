@@ -1,9 +1,9 @@
-# GoReleaser configuration for pg-squash Engine
+# GoReleaser configuration for pgsquash Engine
 #
-# Uses goreleaser-cross for robust CGO cross-compilation to all platforms.
+# Uses goreleaser-cross for robust CGO cross-compilation to all Platforms.
 # goreleaser-cross includes pre-built toolchains for Linux, macOS, and Windows.
 #
-# Supported platforms:
+# Supported Platforms:
 # - Linux: AMD64, ARM64
 # - macOS: AMD64 (Intel), ARM64 (Apple Silicon)
 # - Windows: AMD64, ARM64 (future)
@@ -11,7 +11,7 @@
 # Requirements:
 # - goreleaser-cross distribution (set in GitHub Actions)
 # - CGO enabled for all builds (required by pg_query_go)
-# - Docker with QEMU for multi-platform support
+# - Docker with QEMU for multi-Platform support
 version: 2
 
 before:
@@ -167,13 +167,13 @@ changelog:
 
 release:
   github:
-    owner: capysquash
-    name: pg-squash
+    owner: CAPYSQUASH
+    name: pgsquash
   draft: false
   prerelease: auto
   mode: replace
   header: |
-    ## pg-squash Engine {{ .Version }}
+    ## pgsquash Engine {{ .Version }}
 
     **Release Date**: {{ .Date }}
 
@@ -188,39 +188,39 @@ release:
     #### Homebrew (macOS & Linux)
     ```bash
     # Coming soon
-    # brew install capysquash/tap/pgsquash
+    # brew install CAPYSQUASH/tap/pgsquash
     ```
 
     #### Go Install
     ```bash
-    go install github.com/capysquash/pg-squash-engine/cmd/pgsquash@{{ .Tag }}
+    go install github.com/CAPYSQUASH/pgsquash-engine/cmd/pgsquash@{{ .Tag }}
     ```
 
     #### Docker
     ```bash
     # GitHub Container Registry
-    docker pull ghcr.io/capysquash/pgsquash:{{ .Version }}
+    docker pull ghcr.io/CAPYSQUASH/pgsquash:{{ .Version }}
 
     # Docker Hub
     docker pull pgsquash/pgsquash:{{ .Version }}
     ```
 
     #### Manual Installation
-    Download the appropriate binary for your platform below.
+    Download the appropriate binary for your Platform below.
 
   footer: |
     ---
 
-    **Full Changelog**: https://github.com/capysquash/pg-squash-engine/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/CAPYSQUASH/pgsquash-engine/compare/{{ .PreviousTag }}...{{ .Tag }}
 
     ## 🐳 Docker Images
 
-    Multi-platform Docker images are available:
+    Multi-Platform Docker images are available:
 
     ```bash
     # GitHub Container Registry
-    docker pull ghcr.io/capysquash/pgsquash:{{ .Version }}
-    docker pull ghcr.io/capysquash/pgsquash:latest
+    docker pull ghcr.io/CAPYSQUASH/pgsquash:{{ .Version }}
+    docker pull ghcr.io/CAPYSQUASH/pgsquash:latest
 
     # Docker Hub
     docker pull pgsquash/pgsquash:{{ .Version }}
@@ -233,18 +233,18 @@ release:
 
     ## 🆘 Support
 
-    - 📖 [Documentation](https://github.com/capysquash/pg-squash-engine)
-    - 🐛 [Report Issues](https://github.com/capysquash/pg-squash-engine/issues)
-    - 💬 [Discussions](https://github.com/capysquash/pg-squash-engine/discussions)
+    - 📖 [Documentation](https://github.com/CAPYSQUASH/pgsquash-engine)
+    - 🐛 [Report Issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues)
+    - 💬 [Discussions](https://github.com/CAPYSQUASH/pgsquash-engine/discussions)
 
 # Homebrew tap (optional - uncomment if you have a tap repository)
 # brews:
 #   - name: pgsquash
 #     description: "PostgreSQL migration squasher and optimizer"
-#     homepage: "https://github.com/capysquash/pg-squash-engine"
+#     homepage: "https://github.com/CAPYSQUASH/pgsquash-engine"
 #     license: "MIT"
 #     repository:
-#       owner: capysquash
+#       owner: CAPYSQUASH
 #       name: homebrew-tap
 #       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 #     directory: Formula
@@ -260,7 +260,7 @@ release:
 #   - name: pgsquash
 #     summary: PostgreSQL migration squasher and optimizer
 #     description: |
-#       pg-squash Engine analyzes PostgreSQL migration files and consolidates them
+#       pgsquash Engine analyzes PostgreSQL migration files and consolidates them
 #       into optimized, organized migration files while preserving data integrity.
 #     grade: stable
 #     confinement: classic
@@ -270,17 +270,17 @@ release:
 # scoops:
 #   - name: pgsquash
 #     description: "PostgreSQL migration squasher and optimizer"
-#     homepage: "https://github.com/capysquash/pg-squash-engine"
+#     homepage: "https://github.com/CAPYSQUASH/pgsquash-engine"
 #     license: MIT
 #     repository:
-#       owner: capysquash
+#       owner: CAPYSQUASH
 #       name: scoop-bucket
 #       token: "{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}"
 
 # AUR (Arch Linux) - optional
 # aurs:
 #   - name: pgsquash-bin
-#     homepage: "https://github.com/capysquash/pg-squash-engine"
+#     homepage: "https://github.com/CAPYSQUASH/pgsquash-engine"
 #     description: "PostgreSQL migration squasher and optimizer"
 #     maintainers:
 #       - "Your Name <your.email@example.com>"
@@ -297,20 +297,20 @@ metadata:
 # announce:
 #   discord:
 #     enabled: true
-#     message_template: '🚀 pg-squash {{ .Tag }} is out! Check it out: {{ .ReleaseURL }}'
+#     message_template: '🚀 pgsquash {{ .Tag }} is out! Check it out: {{ .ReleaseURL }}'
 #   slack:
 #     enabled: true
-#     message_template: '🚀 pg-squash {{ .Tag }} has been released!'
+#     message_template: '🚀 pgsquash {{ .Tag }} has been released!'
 #   twitter:
 #     enabled: true
-#     message_template: '🚀 pg-squash {{ .Tag }} is now available! #PostgreSQL #DevTools'
+#     message_template: '🚀 pgsquash {{ .Tag }} is now available! #PostgreSQL #DevTools'
 
 # Artifacts
 # nfpms:
 #   - id: packages
 #     package_name: pgsquash
-#     vendor: capysquash
-#     homepage: https://github.com/capysquash/pg-squash-engine
+#     vendor: CAPYSQUASH
+#     homepage: https://github.com/CAPYSQUASH/pgsquash-engine
 #     maintainer: Your Name <your.email@example.com>
 #     description: PostgreSQL migration squasher and optimizer
 #     license: MIT

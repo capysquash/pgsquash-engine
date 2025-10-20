@@ -10,7 +10,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // StreamingProcessor handles memory-efficient processing of large migration sets
@@ -25,6 +28,7 @@ type StreamingProcessor struct {
 	cancel      context.CancelFunc
 	wg          sync.WaitGroup
 	stats       *ProcessingStats
+	logger      *utils.Logger
 }
 
 // MigrationFile represents a migration file to be processed
@@ -38,7 +42,7 @@ type MigrationFile struct {
 // ProcessedFile represents a processed migration file
 type ProcessedFile struct {
 	OriginalFile *MigrationFile
-	Migration    *parser.Migration
+	Migration    *types.Migration
 	ProcessTime  time.Duration
 	MemoryUsed   int64
 	Errors       []error
@@ -60,6 +64,9 @@ type ProcessingStats struct {
 func NewStreamingProcessor(batchSize, workerCount int, memManager *MemoryManager) *StreamingProcessor {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Create logger with appropriate level
+	logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout).WithPrefix("StreamingProcessor")
+
 	return &StreamingProcessor{
 		batchSize:   batchSize,
 		workerCount: workerCount,
@@ -70,6 +77,7 @@ func NewStreamingProcessor(batchSize, workerCount int, memManager *MemoryManager
 		ctx:         ctx,
 		cancel:      cancel,
 		stats:       &ProcessingStats{},
+		logger:      logger,
 	}
 }
 
@@ -109,7 +117,7 @@ func (sp *StreamingProcessor) ProcessDirectory(dir string) error {
 		// Read file content
 		content, err := os.ReadFile(path)
 		if err != nil {
-			sp.errors <- fmt.Errorf("failed to read file %s: %w", path, err)
+			sp.errors <- errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("failed to read file %s", path), nil)
 			return nil // Continue processing other files
 		}
 
@@ -122,7 +130,7 @@ func (sp *StreamingProcessor) ProcessDirectory(dir string) error {
 
 		// Check memory constraints
 		if !sp.memManager.TrackMemoryUsage(migrationFile.Size) {
-			sp.errors <- fmt.Errorf("memory limit exceeded for file %s", path)
+			sp.errors <- errors.New(errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("memory limit exceeded for file %s", path), nil)
 			atomic.AddInt64(&sp.stats.FilesSkipped, 1)
 			return nil
 		}
@@ -202,7 +210,7 @@ func (sp *StreamingProcessor) processFile(migrationFile *MigrationFile) {
 	if err != nil {
 		processedFile.Errors = []error{err}
 		atomic.AddInt64(&sp.stats.FilesErrored, 1)
-		sp.errors <- fmt.Errorf("failed to parse file %s: %w", migrationFile.Path, err)
+		sp.errors <- errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryPerformance, fmt.Sprintf("failed to parse file %s", migrationFile.Path), nil)
 		return
 	}
 
@@ -224,10 +232,11 @@ func (sp *StreamingProcessor) errorHandler() {
 	for {
 		select {
 		case err := <-sp.errors:
-			// Log error (in a real implementation, you might use a proper logger)
-			fmt.Printf("Streaming processor error: %v\n", err)
+			// Log error using structured logger
+			sp.logger.Error("Processing error: %v", err)
 
 		case <-sp.ctx.Done():
+			sp.logger.Debug("Error handler shutting down")
 			return
 		}
 	}

@@ -1,7 +1,7 @@
 package tracking
 
 import (
-	"fmt"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // AddNode adds a node to the dependency graph
@@ -73,7 +73,12 @@ func (dg *DependencyGraph) TopologicalSort() ([]ObjectID, error) {
 
 	// Check for cycles
 	if len(result) != len(dg.nodes) {
-		return nil, fmt.Errorf("circular dependencies detected")
+		return nil, errors.New(errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation,
+			"circular dependencies detected",
+			map[string]interface{}{
+				"expected_nodes": len(dg.nodes),
+				"sorted_nodes": len(result),
+			})
 	}
 
 	return result, nil

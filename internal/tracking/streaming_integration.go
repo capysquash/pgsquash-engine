@@ -2,13 +2,13 @@ package tracking
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
-	"github.com/capysquash/pg-squash-engine/internal/performance"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/performance"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // StreamingTracker integrates UnifiedTracker with performance streaming capabilities
@@ -28,7 +28,7 @@ type StreamingTracker struct {
 
 // TrackingResult represents the result of processing a migration through streaming tracking
 type TrackingResult struct {
-	Migration     *parser.Migration
+	Migration     *types.Migration
 	ObjectsAdded  int
 	EventsCreated int
 	ProcessTime   time.Duration
@@ -90,7 +90,8 @@ func (st *StreamingTracker) ProcessDirectory(dir string) error {
 	if err != nil {
 		st.cancel()
 		st.wg.Wait()
-		return fmt.Errorf("streaming processor failed: %w", err)
+		return errors.Wrap(err, errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation,
+			"streaming processor failed", map[string]interface{}{"directory": dir})
 	}
 
 	// Process all migration results
@@ -223,7 +224,8 @@ func (st *StreamingTracker) Stop() error {
 
 	// Stop the streaming processor
 	if err := st.streamingProcessor.Stop(); err != nil {
-		return fmt.Errorf("failed to stop streaming processor: %w", err)
+		return errors.Wrap(err, errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation,
+			"failed to stop streaming processor", nil)
 	}
 
 	// Wait for our workers

@@ -3,6 +3,7 @@ package squasher
 import (
 	"fmt"
 
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
@@ -15,7 +16,12 @@ func Deparse(tree *pg_query.ParseResult) (string, error) {
 
 	res, err := pg_query.Deparse(tree)
 	if err != nil {
-		return "", fmt.Errorf("failed to deparse tree: %w", err)
+		return "", errors.NewError(
+			errors.ErrorCodeSQLGenerationFailed,
+			fmt.Sprintf("failed to deparse tree: %v", err),
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithInnerError(err)
 	}
 	return res, nil
 }

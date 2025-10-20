@@ -3,6 +3,10 @@ set -euo pipefail
 
 # Multi-Version PostgreSQL Testing Script
 # Tests migrations against multiple PostgreSQL versions
+#
+# NOTE: For manual testing, you can also use docker-compose.testing.yml which includes
+# PostgreSQL 17, 15, and 13. This script provides automated testing across more versions
+# with isolated containers and detailed reporting.
 
 # Colors
 GREEN='\033[0;32m'
@@ -117,7 +121,7 @@ test_version() {
     log_info "Starting PostgreSQL $version container..."
     docker run -d \
         --name "$container_name" \
-        --label "pg-squash.test=multi-version" \
+        --label "pgsquash.test=multi-version" \
         -e POSTGRES_PASSWORD=test \
         -e POSTGRES_USER=postgres \
         -e POSTGRES_DB=test \
@@ -250,7 +254,7 @@ echo ""
 
 # Cleanup any remaining test containers
 log_info "Cleaning up test containers..."
-docker rm -f $(docker ps -aq -f "label=pg-squash.test=multi-version" 2>/dev/null) > /dev/null 2>&1 || true
+docker rm -f $(docker ps -aq -f "label=pgsquash.test=multi-version" 2>/dev/null) > /dev/null 2>&1 || true
 
 # Exit with appropriate code
 if [ ${#FAILED_VERSIONS[@]} -eq 0 ]; then

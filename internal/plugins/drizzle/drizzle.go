@@ -1,4 +1,4 @@
-// Package drizzle provides Drizzle ORM integration for pg-squash.
+// Package drizzle provides Drizzle ORM integration for pgsquash.
 // It handles Drizzle-generated migrations, identity columns, and drizzle-kit patterns.
 package drizzle
 
@@ -9,8 +9,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // DrizzlePlugin implements Drizzle ORM integration
@@ -249,11 +250,15 @@ func (dp *DrizzlePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
 			"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '__drizzle_migrations')").
 			Scan(&tableExists)
 		if err != nil {
-			return fmt.Errorf("failed to check __drizzle_migrations table: %w", err)
+			return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"failed to check __drizzle_migrations table",
+				map[string]interface{}{"table": "__drizzle_migrations"})
 		}
 
 		if !tableExists {
-			return fmt.Errorf("__drizzle_migrations table does not exist (expected for Drizzle project)")
+			return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"__drizzle_migrations table does not exist (expected for Drizzle project)",
+				map[string]interface{}{"table": "__drizzle_migrations"})
 		}
 
 		// Verify table structure
@@ -262,12 +267,20 @@ func (dp *DrizzlePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
 			"SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '__drizzle_migrations'").
 			Scan(&columnCount)
 		if err != nil {
-			return fmt.Errorf("failed to validate __drizzle_migrations structure: %w", err)
+			return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"failed to validate __drizzle_migrations structure",
+				map[string]interface{}{"table": "__drizzle_migrations"})
 		}
 
 		// Expected columns: id, hash, created_at
 		if columnCount < 3 {
-			return fmt.Errorf("__drizzle_migrations table has incomplete structure (found %d columns, expected >= 3)", columnCount)
+			return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"__drizzle_migrations table has incomplete structure",
+				map[string]interface{}{
+					"table":            "__drizzle_migrations",
+					"found_columns":    columnCount,
+					"expected_columns": 3,
+				})
 		}
 	}
 
@@ -281,7 +294,9 @@ func (dp *DrizzlePlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
 		`).Scan(&identityColumnCount)
 
 		if err != nil {
-			return fmt.Errorf("failed to check IDENTITY columns: %w", err)
+			return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"failed to check IDENTITY columns",
+				map[string]interface{}{"operation": "check_identity_columns"})
 		}
 
 		if identityColumnCount == 0 {

@@ -1,5 +1,5 @@
 // Package plugins provides a unified third-party integration system.
-// It allows third-party services (auth providers, ORMs, managed platforms)
+// It allows third-party services (auth providers, ORMs, managed Platforms)
 // to hook into the migration analysis, transformation, and validation pipeline.
 package plugins
 
@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // Plugin represents a third-party service integration that can hook into
@@ -56,6 +56,12 @@ type Plugin interface {
     // Returns patterns found (e.g., JWT claim access, Prisma directives).
     // Called before pg_query parsing for pre-parse transformations.
     DetectPatterns(sql string) []Pattern
+
+    // DetectAuthPattern analyzes a statement for authentication patterns.
+    // Returns the auth pattern identifier (e.g., "clerk_jwt_v2", "supabase_rls")
+    // or empty string if no auth pattern is detected.
+    // This allows plugins to claim ownership of auth-related statements.
+    DetectAuthPattern(stmt *types.Statement) string
 
     // ===== Transformation Hooks =====
 
@@ -223,4 +229,8 @@ func (bp *BasePlugin) GetConsolidationRules() []ConsolidationRule {
 
 func (bp *BasePlugin) ShouldPreserve(stmt *types.Statement) bool {
     return false
+}
+
+func (bp *BasePlugin) DetectAuthPattern(stmt *types.Statement) string {
+    return "" // Default: no auth pattern detected
 }

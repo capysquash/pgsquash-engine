@@ -177,10 +177,10 @@ setup_validation_db() {
 
     log_step "Setting up validation database environment..."
 
-    # Create Docker network for pg-squash if it doesn't exist
-    if ! docker network inspect pg-squash-net &> /dev/null; then
-        docker network create pg-squash-net
-        log_success "Created Docker network: pg-squash-net"
+    # Create Docker network for pgsquash if it doesn't exist
+    if ! docker network inspect pgsquash-net &> /dev/null; then
+        docker network create pgsquash-net
+        log_success "Created Docker network: pgsquash-net"
     fi
 
     log_success "Validation environment ready"
@@ -203,7 +203,7 @@ perform_health_check() {
 
     # Check binary
     if ! pgsquash --version &> /dev/null; then
-        log_error "pg-squash binary not working"
+        log_error "pgsquash binary not working"
         return 1
     fi
 
@@ -241,7 +241,7 @@ show_startup_info() {
 init_pgsquash() {
     show_banner
 
-    log_info "🚀 Starting pg-squash automated setup..."
+    log_info "🚀 Starting pgsquash automated setup..."
     echo
 
     setup_environment
@@ -252,14 +252,14 @@ init_pgsquash() {
     perform_health_check
 
     echo
-    log_success "✅ pg-squash setup completed successfully!"
+    log_success "✅ pgsquash setup completed successfully!"
     show_startup_info
 }
 
 # Command handlers
 handle_init() {
     init_pgsquash
-    log_success "🎉 pg-squash is ready to use!"
+    log_success "🎉 pgsquash is ready to use!"
     echo
     log_info "💡 Quick start commands:"
     log_info "  • Analyze migrations:    pgsquash analyze /app/migrations/*.sql"
@@ -328,8 +328,8 @@ cleanup() {
 
     # Clean up any running containers (only if Docker is enabled)
     if [[ "${PGSQUASH_DOCKER_ENABLED:-false}" == "true" ]]; then
-        docker ps -q --filter "label=pg-squash" | xargs -r docker stop 2>/dev/null || true
-        docker ps -a -q --filter "label=pg-squash" | xargs -r docker rm 2>/dev/null || true
+        docker ps -q --filter "label=pgsquash" | xargs -r docker stop 2>/dev/null || true
+        docker ps -a -q --filter "label=pgsquash" | xargs -r docker rm 2>/dev/null || true
     fi
 
     log_success "Cleanup completed"
@@ -360,13 +360,13 @@ main() {
         "--help"|"-h"|"help")
             show_banner
             cat << 'EOF'
-🚀 pg-squash Docker Container
+🚀 pgsquash Docker Container
 
 USAGE:
     docker run --rm -v $(pwd)/migrations:/app/migrations -v $(pwd)/output:/app/output pgsquash [COMMAND] [OPTIONS]
 
 COMMANDS:
-    init        Initialize pg-squash environment (default)
+    init        Initialize pgsquash environment (default)
     squash      Run squashing workflow on migrations
     validate    Validate migrations using Docker
     workflow    Run complete analyze → squash → validate workflow

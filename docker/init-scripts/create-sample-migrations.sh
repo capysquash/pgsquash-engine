@@ -389,7 +389,7 @@ log_info "  • Functions and triggers"
 log_info "  • Row Level Security (RLS)"
 log_info "  • Cycles and patterns for testing squashing"
 echo
-log_info "These migrations are designed to test various pg-squash features:"
+log_info "These migrations are designed to test various pgsquash features:"
 log_info "  🔄 CREATE-ALTER consolidation"
 log_info "  🗑️  DROP-CREATE cycles"
 log_info "  ⚡ Transient objects"

@@ -1,16 +1,16 @@
-// Package prisma provides Prisma ORM integration for pg-squash.
+// Package prisma provides Prisma ORM integration for pgsquash.
 // It handles Prisma-generated migrations, schema.prisma patterns, and migration metadata.
 package prisma
 
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/plugins"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // PrismaPlugin implements Prisma ORM integration
@@ -145,7 +145,7 @@ func (pp *PrismaPlugin) EnrichStatement(ctx context.Context, stmt *types.Stateme
 		if stmt.Comments == nil {
 			stmt.Comments = []string{}
 		}
-		stmt.Comments = append(stmt.Comments, fmt.Sprintf("Prisma: %s %s", matches[1], matches[2]))
+		stmt.Comments = append(stmt.Comments, "Prisma: "+matches[1]+" "+matches[2])
 	}
 
 	// Mark shadow database operations
@@ -270,11 +270,15 @@ func (pp *PrismaPlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
 			"SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = '_prisma_migrations')").
 			Scan(&tableExists)
 		if err != nil {
-			return fmt.Errorf("failed to check _prisma_migrations table: %w", err)
+			return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"failed to check _prisma_migrations table",
+				map[string]interface{}{"table": "_prisma_migrations"})
 		}
 
 		if !tableExists {
-			return fmt.Errorf("_prisma_migrations table does not exist (expected for Prisma project)")
+			return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"_prisma_migrations table does not exist (expected for Prisma project)",
+				map[string]interface{}{"table": "_prisma_migrations"})
 		}
 
 		// Verify table structure
@@ -283,12 +287,20 @@ func (pp *PrismaPlugin) ValidateSchema(ctx context.Context, db *sql.DB) error {
 			"SELECT COUNT(*) FROM information_schema.columns WHERE table_name = '_prisma_migrations'").
 			Scan(&columnCount)
 		if err != nil {
-			return fmt.Errorf("failed to validate _prisma_migrations structure: %w", err)
+			return errors.Wrap(err, errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"failed to validate _prisma_migrations structure",
+				map[string]interface{}{"table": "_prisma_migrations"})
 		}
 
 		// Expected columns: id, checksum, finished_at, migration_name, logs, rolled_back_at, started_at, applied_steps_count
 		if columnCount < 7 {
-			return fmt.Errorf("_prisma_migrations table has incomplete structure (found %d columns, expected >= 7)", columnCount)
+			return errors.New(errors.ErrorCodeValidationFailed, errors.CategoryValidation,
+				"_prisma_migrations table has incomplete structure",
+				map[string]interface{}{
+					"table":            "_prisma_migrations",
+					"found_columns":    columnCount,
+					"expected_columns": 7,
+				})
 		}
 	}
 

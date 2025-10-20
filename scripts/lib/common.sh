@@ -1,6 +1,6 @@
 #!/bin/bash
-# pg-squash Common Library
-# Shared functions and utilities for all pg-squash scripts
+# pgsquash Common Library
+# Shared functions and utilities for all pgsquash scripts
 
 # ============================================================================
 # COLOR DEFINITIONS
@@ -334,4 +334,4 @@ export -f load_env_file detect_project_root compare_schema_counts
 export -f show_pgsquash_banner confirm_action trap_handler setup_error_handling
 export -f get_script_version check_prerequisites
 
-log_info "pg-squash common library loaded (v$(get_script_version))"
+log_info "pgsquash common library loaded (v$(get_script_version))"

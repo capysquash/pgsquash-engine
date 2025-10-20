@@ -14,7 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // RollbackPlan represents a complete rollback strategy
@@ -98,7 +99,7 @@ func NewRollbackManager(db *sql.DB, workDir string) *RollbackManager {
 }
 
 // CreateRollbackPlan generates a comprehensive rollback plan for migrations
-func (rm *RollbackManager) CreateRollbackPlan(ctx context.Context, name string, statements []parser.Statement) (*RollbackPlan, error) {
+func (rm *RollbackManager) CreateRollbackPlan(ctx context.Context, name string, statements []types.Statement) (*RollbackPlan, error) {
 	planID := fmt.Sprintf("rollback_%d_%s", time.Now().Unix(), strings.ReplaceAll(name, " ", "_"))
 
 	plan := &RollbackPlan{
@@ -117,7 +118,7 @@ func (rm *RollbackManager) CreateRollbackPlan(ctx context.Context, name string, 
 	// Generate rollback scripts
 	scripts, err := rm.generator.GenerateRollbackScript(ctx, statements)
 	if err != nil {
-		return nil, NewTransformationError(ErrorCodeRollbackGenerationFailed, "failed to generate rollback scripts").WithInnerError(err)
+		return nil, errors.NewTransformationError(errors.ErrorCodeRollbackGenerationFailed, "failed to generate rollback scripts").WithInnerError(err)
 	}
 
 	plan.Scripts = scripts
@@ -125,7 +126,7 @@ func (rm *RollbackManager) CreateRollbackPlan(ctx context.Context, name string, 
 	// Analyze dependencies and risks
 	err = rm.analyzeRollbackPlan(ctx, plan)
 	if err != nil {
-		return nil, NewTransformationError(ErrorCodeRollbackAnalysisFailed, "failed to analyze rollback plan").WithInnerError(err)
+		return nil, errors.NewTransformationError(errors.ErrorCodeRollbackAnalysisFailed, "failed to analyze rollback plan").WithInnerError(err)
 	}
 
 	// Store the plan
@@ -134,7 +135,7 @@ func (rm *RollbackManager) CreateRollbackPlan(ctx context.Context, name string, 
 	// Persist to file
 	err = rm.savePlanToFile(plan)
 	if err != nil {
-		return nil, NewTransformationError(ErrorCodeRollbackSaveFailed, "failed to save rollback plan").WithInnerError(err)
+		return nil, errors.NewTransformationError(errors.ErrorCodeRollbackSaveFailed, "failed to save rollback plan").WithInnerError(err)
 	}
 
 	return plan, nil
@@ -243,7 +244,12 @@ func (rm *RollbackManager) getDatabaseVersion(ctx context.Context) (string, erro
 func (rm *RollbackManager) ExecuteRollbackPlan(ctx context.Context, planID string, dryRun bool) (*RollbackExecution, error) {
 	plan, exists := rm.plans[planID]
 	if !exists {
-		return nil, fmt.Errorf("rollback plan %s not found", planID)
+		return nil, errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("rollback plan %s not found", planID),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		)
 	}
 
 	executionID := fmt.Sprintf("exec_%s_%d", planID, time.Now().Unix())
@@ -358,7 +364,12 @@ func (rm *RollbackManager) ListRollbackPlans() []*RollbackPlan {
 func (rm *RollbackManager) GetRollbackPlan(planID string) (*RollbackPlan, error) {
 	plan, exists := rm.plans[planID]
 	if !exists {
-		return nil, fmt.Errorf("rollback plan %s not found", planID)
+		return nil, errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("rollback plan %s not found", planID),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		)
 	}
 	return plan, nil
 }
@@ -367,7 +378,7 @@ func (rm *RollbackManager) GetRollbackPlan(planID string) (*RollbackPlan, error)
 func (rm *RollbackManager) GetRollbackExecution(executionID string) (*RollbackExecution, error) {
 	execution, exists := rm.executions[executionID]
 	if !exists {
-		return nil, NewTransformationError(ErrorCodeExecutionNotFound, "rollback execution not found").WithContext("execution_id", executionID)
+		return nil, errors.NewTransformationError(errors.ErrorCodeExecutionNotFound, "rollback execution not found").WithAdditional("execution_id", executionID)
 	}
 	return execution, nil
 }
@@ -376,18 +387,64 @@ func (rm *RollbackManager) GetRollbackExecution(executionID string) (*RollbackEx
 func (rm *RollbackManager) savePlanToFile(plan *RollbackPlan) error {
 	planDir := filepath.Join(rm.workDir, "rollback_plans")
 	if err := os.MkdirAll(planDir, 0755); err != nil {
-		return err
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("create rollback plans directory '%s'", planDir),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err)
+	}
+
+	// Verify directory was created
+	if _, err := os.Stat(planDir); os.IsNotExist(err) {
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("rollback plans directory '%s' does not exist after creation attempt", planDir),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		)
 	}
 
 	filename := fmt.Sprintf("%s.json", plan.ID)
-	filepath := filepath.Join(planDir, filename)
+	planFilePath := filepath.Join(planDir, filename)
 
 	data, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
-		return err
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			"marshal rollback plan to JSON",
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err)
 	}
 
-	return os.WriteFile(filepath, data, 0644)
+	if err := os.WriteFile(planFilePath, data, 0644); err != nil {
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("write rollback plan file '%s'", planFilePath),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err)
+	}
+
+	// Verify file was written successfully
+	if info, err := os.Stat(planFilePath); err != nil {
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("rollback plan file '%s' was not created", planFilePath),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		).WithInnerError(err)
+	} else if info.Size() == 0 {
+		return errors.NewError(
+			errors.ErrorCodeTransformationFailed,
+			fmt.Sprintf("rollback plan file '%s' is empty (0 bytes)", planFilePath),
+			errors.SeverityError,
+			errors.CategoryTransformation,
+		)
+	}
+
+	return nil
 }
 
 // loadPlanFromFile loads a rollback plan from disk
@@ -452,27 +509,27 @@ func (rm *RollbackManager) DeleteRollbackPlan(planID string) error {
 func (rm *RollbackManager) ValidateRollbackPlan(ctx context.Context, planID string) error {
 	plan, exists := rm.plans[planID]
 	if !exists {
-		return NewTransformationError(ErrorCodeRollbackNotFound, "rollback plan not found").WithContext("plan_id", planID)
+		return errors.NewTransformationError(errors.ErrorCodeRollbackNotFound, "rollback plan not found").WithAdditional("plan_id", planID)
 	}
 
 	// Check database connectivity
 	if rm.db != nil {
 		err := rm.db.PingContext(ctx)
 		if err != nil {
-			return NewTransformationError(ErrorCodeDatabaseNotAccessible, "database not accessible").WithInnerError(err)
+			return errors.NewTransformationError(errors.ErrorCodeDatabaseNotAccessible, "database not accessible").WithInnerError(err)
 		}
 	}
 
 	// Validate each script
 	for _, script := range plan.Scripts {
 		if strings.Contains(script.SQL, "-- Cannot automatically rollback") {
-			return NewTransformationError(ErrorCodeManualInterventionRequired, "script requires manual intervention").WithContext("script_id", script.ID)
+			return errors.NewTransformationError(errors.ErrorCodeManualInterventionRequired, "script requires manual intervention").WithAdditional("script_id", script.ID)
 		}
 
 		// Use transformer to validate SQL syntax
 		_, err := rm.transformer.Transform(ctx, script.SQL)
 		if err != nil {
-			return NewTransformationError(ErrorCodeInvalidSQL, "script has invalid SQL").WithContext("script_id", script.ID).WithInnerError(err)
+			return errors.NewTransformationError(errors.ErrorCodeInvalidSQL, "script has invalid SQL").WithAdditional("script_id", script.ID).WithInnerError(err)
 		}
 	}
 

@@ -1,114 +1,106 @@
 # Docker Infrastructure
 
-Complete Docker setup for pg-squash with three distinct use cases.
+Complete Docker setup for pgsquash with modular compose files for different use cases.
+
+## Quick Start
+
+### Core Development (2 services)
+
+```bash
+# Start essential services only
+docker compose up -d
+
+# Services: pgsquash + postgres-primary (PostgreSQL 17)
+# RAM usage: ~500MB
+```
+
+### Multi-Version Testing (5 services)
+
+```bash
+# Add PostgreSQL 17, 15, 13 for version compatibility testing
+docker compose -f docker-compose.yml -f docker-compose.testing.yml up -d
+
+# Services: core + postgres-17 + postgres-15 + postgres-13
+# RAM usage: ~1.5GB
+```
+
+### Development Tools (4 services)
+
+```bash
+# Add pgAdmin and Filebrowser for GUI management
+docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d
+
+# Services: core + pgAdmin + Filebrowser
+# RAM usage: ~800MB
+# Access pgAdmin: http://localhost:5050
+# Access Filebrowser: http://localhost:8081
+```
+
+### API Server (standalone)
+
+```bash
+# Deploy just the API server with GitHub integration
+cd docker/api-server
+docker compose up -d
+
+# Service: API server only
+# RAM usage: ~200MB
+# Access API: http://localhost:8080/health
+```
+
+---
 
 ## Directory Structure
 
 ```
-/Dockerfile                       # ← Shared by all use cases
-/docker-compose.yml               # ← Complete development environment
+/Dockerfile                       # ← Main application Dockerfile
+/docker-compose.yml               # ← Core services (2)
+/docker-compose.testing.yml       # ← Multi-version PostgreSQL testing
+/docker-compose.tools.yml         # ← Optional development tools
 
 docker/
 ├── README.md                     # This file
-├── DOCKERFILE_USAGE.md           # How Dockerfile is used across use cases
+├── entrypoint.sh                # Container entrypoint script
 │
-├── engine/                       # Use Case 1: Containerized CLI
+├── api-server/                  # API Server Deployment
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── README.md
+│
+├── engine/                      # Containerized CLI
 │   ├── quick-start.yml
 │   ├── examples.sh
 │   └── README.md
 │
-├── validation/                   # Use Case 2: Docker Validation
-│   ├── with-validation.yml
+├── validation/                  # Validation Tools
 │   ├── init-scripts/
-│   ├── validation/
 │   └── README.md
 │
-├── web-app/                      # Use Case 3: Full-Stack Web App
-│   ├── monolithic/
-│   ├── separated/
-│   ├── hybrid/
-│   └── README.md
-│
-├── dev-environment/              # Complete development setup
-│   ├── full-stack.yml           # Simplified dev compose
-│   └── README.md                # Points to root docker-compose.yml
-│
-├── scripts/                      # Helper scripts
-│   ├── build.sh                 # Build Docker images
-│   ├── quick-validate.sh        # ⭐ Fast validation
-│   ├── validate.sh              # Full validation
-│   ├── setup-validation.sh      # Setup validation
-│   ├── multi-version-test.sh    # Multi-version testing
-│   ├── cleanup.sh               # Cleanup containers
-│   └── test-setup.sh            # Test setup
-│
-├── config-templates/             # Configuration templates
-│   ├── pgsquash.config.json.template
-│   ├── .env.template
-│   └── deployment-configs/
-│
-├── init-scripts/                 # Shared initialization
+├── init-scripts/                # PostgreSQL Initialization
 │   ├── supabase-compat.sql
 │   ├── init-postgres.sql
 │   └── validation-init.sql
 │
-└── entrypoint.sh                 # Container entrypoint
+├── scripts/                     # Helper Scripts
+│   ├── build.sh                # Build Docker images
+│   ├── cleanup.sh              # Cleanup containers
+│   ├── multi-version-test.sh   # Multi-version testing
+│   └── test-setup.sh           # Test setup
+│
+└── dev-environment/             # Development Environment
+    ├── full-stack.yml
+    └── README.md
 ```
 
-## Root Files
+---
 
-### `/Dockerfile`
-Main Dockerfile used by **all three use cases** (engine, validation, dev).
+## Deployment Scenarios
 
-- **Engine**: CLI-only container
-- **Validation**: + Docker CLI for validation
-- **Dev**: Full development setup
+### 1. Containerized CLI
 
-See [DOCKERFILE_USAGE.md](../docs/docker/DOCKERFILE_USAGE.md) for details.
+Run pgsquash CLI in a container without installing Go.
 
-### `/docker-compose.yml`
-Complete **development environment** with all services:
-- pg-squash + Docker socket
-- PostgreSQL 17, 15, 13 (multi-version)
-- Redis, MinIO, Grafana, Prometheus, Traefik, pgAdmin
-
-See [dev-environment/README.md](dev-environment/README.md) for usage.
-
-## Quick Start
-
-### Engine (CLI in Docker)
-
-```bash
-docker compose -f docker/engine/quick-start.yml run --rm pgsquash squash
-```
-
-### Validation (Docker-in-Docker)
-
-```bash
-./docker/scripts/quick-validate.sh
-```
-
-### Web App (Full Stack)
-
-```bash
-cd docker/web-app/monolithic
-docker compose up -d
-```
-
-### Development Environment
-
-```bash
-# From project root
-docker compose up -d
-```
-
-## Three Use Cases
-
-### 1. Engine: Containerized CLI
-
-Run pg-squash CLI in a container without installing Go.
-
-**Directory**: `docker/engine/`
+**Use Case**: CI/CD pipelines, team consistency, no Go installation required
 
 ```bash
 # Squash migrations
@@ -125,84 +117,114 @@ docker compose -f docker/engine/quick-start.yml run --rm pgsquash bash
 
 ---
 
-### 2. Validation: Docker Validation Containers
+### 2. Validation with Docker
 
-Spin up ephemeral PostgreSQL containers to validate migrations.
+Spin up ephemeral PostgreSQL containers to validate migration squashing results.
 
-**Directory**: `docker/validation/`
+**Use Case**: Automated testing, schema validation, multi-version compatibility
 
 ```bash
 # Quick validation (recommended)
 ./docker/scripts/quick-validate.sh
 
-# Full validation with Docker Compose
-docker compose -f docker/validation/with-validation.yml run --rm pgsquash validate
-
-# Multi-version testing
+# Multi-version testing (PostgreSQL 17, 15, 13)
 ./docker/scripts/multi-version-test.sh
+
+# Cleanup validation containers
+./docker/scripts/cleanup.sh
 ```
 
 **Documentation**: [validation/README.md](validation/README.md)
 
 ---
 
-### 3. Web App: Full-Stack Web Application
+### 3. API Server
 
-Complete web application with Next.js frontend and Go API backend.
+HTTP API with GitHub webhook integration for Platforms.
 
-**Directory**: `docker/web-app/`
+**Use Case**: Web frontends, mobile apps, GitHub PR automation
 
-**Deployment Scenarios**:
-
-#### Monolithic (Simple)
 ```bash
-cd docker/web-app/monolithic
+cd docker/api-server
 docker compose up -d
-# Access at http://localhost:3000
+
+# Test health endpoint
+curl http://localhost:8080/health
 ```
 
-#### Separated (Production)
-```bash
-cd docker/web-app/separated
-docker compose up -d api-server
-# + Deploy frontend to Vercel
-```
+**API Endpoints**:
 
-#### Hybrid (Development)
-```bash
-cd docker/web-app/hybrid
-# See README for hybrid setup
-```
+- `GET /health` - Health check
+- `POST /api/analyze` - Analyze migrations
+- `POST /api/squash` - Squash migrations
+- `POST /github/webhook` - GitHub webhook handler
+- `GET /github/login` - GitHub OAuth login
 
-**Documentation**: [web-app/README.md](web-app/README.md)
+**Documentation**: [api-server/README.md](api-server/README.md)
 
 ---
 
 ### 4. Development Environment
 
-Complete development environment with all services.
+Complete development environment with core services.
 
-**File**: `/docker-compose.yml` (root)
+**Use Case**: Local development, debugging, full workflow testing
 
 ```bash
-# Start core services
+# Core services (2)
 docker compose up -d
 
-# With monitoring
-docker compose --profile monitoring up -d
+# With multi-version testing (5)
+docker compose -f docker-compose.yml -f docker-compose.testing.yml up -d
 
-# With all tools
-docker compose --profile monitoring --profile management up -d
+# With development tools (4)
+docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d
+
+# Everything together (7)
+docker compose -f docker-compose.yml -f docker-compose.testing.yml -f docker-compose.tools.yml up -d
 ```
 
 **Documentation**: [dev-environment/README.md](dev-environment/README.md)
 
-## Scripts Reference
+---
 
-### Build Scripts
+## Platform
 
-#### `build.sh`
-Build and publish Docker images with multi-platform support.
+The pgsquash Platform (Next.js frontend + API backend) is maintained in a **separate repository**:
+
+**Repository**: `/capysquash-platform/` (separate from engine)
+
+For Platform deployment and documentation, see the Platform repository.
+
+---
+
+## Modular Compose Files
+
+### Root Compose Files
+
+| File                         | Services | Purpose                                     | RAM Usage |
+| ---------------------------- | -------- | ------------------------------------------- | --------- |
+| `docker-compose.yml`         | 2        | Core services (pgsquash + postgres-primary) | \~500MB   |
+| `docker-compose.testing.yml` | +3       | Add PostgreSQL 17, 15, 13 for testing       | +1GB      |
+| `docker-compose.tools.yml`   | +2       | Add pgAdmin + Filebrowser                   | +300MB    |
+
+### Subdirectory Compose Files
+
+| File                             | Services | Purpose               | RAM Usage |
+| -------------------------------- | -------- | --------------------- | --------- |
+| `engine/quick-start.yml`         | 1        | CLI-only container    | \~200MB   |
+| `api-server/docker-compose.yml`  | 1        | API server standalone | \~200MB   |
+| `dev-environment/full-stack.yml` | 2        | Simplified dev setup  | \~500MB   |
+
+---
+
+## Helper Scripts
+
+All scripts located in `docker/scripts/`:
+
+### Build & Publish
+
+**`build.sh`** - Build and publish Docker images
 
 ```bash
 # Build locally
@@ -211,118 +233,47 @@ Build and publish Docker images with multi-platform support.
 # Build and push to registry
 ./docker/scripts/build.sh --registry docker.io --repository myuser/pgsquash --push
 
-# Multi-platform build
-./docker/scripts/build.sh --platforms "linux/amd64,linux/arm64" --push
+# Multi-Platform build
+./docker/scripts/build.sh --Platforms "linux/amd64,linux/arm64" --push
 
 # Build specific version
 ./docker/scripts/build.sh --version v1.2.3 --push
-
-# Help
-./docker/scripts/build.sh --help
 ```
 
 **Features**:
+
 - Multi-architecture builds (amd64, arm64)
 - Automatic version tagging from git
 - Build cache optimization
 - Security scanning with Trivy (if installed)
-- Image metadata generation
-- Buildx setup and management
 
-### Validation Scripts
+---
 
-#### `quick-validate.sh`
-One-command validation using Docker containers.
+### Validation & Testing
 
-```bash
-# Validate migrations in current directory
-./docker/scripts/quick-validate.sh
-
-# Validate specific directory
-./docker/scripts/quick-validate.sh my-migrations/
-
-# With custom output directory
-OUTPUT_DIR=./validation-results ./docker/scripts/quick-validate.sh
-
-# With specific safety level
-PGSQUASH_SAFETY_LEVEL=aggressive ./docker/scripts/quick-validate.sh
-```
-
-**Features**:
-- Automatic Docker Compose detection
-- Fallback to direct Docker if needed
-- Results summary with file listings
-
-#### `validate.sh`
-Full validation workflow with comprehensive reporting.
+**`multi-version-test.sh`** - Test against multiple PostgreSQL versions
 
 ```bash
-# Full validation with reporting
-./docker/scripts/validate.sh
-
-# Keep container for inspection
-./docker/scripts/validate.sh --keep-container
-
-# Help
-./docker/scripts/validate.sh --help
-```
-
-**Features**:
-- Comprehensive schema comparison
-- Detailed validation reports with timestamps
-- Original vs squashed migration comparison
-- Supabase compatibility layer
-- Side-by-side database comparison
-
-#### `setup-validation.sh`
-Setup complete validation environment with auto-detected extensions.
-
-```bash
-# Setup validation environment
-./docker/scripts/setup-validation.sh migrations/
-
-# With custom output directory
-./docker/scripts/setup-validation.sh migrations/ /tmp/validation
-```
-
-**Features**:
-- Automatic extension detection from migrations
-- Auth service compatibility (Clerk, Supabase)
-- Docker Compose generation
-- Initialization scripts for extensions
-- Ready-to-run validation script
-
-#### `multi-version-test.sh`
-Test migrations against multiple PostgreSQL versions.
-
-```bash
-# Test all default versions (17, 16, 15, 14, 13)
+# Test all default versions (17, 15, 13)
 ./docker/scripts/multi-version-test.sh
-
-# Test specific directory
-./docker/scripts/multi-version-test.sh my-migrations/
 
 # Test specific versions
 ./docker/scripts/multi-version-test.sh --versions 17,15,13
 
 # Quick test (latest and oldest only)
 ./docker/scripts/multi-version-test.sh --quick
-
-# Help
-./docker/scripts/multi-version-test.sh --help
 ```
 
 **Features**:
+
 - Parallel version testing
 - Detailed logs per version
 - Schema comparison across versions
 - Summary report generation
-- Quick mode for CI/CD
 
-### Utility Scripts
+---
 
-#### `cleanup.sh`
-Clean up Docker resources from validation and development.
+**`cleanup.sh`** - Clean up Docker resources
 
 ```bash
 # Clean validation containers only (default)
@@ -333,51 +284,34 @@ Clean up Docker resources from validation and development.
 
 # Skip confirmation prompts
 ./docker/scripts/cleanup.sh --all --force
-
-# Help
-./docker/scripts/cleanup.sh --help
 ```
 
 **Features**:
+
 - Label-based container cleanup
 - Volume management
 - Compose service cleanup
-- System pruning
 - Safety confirmations
 
-#### `docker-run-examples.sh`
-View and copy-paste Docker run examples.
+---
 
-```bash
-# View all examples
-./docker/scripts/docker-run-examples.sh
-```
-
-**Examples Include**:
-- Basic squashing with resource limits
-- Security-hardened containers
-- Validation with Docker socket
-- Read-only containers
-- Different safety levels
-
-#### `test-setup.sh`
-Comprehensive Docker setup testing.
+**`test-setup.sh`** - Comprehensive Docker setup testing
 
 ```bash
 # Run all tests
 ./docker/scripts/test-setup.sh
-
-# Help
-./docker/scripts/test-setup.sh --help
 ```
 
 **Tests**:
+
 - Docker availability
 - Image building
 - Container runtime
 - Validation workflow
 - Full end-to-end workflow
-- Multi-platform support
+- Multi-Platform support
+
+---
 
 ## Configuration
 
@@ -386,36 +320,110 @@ Comprehensive Docker setup testing.
 Copy template and customize:
 
 ```bash
-cp docker/config-templates/.env.template .env
+cp .env.example .env
 nano .env
+```
+
+**Core Variables**:
+
+```bash
+POSTGRES_PASSWORD=pgsquash_secure_password
+POSTGRES_PRIMARY_PORT=5432
+```
+
+**API Server Variables**:
+
+```bash
+GITHUB_TOKEN=ghp_your_token_here
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+GITHUB_CLIENT_ID=your_oauth_client_id
+GITHUB_CLIENT_SECRET=your_oauth_client_secret
+```
+
+**Testing Variables**:
+
+```bash
+POSTGRES_17_PORT=5417
+POSTGRES_15_PORT=5415
+POSTGRES_13_PORT=5413
+```
+
+**Tool Variables**:
+
+```bash
+PGADMIN_PORT=5050
+FILEBROWSER_PORT=8081
 ```
 
 ### Config File
 
 ```bash
-cp docker/config-templates/pgsquash.config.json.template config/pgsquash.config.json
+cp pgsquash.config.example.json pgsquash.config.json
+nano pgsquash.config.json
 ```
+
+---
+
+## Migration from Old Structure
+
+If you used the old Docker setup (11 services), see migration guide:
+
+**[DOCKER\_INFRASTRUCTURE\_CHANGES.md](../docs/internal/audits/DOCKER_INFRASTRUCTURE_CHANGES.md)**
+
+**What Changed**:
+
+- 11 services → 2 core services (pgsquash + postgres-primary)
+- Removed services: Redis, MinIO, Grafana, Prometheus, Traefik, pgAdmin, Filebrowser
+- Moved testing: postgres-17, postgres-15, postgres-13 → `docker-compose.testing.yml`
+- Moved tools: pgAdmin, Filebrowser → `docker-compose.tools.yml`
+
+**Impact**:
+
+- ✅ 75% faster startup (15s vs 60s)
+- ✅ 75% less RAM usage (500MB vs 2GB)
+- ✅ Modular compose files for different use cases
+- ✅ Clear service integration status
+
+---
 
 ## Best Practices
 
 ### Development
 
-- Use `docker/validation/with-validation.yml`
-- Mount local directories for quick iteration
-- Enable verbose logging
+```bash
+# Start core services for basic development
+docker compose up -d
+
+# Add tools when needed
+docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d
+```
 
 ### CI/CD
 
-- Use `docker/engine/quick-start.yml`
-- Pin image versions
-- Use `--rm` for cleanup
+```bash
+# Use engine for CI/CD pipelines
+docker compose -f docker/engine/quick-start.yml run --rm pgsquash squash
+
+# Use multi-version testing for compatibility
+./docker/scripts/multi-version-test.sh --quick
+```
 
 ### Production
 
-- Use main `docker-compose.yml` or `docker/web-app/separated/`
-- Set resource limits
-- Use secrets management
-- Enable monitoring
+```bash
+# Use API server for production deployments
+cd docker/api-server
+docker compose up -d
+
+# Set resource limits in compose file
+deploy:
+  resources:
+    limits:
+      cpus: '2.0'
+      memory: 2G
+```
+
+---
 
 ## Troubleshooting
 
@@ -423,7 +431,7 @@ cp docker/config-templates/pgsquash.config.json.template config/pgsquash.config.
 
 ```bash
 # Clean build
-docker-compose build --no-cache
+docker compose build --no-cache
 
 # Check Dockerfile syntax
 docker build --dry-run -f Dockerfile .
@@ -436,7 +444,7 @@ docker build --dry-run -f Dockerfile .
 docker info
 
 # List validation containers
-docker ps -a --filter "label=pg-squash.type=validation"
+docker ps -a --filter "label=pgsquash.type=validation"
 
 # Clean up stuck containers
 ./docker/scripts/cleanup.sh
@@ -449,20 +457,35 @@ docker ps -a --filter "label=pg-squash.type=validation"
 sudo chown -R $(id -u):$(id -g) output/
 
 # Check user in container
-docker-compose run --rm pgsquash id
+docker compose run --rm pgsquash id
 ```
+
+### Port Conflicts
+
+```bash
+# Check what's using the port
+lsof -i :5432
+
+# Or change the port in .env
+echo "POSTGRES_PRIMARY_PORT=5433" >> .env
+```
+
+---
 
 ## Advanced
 
 ### Custom PostgreSQL Image
 
-Create `docker/validation/custom-postgres.dockerfile`:
+Create custom Postgres image with additional extensions:
 
 ```dockerfile
-FROM postgres:15-alpine
+# docker/validation/custom-postgres.dockerfile
+FROM postgres:17
 
-RUN apk add --no-cache postgis
-# Add more extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-17-postgis-3 \
+    postgresql-17-pgvector \
+    && rm -rf /var/lib/apt/lists/*
 ```
 
 Build and use:
@@ -470,7 +493,7 @@ Build and use:
 ```bash
 docker build -t pgsquash-postgres:custom -f docker/validation/custom-postgres.dockerfile .
 
-# Update config
+# Update compose file
 postgresql_image: pgsquash-postgres:custom
 ```
 
@@ -478,17 +501,26 @@ postgresql_image: pgsquash-postgres:custom
 
 ```bash
 docker buildx create --use
-docker buildx build --platform linux/amd64,linux/arm64 -t pgsquash:latest .
+docker buildx build --Platform linux/amd64,linux/arm64 -t pgsquash:latest .
 ```
+
+---
 
 ## Documentation
 
-- [Setup Guide](../docs/docker/DOCKER_SETUP.md)
-- [Use Cases](../docs/docker/DOCKER_USE_CASES.md)
+- **API Server**: [api-server/README.md](api-server/README.md)
+- **CLI Engine**: [engine/README.md](engine/README.md)
+- **Validation**: [validation/README.md](validation/README.md)
+- **Development**: [dev-environment/README.md](dev-environment/README.md)
+- **Infrastructure Changes**: [../docs/internal/audits/DOCKER\_INFRASTRUCTURE\_CHANGES.md](../docs/internal/audits/DOCKER_INFRASTRUCTURE_CHANGES.md)
+
+---
 
 ## Support
 
 Issues? Check:
-1. [Troubleshooting Guide](../docs/TROUBLESHOOTING.md)
-2. [GitHub Issues](https://github.com/capysquash/pg-squash-engine/issues)
-3. Container logs: `docker-compose logs -f`
+
+1. [Troubleshooting Guide](../docs/troubleshooting.md)
+2. [GitHub Issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues)
+3. Container logs: `docker compose logs -f`
+4. [Infrastructure Changes Guide](../docs/internal/audits/DOCKER_INFRASTRUCTURE_CHANGES.md)

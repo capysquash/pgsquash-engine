@@ -1,15 +1,15 @@
 package consolidation
 
 import (
-	"github.com/capysquash/pg-squash-engine/internal/utils"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/tracking"
-	"github.com/capysquash/pg-squash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 
-	"github.com/capysquash/pg-squash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // EnumDeduplicationRule detects and resolves duplicate ENUM type definitions
@@ -142,9 +142,45 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 		return result, nil
 	}
 
-	// This is the earliest/first ENUM - keep it
+	// This is the earliest/first ENUM - keep it and merge any ALTER TYPE ADD VALUE statements
 	firstEnum := enumStmts[0]
 	warnings := []string{}
+
+	// Collect ALTER TYPE ADD VALUE statements
+	var alterTypeStmts []types.Statement
+	for _, event := range lifecycle.History {
+		if event.Statement.Operation == types.OpAlter &&
+		   event.Statement.ObjectType == types.TypeEnum &&
+		   event.Statement.AlterTypeNewValue != "" {
+			alterTypeStmts = append(alterTypeStmts, event.Statement)
+		}
+	}
+
+	// If we have ALTER TYPE ADD VALUE statements, merge them into CREATE TYPE
+	consolidatedSQL := firstEnum.SQL
+	if len(alterTypeStmts) > 0 {
+		// Extract existing enum values from CREATE TYPE statement
+		enumPattern := regexp.MustCompile(`(?is)CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\((.*?)\)`)
+		matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
+		if len(matches) > 1 {
+			// Parse existing values
+			existingValues := parseEnumValues(matches[1])
+
+			// Add new values from ALTER TYPE statements
+			for _, alterStmt := range alterTypeStmts {
+				if alterStmt.AlterTypeNewValue != "" && !contains(existingValues, alterStmt.AlterTypeNewValue) {
+					existingValues = append(existingValues, alterStmt.AlterTypeNewValue)
+				}
+			}
+
+			// Reconstruct CREATE TYPE with all values
+			valuesList := strings.Join(quoteEnumValues(existingValues), ", ")
+			consolidatedSQL = regexp.MustCompile(`(?is)(CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\().*?(\))`).
+				ReplaceAllString(firstEnum.SQL, fmt.Sprintf("${1}%s${2}", valuesList))
+
+			warnings = append(warnings, fmt.Sprintf("Merged %d ALTER TYPE ADD VALUE statement(s) into CREATE TYPE", len(alterTypeStmts)))
+		}
+	}
 
 	if len(enumStmts) > 1 {
 		warnings = append(warnings, fmt.Sprintf("Found %d definitions for ENUM %s, using first definition", len(enumStmts), typeName))
@@ -158,18 +194,30 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 		warnings = append(warnings, fmt.Sprintf("ENUM %s is the primary definition (duplicates eliminated: %v)", typeName, conflictNames))
 	}
 
+	// Include ALTER TYPE statements in original statements if any were merged
+	originalStmts := enumStmts
+	if len(alterTypeStmts) > 0 {
+		originalStmts = append(originalStmts, alterTypeStmts...)
+	}
+
+	optimizations := []string{}
+	if len(enumStmts) > 1 {
+		optimizations = append(optimizations, fmt.Sprintf("Deduplicated %d ENUM definition(s) for %s", len(enumStmts)-1, typeName))
+	}
+	if len(alterTypeStmts) > 0 {
+		optimizations = append(optimizations, fmt.Sprintf("Merged %d ALTER TYPE ADD VALUE statement(s) into CREATE TYPE", len(alterTypeStmts)))
+	}
+
 	result := &tracking.ConsolidationResult{
-		OriginalStatements: enumStmts,
-		ConsolidatedSQL:    firstEnum.SQL,
-		Optimizations: []string{
-			fmt.Sprintf("Deduplicated %d ENUM definition(s) for %s", len(enumStmts)-1, typeName),
-		},
-		Warnings:  warnings,
-		RiskLevel: tracking.RiskLevelMedium, // Medium risk since we're choosing one definition
+		OriginalStatements: originalStmts,
+		ConsolidatedSQL:    consolidatedSQL,
+		Optimizations:      optimizations,
+		Warnings:           warnings,
+		RiskLevel:          tracking.RiskLevelMedium, // Medium risk since we're choosing one definition
 		EstimatedSavings: tracking.SquashSavings{
-			StatementsReduced: len(enumStmts) - 1,
-			FilesAffected:     len(enumStmts),
-			LinesReduced:      (len(enumStmts) - 1) * 5,
+			StatementsReduced: len(enumStmts) - 1 + len(alterTypeStmts),
+			FilesAffected:     len(enumStmts) + len(alterTypeStmts),
+			LinesReduced:      ((len(enumStmts) - 1) + len(alterTypeStmts)) * 5,
 		},
 	}
 
@@ -208,5 +256,42 @@ func isSimilarEnumName(name1, name2 string) bool {
 		}
 	}
 
+	return false
+}
+
+// parseEnumValues extracts individual enum values from a comma-separated list
+// Input: "'active', 'inactive', 'suspended'"
+// Output: ["active", "inactive", "suspended"]
+func parseEnumValues(valuesStr string) []string {
+	var values []string
+	// Match quoted strings
+	valuePattern := regexp.MustCompile(`'([^']*)'`)
+	matches := valuePattern.FindAllStringSubmatch(valuesStr, -1)
+	for _, match := range matches {
+		if len(match) > 1 {
+			values = append(values, match[1])
+		}
+	}
+	return values
+}
+
+// quoteEnumValues wraps each value in single quotes for SQL
+// Input: ["active", "inactive"]
+// Output: ["'active'", "'inactive'"]
+func quoteEnumValues(values []string) []string {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = fmt.Sprintf("'%s'", v)
+	}
+	return quoted
+}
+
+// contains checks if a string slice contains a specific value
+func contains(slice []string, value string) bool {
+	for _, item := range slice {
+		if item == value {
+			return true
+		}
+	}
 	return false
 }

@@ -1,16 +1,16 @@
 # =============================================================================
-# pg-squash Engine Dockerfile
+# pgsquash Engine Dockerfile
 # ======================================================================
 
 # Build arguments
-ARG GO_VERSION=1.25.1
+ARG GO_VERSION=1.25.3
 ARG BUILD_VERSION=dev
 ARG BUILD_DATE
 ARG GIT_COMMIT
 
 # Build stage
 
-# Alternative: golang:1.25.1 (Debian) works fine for building
+# Alternative: golang:1.25.3 (Debian) works fine for building
 FROM ubuntu:noble AS builder
 
 # Re-declare ARGs for this stage
@@ -109,15 +109,15 @@ USER pgsquash
 WORKDIR /app
 
 # Add OCI labels
-LABEL org.opencontainers.image.title="pg-squash Engine" \
+LABEL org.opencontainers.image.title="pgsquash Engine" \
       org.opencontainers.image.description="PostgreSQL migration squasher and optimizer" \
       org.opencontainers.image.version="${BUILD_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \
       org.opencontainers.image.revision="${GIT_COMMIT}" \
-      org.opencontainers.image.vendor="capysquash" \
+      org.opencontainers.image.vendor="CAPYSQUASH" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/capysquash/pg-squash-engine" \
-      org.opencontainers.image.documentation="https://github.com/capysquash/pg-squash-engine/blob/main/README.md"
+      org.opencontainers.image.source="https://github.com/CAPYSQUASH/pgsquash-engine" \
+      org.opencontainers.image.documentation="https://github.com/CAPYSQUASH/pgsquash-engine/blob/main/README.md"
 
 # Health check - using dedicated health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -6,7 +6,7 @@ source "$SCRIPT_DIR/../../scripts/lib/common.sh"
 
 setup_error_handling
 
-# Cleanup Script for pg-squash Docker Resources
+# Cleanup Script for pgsquash Docker Resources
 # Removes validation containers, unused images, and temporary volumes
 
 # Parse arguments
@@ -19,7 +19,7 @@ show_help() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Cleanup pg-squash Docker resources
+Cleanup pgsquash Docker resources
 
 OPTIONS:
     --all               Clean everything (containers, images, volumes)
@@ -72,9 +72,9 @@ done
 
 # Confirmation prompt
 if [ "$FORCE" = false ]; then
-    echo "🧹 This will clean up pg-squash Docker resources:"
+    echo "🧹 This will clean up pgsquash Docker resources:"
     [ "$CLEAN_VALIDATION" = true ] && echo "  • Validation containers"
-    [ "$CLEAN_ALL" = true ] && echo "  • All pg-squash containers and images"
+    [ "$CLEAN_ALL" = true ] && echo "  • All pgsquash containers and images"
     [ "$CLEAN_VOLUMES" = true ] && echo "  • Docker volumes"
     echo ""
     read -p "Continue? (y/N) " -n 1 -r
@@ -91,8 +91,8 @@ log_info "🧹 Starting cleanup..."
 if [ "$CLEAN_VALIDATION" = true ]; then
     log_info "Removing validation containers..."
 
-    # Stop and remove containers with pg-squash labels
-    VALIDATION_CONTAINERS=$(docker ps -aq -f "label=pg-squash.type=validation" 2>/dev/null || true)
+    # Stop and remove containers with pgsquash labels
+    VALIDATION_CONTAINERS=$(docker ps -aq -f "label=pgsquash.type=validation" 2>/dev/null || true)
     if [ -n "$VALIDATION_CONTAINERS" ]; then
         echo "$VALIDATION_CONTAINERS" | xargs docker rm -f 2>/dev/null || true
         log_success "Removed validation containers"
@@ -108,15 +108,15 @@ if [ "$CLEAN_VALIDATION" = true ]; then
     fi
 fi
 
-# Clean all pg-squash resources
+# Clean all pgsquash resources
 if [ "$CLEAN_ALL" = true ]; then
-    log_info "Removing all pg-squash containers..."
+    log_info "Removing all pgsquash containers..."
 
-    # Stop all containers with pg-squash label
-    ALL_CONTAINERS=$(docker ps -aq -f "label=pg-squash" 2>/dev/null || true)
+    # Stop all containers with pgsquash label
+    ALL_CONTAINERS=$(docker ps -aq -f "label=pgsquash" 2>/dev/null || true)
     if [ -n "$ALL_CONTAINERS" ]; then
         echo "$ALL_CONTAINERS" | xargs docker rm -f 2>/dev/null || true
-        log_success "Removed all pg-squash containers"
+        log_success "Removed all pgsquash containers"
     fi
 
     # Stop containers from docker-compose
@@ -127,22 +127,22 @@ if [ "$CLEAN_ALL" = true ]; then
         fi
     done
 
-    log_info "Removing pg-squash images..."
+    log_info "Removing pgsquash images..."
     docker images | grep "pgsquash" | awk '{print $3}' | xargs docker rmi -f 2>/dev/null || true
-    log_success "Removed pg-squash images"
+    log_success "Removed pgsquash images"
 fi
 
 # Clean volumes
 if [ "$CLEAN_VOLUMES" = true ]; then
-    log_info "Removing pg-squash volumes..."
+    log_info "Removing pgsquash volumes..."
 
     # Remove labeled volumes
-    VOLUMES=$(docker volume ls -q -f "label=pg-squash" 2>/dev/null || true)
+    VOLUMES=$(docker volume ls -q -f "label=pgsquash" 2>/dev/null || true)
     if [ -n "$VOLUMES" ]; then
         echo "$VOLUMES" | xargs docker volume rm 2>/dev/null || true
-        log_success "Removed pg-squash volumes"
+        log_success "Removed pgsquash volumes"
     else
-        log_info "No pg-squash volumes found"
+        log_info "No pgsquash volumes found"
     fi
 
     # Prune anonymous volumes

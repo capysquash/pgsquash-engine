@@ -1,4 +1,4 @@
--- PostgreSQL initialization script for pg-squash validation databases
+-- PostgreSQL initialization script for pgsquash validation databases
 -- This script sets up the necessary extensions, roles, and configurations
 
 -- Enable required extensions

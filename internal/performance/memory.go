@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
 // MemoryManager handles memory-efficient processing with deduplication and size limits
@@ -35,7 +35,7 @@ func NewMemoryManager(maxMemoryMB int) *MemoryManager {
 	// Initialize object pools
 	mm.statementPool = &sync.Pool{
 		New: func() interface{} {
-			return &parser.Statement{}
+			return &types.Statement{}
 		},
 	}
 
@@ -49,15 +49,15 @@ func NewMemoryManager(maxMemoryMB int) *MemoryManager {
 }
 
 // GetStatement retrieves a pooled statement object
-func (mm *MemoryManager) GetStatement() *parser.Statement {
-	stmt := mm.statementPool.Get().(*parser.Statement)
+func (mm *MemoryManager) GetStatement() *types.Statement {
+	stmt := mm.statementPool.Get().(*types.Statement)
 	// Reset the statement
-	*stmt = parser.Statement{}
+	*stmt = types.Statement{}
 	return stmt
 }
 
 // PutStatement returns a statement to the pool
-func (mm *MemoryManager) PutStatement(stmt *parser.Statement) {
+func (mm *MemoryManager) PutStatement(stmt *types.Statement) {
 	if stmt != nil {
 		mm.statementPool.Put(stmt)
 	}
@@ -300,13 +300,13 @@ type DeduplicationStats struct {
 
 // MemoryOptimizedStatement wraps a statement with memory optimization features
 type MemoryOptimizedStatement struct {
-	*parser.Statement
+	*types.Statement
 	memoryManager *MemoryManager
 	size          int64
 }
 
 // NewMemoryOptimizedStatement creates a statement with memory tracking
-func NewMemoryOptimizedStatement(mm *MemoryManager, stmt *parser.Statement) *MemoryOptimizedStatement {
+func NewMemoryOptimizedStatement(mm *MemoryManager, stmt *types.Statement) *MemoryOptimizedStatement {
 	size := estimateStatementSize(stmt)
 	if !mm.TrackMemoryUsage(size) {
 		return nil // Memory limit exceeded
@@ -330,7 +330,7 @@ func (mos *MemoryOptimizedStatement) Release() {
 }
 
 // estimateStatementSize estimates the memory usage of a statement
-func estimateStatementSize(stmt *parser.Statement) int64 {
+func estimateStatementSize(stmt *types.Statement) int64 {
 	if stmt == nil {
 		return 0
 	}

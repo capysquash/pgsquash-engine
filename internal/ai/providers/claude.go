@@ -8,6 +8,7 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // ClaudeProvider implements the AI provider interface for Anthropic's Claude
@@ -22,7 +23,12 @@ type ClaudeProvider struct {
 // NewClaudeProvider creates a new Claude provider instance
 func NewClaudeProvider(config *ProviderConfig) (*ClaudeProvider, error) {
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("claude API key is required")
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"claude API key is required",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithSuggestion("set ANTHROPIC_API_KEY environment variable")
 	}
 
 	client := anthropic.NewClient(option.WithAPIKey(config.APIKey))
@@ -104,8 +110,8 @@ func (c *ClaudeProvider) HealthCheck(ctx context.Context) error {
 func (c *ClaudeProvider) Analyze(ctx context.Context, req *AnalysisRequest) (*AnalysisResponse, error) {
 	startTime := time.Now()
 
-	systemPrompt := c.getSystemPromptForType(req.Type)
-	userPrompt := c.buildUserPrompt(req)
+	systemPrompt := GetSystemPromptForType(req.Type)
+	userPrompt := BuildUserPrompt(req)
 
 	maxTokens := 4000
 	if req.MaxTokens > 0 {
@@ -133,7 +139,12 @@ func (c *ClaudeProvider) Analyze(ctx context.Context, req *AnalysisRequest) (*An
 
 	response, err := c.client.Messages.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("claude API call failed: %w", err)
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"claude API call failed",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("check ANTHROPIC_API_KEY and rate limits")
 	}
 
 	result := c.extractTextFromResponse(response)
@@ -155,11 +166,21 @@ func (c *ClaudeProvider) Analyze(ctx context.Context, req *AnalysisRequest) (*An
 func (c *ClaudeProvider) SubmitBatch(ctx context.Context, batch *BatchRequest) (*BatchResponse, error) {
 	// Claude batch processing implementation
 	// Note: This would use Claude's batch API when available
-	return nil, fmt.Errorf("batch processing not yet implemented for Claude")
+	return nil, errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		"batch processing not yet implemented for Claude",
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithSuggestion("batch processing will be available in a future version")
 }
 
 func (c *ClaudeProvider) GetBatchStatus(ctx context.Context, batchID string) (*BatchResponse, error) {
-	return nil, fmt.Errorf("batch status not yet implemented for Claude")
+	return nil, errors.NewError(
+		errors.ErrorCodeValidationFailed,
+		"batch status not yet implemented for Claude",
+		errors.SeverityError,
+		errors.CategoryValidation,
+	).WithSuggestion("batch processing will be available in a future version")
 }
 
 func (c *ClaudeProvider) SupportsStreaming() bool {
@@ -179,8 +200,8 @@ func (c *ClaudeProvider) SupportsBatch() bool {
 func (c *ClaudeProvider) AnalyzeWithTools(ctx context.Context, req *AnalysisRequest, tools []*ToolDefinition) (*AnalysisResponse, error) {
 	startTime := time.Now()
 
-	systemPrompt := c.getSystemPromptForType(req.Type)
-	userPrompt := c.buildUserPrompt(req)
+	systemPrompt := GetSystemPromptForType(req.Type)
+	userPrompt := BuildUserPrompt(req)
 
 	maxTokens := 4000
 	if req.MaxTokens > 0 {
@@ -208,7 +229,12 @@ func (c *ClaudeProvider) AnalyzeWithTools(ctx context.Context, req *AnalysisRequ
 
 	response, err := c.client.Messages.New(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("claude API call with tools failed: %w", err)
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"claude API call with tools failed",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err).WithSuggestion("check ANTHROPIC_API_KEY and rate limits")
 	}
 
 	result := c.extractTextFromResponse(response)
@@ -267,103 +293,32 @@ func (c *ClaudeProvider) AnalyzeStream(ctx context.Context, req *AnalysisRequest
 
 // Helper methods
 
-func (c *ClaudeProvider) getSystemPromptForType(analysisType AnalysisType) string {
-	basePrompt := "You are a PostgreSQL expert specializing in database optimization, migration analysis, and SQL best practices. Provide precise, accurate responses."
-
-	switch analysisType {
-	case AnalysisFunctionEquivalence:
-		return basePrompt + " Focus on semantic equivalence of PostgreSQL functions, considering inputs, outputs, and side effects."
-	case AnalysisDeadCode:
-		return basePrompt + " Analyze PostgreSQL schemas to identify unused functions, triggers, and database objects."
-	case AnalysisFunctionComplexity:
-		return basePrompt + " Evaluate PostgreSQL function complexity, maintainability, and performance characteristics."
-	case AnalysisAuthPatterns:
-		return basePrompt + " Identify authentication and authorization patterns in PostgreSQL schemas, including RLS, JWT, and third-party integrations."
-	case AnalysisOptimizations:
-		return basePrompt + " Suggest performance and maintainability optimizations for PostgreSQL migrations and schemas."
-	case AnalysisSQLComplexity:
-		return basePrompt + " Analyze SQL statement complexity, performance implications, and best practice adherence."
-	default:
-		return basePrompt
-	}
-}
-
-func (c *ClaudeProvider) buildUserPrompt(req *AnalysisRequest) string {
-	switch req.Type {
-	case AnalysisFunctionEquivalence:
-		parts := strings.Split(req.Content, "|||")
-		if len(parts) == 2 {
-			return fmt.Sprintf(`Analyze these two PostgreSQL functions and determine if they are semantically equivalent.
-
-Two functions are semantically equivalent if they:
-1. Have the same input parameters (names can differ, but types and order must match)
-2. Produce identical outputs for all possible inputs
-3. Have the same side effects (or lack thereof)
-4. Handle edge cases identically
-
-Function 1:
-%s
-
-Function 2:
-%s
-
-Respond with only 'true' if they are semantically equivalent, or 'false' if they are not.`, parts[0], parts[1])
-		}
-		return req.Content
-
-	case AnalysisDeadCode:
-		return fmt.Sprintf(`Analyze this PostgreSQL schema and determine if the specified function is dead code.
-
-A function is considered dead code if:
-1. It's not called by any other functions in the schema
-2. It's not referenced in any triggers
-3. It's not used in any policies or constraints
-4. It's not referenced in any views
-5. It appears to be unused application entry point
-
-Schema and Analysis Request:
-%s
-
-Context (if provided):
-%s
-
-Respond with only 'true' if the function appears to be dead code, or 'false' if it's used.`, req.Content, req.Context)
-
-	case AnalysisAuthPatterns:
-		return fmt.Sprintf(`Analyze this SQL content and identify authentication/authorization patterns.
-
-Look for:
-1. JWT token processing (auth.jwt(), claims extraction)
-2. RLS (Row Level Security) policies
-3. User/role-based access patterns
-4. Supabase auth patterns
-5. Clerk auth patterns
-6. Custom authentication schemes
-
-SQL Content:
-%s
-
-List the detected patterns, one per line, or 'NONE' if no auth patterns found.`, req.Content)
-
-	default:
-		prompt := req.Content
-		if req.Context != "" {
-			prompt += "\n\nContext:\n" + req.Context
-		}
-		return prompt
-	}
-}
-
 func (c *ClaudeProvider) extractTextFromResponse(response *anthropic.Message) string {
 	if len(response.Content) == 0 {
 		return ""
 	}
 
-	// Extract text from content blocks - simplified approach
+	// Extract text from content blocks properly
 	var result strings.Builder
 	for _, block := range response.Content {
-		// Convert block to string representation
-		result.WriteString(fmt.Sprintf("%v", block))
+		// ContentBlockUnion is a struct with Type field indicating the variant
+		switch block.Type {
+		case "text":
+			// Extract text from text block
+			result.WriteString(block.Text)
+		case "thinking":
+			// Extract thinking content (Claude extended thinking)
+			result.WriteString(block.Thinking)
+		case "tool_use", "server_tool_use":
+			// For tool use blocks, skip or handle based on use case
+			continue
+		case "web_search_tool_result":
+			// Web search results - could extract if needed
+			continue
+		default:
+			// Unknown block type - use fallback
+			result.WriteString(fmt.Sprintf("%v", block))
+		}
 	}
 
 	return result.String()

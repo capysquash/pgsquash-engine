@@ -1,13 +1,15 @@
 package tracking
 
 import (
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
-	"log"
 	"sort"
 	"strings"
 
-	"github.com/capysquash/pg-squash-engine/internal/parser"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
+
+// Risk assessment rule implementations and helper methods
 
 // AddRule adds a risk assessment rule
 func (ra *RiskAssessment) AddRule(rule RiskRule) {
@@ -39,10 +41,10 @@ func (ra *RiskAssessment) GetRiskRules() []RiskRule {
 type DataLossRiskRule struct{}
 
 func (r *DataLossRiskRule) Evaluate(event *LifecycleEvent, lifecycle *ObjectLifecycle) RiskLevel {
-	if event.Operation == parser.OpDrop {
+	if event.Operation == types.OpDrop {
 		return RiskLevelHigh
 	}
-	if event.Operation == parser.OpAlter && event.HasDataOps {
+	if event.Operation == types.OpAlter && event.HasDataOps {
 		return RiskLevelMedium
 	}
 	return RiskLevelLow
@@ -90,7 +92,7 @@ type ProductionUsageRiskRule struct{}
 
 func (r *ProductionUsageRiskRule) Evaluate(event *LifecycleEvent, lifecycle *ObjectLifecycle) RiskLevel {
 	// Check if object is likely used in production
-	if lifecycle.Type == parser.TypeTable || lifecycle.Type == parser.TypeView {
+	if lifecycle.Type == types.TypeTable || lifecycle.Type == types.TypeView {
 		return RiskLevelMedium
 	}
 	return RiskLevelLow
@@ -104,11 +106,11 @@ func (r *ProductionUsageRiskRule) Description() string {
 type ConstraintModificationRiskRule struct{}
 
 func (r *ConstraintModificationRiskRule) Evaluate(event *LifecycleEvent, lifecycle *ObjectLifecycle) RiskLevel {
-	if lifecycle.Type == parser.TypeConstraint {
-		if event.Operation == parser.OpDrop {
+	if lifecycle.Type == types.TypeConstraint {
+		if event.Operation == types.OpDrop {
 			return RiskLevelHigh
 		}
-		if event.Operation == parser.OpAlter {
+		if event.Operation == types.OpAlter {
 			return RiskLevelMedium
 		}
 	}
@@ -123,10 +125,10 @@ func (r *ConstraintModificationRiskRule) Description() string {
 type PermissionChangeRiskRule struct{}
 
 func (r *PermissionChangeRiskRule) Evaluate(event *LifecycleEvent, lifecycle *ObjectLifecycle) RiskLevel {
-	if event.Operation == parser.OpRevoke {
+	if event.Operation == types.OpRevoke {
 		return RiskLevelMedium
 	}
-	if event.Operation == parser.OpGrant && len(lifecycle.Permissions) > 10 {
+	if event.Operation == types.OpGrant && len(lifecycle.Permissions) > 10 {
 		return RiskLevelMedium // Complex permission structure
 	}
 	return RiskLevelLow
@@ -159,41 +161,41 @@ func (obj *ObjectLifecycle) CanSquash() bool {
 
 // GetFinalState returns the final state of the object
 // For tables, this returns the CREATE statement, not ALTER statements
-func (obj *ObjectLifecycle) GetFinalState() *parser.Statement {
+func (obj *ObjectLifecycle) GetFinalState() *types.Statement {
 	if len(obj.History) == 0 {
 		return nil
 	}
 
 	// For tables, prefer returning CREATE over ALTER
-	if obj.Type == parser.TypeTable {
+	if obj.Type == types.TypeTable {
 		// Debug: log history for profiles and viewing_requests tables
 		tableName := strings.ToLower(obj.Name)
 		if tableName == "profiles" || tableName == "viewing_requests" {
-			log.Printf("DEBUG GetFinalState: %s table has %d history events:", obj.Name, len(obj.History))
+			utils.GetDefaultLogger().WithPrefix("RISK-ASSESSMENT").Info("DEBUG GetFinalState: %s table has %d history events:", obj.Name, len(obj.History))
 			for i, event := range obj.History {
-				log.Printf("  Event %d: Operation=%s, SQL length=%d", i, event.Operation, len(event.Statement.SQL))
+				utils.GetDefaultLogger().WithPrefix("RISK-ASSESSMENT").Info("  Event %d: Operation=%s, SQL length=%d", i, event.Operation, len(event.Statement.SQL))
 			}
 		}
 
 		// Find the LAST CREATE statement (most recent schema definition)
 		// When there are multiple CREATE TABLE IF NOT EXISTS statements,
 		// the last one represents the most up-to-date schema
-		var lastCreate *parser.Statement
+		var lastCreate *types.Statement
 		createCount := 0
 		for i := range obj.History {
-			if obj.History[i].Operation == parser.OpCreate {
+			if obj.History[i].Operation == types.OpCreate {
 				lastCreate = &obj.History[i].Statement
 				createCount++
 			}
 		}
 		if createCount > 1 {
-			log.Printf("Table %s has %d CREATE statements, using last one", obj.Name, createCount)
+			utils.GetDefaultLogger().WithPrefix("RISK-ASSESSMENT").Info("Table %s has %d CREATE statements, using last one", obj.Name, createCount)
 		}
 		if tableName == "viewing_requests" {
 			if lastCreate != nil {
-				log.Printf("DEBUG GetFinalState: viewing_requests returning CREATE statement with SQL length=%d", len(lastCreate.SQL))
+				utils.GetDefaultLogger().WithPrefix("RISK-ASSESSMENT").Info("DEBUG GetFinalState: viewing_requests returning CREATE statement with SQL length=%d", len(lastCreate.SQL))
 			} else {
-				log.Printf("DEBUG GetFinalState: viewing_requests has NO CREATE statement, returning nil!")
+				utils.GetDefaultLogger().WithPrefix("RISK-ASSESSMENT").Info("DEBUG GetFinalState: viewing_requests has NO CREATE statement, returning nil!")
 			}
 		}
 		if lastCreate != nil {
@@ -203,7 +205,7 @@ func (obj *ObjectLifecycle) GetFinalState() *parser.Statement {
 
 	// Return the last non-DROP operation
 	for i := len(obj.History) - 1; i >= 0; i-- {
-		if obj.History[i].Operation != parser.OpDrop {
+		if obj.History[i].Operation != types.OpDrop {
 			return &obj.History[i].Statement
 		}
 	}
@@ -212,12 +214,12 @@ func (obj *ObjectLifecycle) GetFinalState() *parser.Statement {
 }
 
 // GetAlterStatements returns all unique ALTER statements for the object (used for tables with column additions)
-func (obj *ObjectLifecycle) GetAlterStatements() []parser.Statement {
+func (obj *ObjectLifecycle) GetAlterStatements() []types.Statement {
 	seen := make(map[string]bool)
-	var alters []parser.Statement
+	var alters []types.Statement
 
 	for _, event := range obj.History {
-		if event.Operation == parser.OpAlter {
+		if event.Operation == types.OpAlter {
 			// Normalize the SQL for deduplication (trim whitespace)
 			normalizedSQL := strings.TrimSpace(event.Statement.SQL)
 
@@ -244,9 +246,9 @@ func (obj *ObjectLifecycle) GetAlterStatements() []parser.Statement {
 // HasConflicts checks for conflicting operations
 func (obj *ObjectLifecycle) HasConflicts() bool {
 	// Check for operations that might conflict
-	operations := make(map[parser.Operation]bool)
+	operations := make(map[types.Operation]bool)
 	for _, event := range obj.History {
-		if operations[event.Operation] && event.Operation == parser.OpCreate {
+		if operations[event.Operation] && event.Operation == types.OpCreate {
 			return true // Duplicate CREATE operation
 		}
 		operations[event.Operation] = true
@@ -278,10 +280,10 @@ func (obj *ObjectLifecycle) GetConsolidatedPermissions() []PermissionEvent {
 		key := fmt.Sprintf("%s::%s", permEvent.Grantee, permEvent.Privilege)
 
 		switch permEvent.Operation {
-		case parser.OpGrant:
+		case types.OpGrant:
 			// Grant the permission
 			finalPermissions[key] = permEvent
-		case parser.OpRevoke:
+		case types.OpRevoke:
 			// Revoke the permission (remove from final state)
 			delete(finalPermissions, key)
 		}
@@ -297,7 +299,7 @@ func (obj *ObjectLifecycle) GetConsolidatedPermissions() []PermissionEvent {
 }
 
 // GetPermissionStatements returns consolidated GRANT statements for this object
-func (obj *ObjectLifecycle) GetPermissionStatements() []parser.Statement {
+func (obj *ObjectLifecycle) GetPermissionStatements() []types.Statement {
 	consolidatedPerms := obj.GetConsolidatedPermissions()
 	if len(consolidatedPerms) == 0 {
 		return nil
@@ -309,16 +311,16 @@ func (obj *ObjectLifecycle) GetPermissionStatements() []parser.Statement {
 		granteePerms[perm.Grantee] = append(granteePerms[perm.Grantee], perm.Privilege)
 	}
 
-	var statements []parser.Statement
+	var statements []types.Statement
 	for grantee, privileges := range granteePerms {
 		// Create a single GRANT statement for this grantee
-		stmt := parser.Statement{
-			Operation:  parser.OpGrant,
+		stmt := types.Statement{
+			Operation:  types.OpGrant,
 			ObjectType: obj.Type,
 			ObjectName: obj.Name,
 			Grantees:   []string{grantee},
 			Privileges: privileges,
-			Category:   parser.CategorySecurity,
+			Category:   types.CategorySecurity,
 			SQL:        fmt.Sprintf("GRANT %s ON %s TO %s", strings.Join(privileges, ", "), obj.Name, grantee),
 		}
 		statements = append(statements, stmt)
@@ -354,14 +356,14 @@ func (ut *UnifiedTracker) analyzeRedundancy(obj *ObjectLifecycle) *RedundancyRep
 	}
 
 	// Pattern: CREATE -> multiple ALTERs
-	if obj.History[0].Operation == parser.OpCreate {
+	if obj.History[0].Operation == types.OpCreate {
 		alterCount := 0
 		hasDataOps := false
 		filesAffected := make(map[string]bool)
 
 		for i := 1; i < len(obj.History); i++ {
 			event := obj.History[i]
-			if event.Operation == parser.OpAlter {
+			if event.Operation == types.OpAlter {
 				alterCount++
 				filesAffected[event.Migration] = true
 			}
@@ -389,8 +391,8 @@ func (ut *UnifiedTracker) analyzeRedundancy(obj *ObjectLifecycle) *RedundancyRep
 
 	// Pattern: DROP -> CREATE
 	for i := 0; i < len(obj.History)-1; i++ {
-		if obj.History[i].Operation == parser.OpDrop &&
-			obj.History[i+1].Operation == parser.OpCreate {
+		if obj.History[i].Operation == types.OpDrop &&
+			obj.History[i+1].Operation == types.OpCreate {
 			return &RedundancyReport{
 				Object:      obj.Name,
 				Type:        obj.Type,
@@ -408,13 +410,13 @@ func (ut *UnifiedTracker) analyzeRedundancy(obj *ObjectLifecycle) *RedundancyRep
 	}
 
 	// Pattern: Duplicate operations
-	operations := make(map[parser.Operation][]LifecycleEvent)
+	operations := make(map[types.Operation][]LifecycleEvent)
 	for _, event := range obj.History {
 		operations[event.Operation] = append(operations[event.Operation], event)
 	}
 
 	for op, events := range operations {
-		if len(events) > 1 && op == parser.OpCreate {
+		if len(events) > 1 && op == types.OpCreate {
 			// Multiple CREATE statements for same object
 			return &RedundancyReport{
 				Object:      obj.Name,
@@ -436,8 +438,8 @@ func (ut *UnifiedTracker) analyzeRedundancy(obj *ObjectLifecycle) *RedundancyRep
 }
 
 // GetObjectsByCategory returns objects grouped by category
-func (ut *UnifiedTracker) GetObjectsByCategory() map[parser.Category][]*ObjectLifecycle {
-	categories := make(map[parser.Category][]*ObjectLifecycle)
+func (ut *UnifiedTracker) GetObjectsByCategory() map[types.Category][]*ObjectLifecycle {
+	categories := make(map[types.Category][]*ObjectLifecycle)
 
 	for _, obj := range ut.objects {
 		categories[obj.Category] = append(categories[obj.Category], obj)
@@ -455,8 +457,8 @@ func (ut *UnifiedTracker) GetStatistics() TrackerStats {
 	}
 
 	// Count by type
-	stats.ObjectsByType = make(map[parser.ObjectType]int)
-	stats.ObjectsByCategory = make(map[parser.Category]int)
+	stats.ObjectsByType = make(map[types.ObjectType]int)
+	stats.ObjectsByCategory = make(map[types.Category]int)
 	stats.ChangesByType = make(map[ResourceChangeType]int)
 
 	for _, obj := range ut.objects {
@@ -465,17 +467,33 @@ func (ut *UnifiedTracker) GetStatistics() TrackerStats {
 	}
 
 	// Count statements and changes
-	for _, migration := range ut.migrations {
-		stats.TotalStatements += len(migration.Statements)
-		for _, stmt := range migration.Statements {
-			if stmt.IsDataOp {
-				stats.DataOperations++
+	// Use counters if available (for streaming mode or when migrations aren't stored)
+	if ut.statementCounter > 0 || ut.streamingMode {
+		stats.TotalStatements = int(ut.statementCounter)
+		stats.DataOperations = int(ut.dataOpCounter)
+		// Update migration count from counter in streaming mode
+		if ut.streamingMode {
+			stats.TotalMigrations = int(ut.migrationCounter)
+		}
+	} else {
+		// Fallback to counting from stored migrations (non-streaming mode)
+		for _, migration := range ut.migrations {
+			stats.TotalStatements += len(migration.Statements)
+			for _, stmt := range migration.Statements {
+				if stmt.IsDataOp {
+					stats.DataOperations++
+				}
 			}
 		}
 	}
 
 	for _, change := range ut.resourceChanges {
 		stats.ChangesByType[change.Type]++
+	}
+
+	// Count total dependencies
+	for _, deps := range ut.dependencies {
+		stats.TotalDependencies += len(deps)
 	}
 
 	return stats
@@ -489,7 +507,78 @@ func (ut *UnifiedTracker) ValidateConsistency() []string {
 	for objKey, deps := range ut.dependencies {
 		for _, dep := range deps {
 			depKey := makeKey(dep.DependsOn.Name, dep.DependsOn.Type)
+
+			// UX FIX: Skip indexes on views/materialized views - these are valid and always created before indexes
+			// Views are in the foundation category, indexes come later, so this dependency is always satisfied
+			if obj, exists := ut.objects[objKey]; exists && obj.Type == types.TypeIndex {
+				// Check if dependency might be a view - try both with TypeView and TypeUnknown
+				viewKey := makeKey(dep.DependsOn.Name, types.TypeView)
+				unknownKey := makeKey(dep.DependsOn.Name, types.TypeUnknown)
+				if _, isView := ut.objects[viewKey]; isView {
+					continue // Index on view - dependency is satisfied
+				}
+				if _, isUnknown := ut.objects[unknownKey]; isUnknown {
+					continue // Might be a view with unknown type - skip warning
+				}
+			}
+
 			if _, exists := ut.objects[depKey]; !exists {
+				// Filter out common false positives
+				depName := strings.ToLower(dep.DependsOn.Name)
+
+				// Skip built-in PostgreSQL functions and values
+				if depName == "now" || depName == "current_timestamp" || depName == "current_user" ||
+					depName == "current_date" || depName == "current_time" || depName == "gen_random_uuid" ||
+					depName == "uuid_generate_v4" {
+					continue
+				}
+
+				// Skip storage schema objects (Supabase storage.objects, storage.buckets)
+				if depName == "objects" || depName == "buckets" {
+					continue
+				}
+
+				// Skip common CHECK constraint names (they're not objects, they're constraint names)
+				if strings.Contains(depName, "_check") || strings.Contains(depName, "check_") {
+					continue
+				}
+
+				// Skip custom types that might not be tracked as objects
+				// These would include ENUMs and DOMAINs that might be inlined
+				// Example: CREATE TABLE users (...) + ALTER TABLE users ADD COLUMN email
+				//          becomes CREATE TABLE users (..., email ...) but tracker warns about "email never created"
+				if dep.DependsOn.Type == types.TypeUnknown {
+					// Skip TypeUnknown - these are either:
+					// 1. Custom types (ENUMs, DOMAINs) that might be inlined
+					// 2. Column references from TABLE objects (false positives after consolidation)
+					continue
+				}
+
+				// Skip column dependencies - columns are not tracked as separate objects
+				// They are part of their parent table and will always generate false positives
+				// Column dependencies are indicated by either:
+				// 1. "table.column" format (with dot notation)
+				// 2. DependencyType == DependencyTypeColumn (from COLUMN: prefix in parser)
+				if strings.Contains(dep.DependsOn.Name, ".") && dep.DependsOn.Type == types.TypeUnknown {
+					// This is likely a column reference (e.g., "users.email")
+					continue
+				}
+
+				// Skip column dependencies from ALTER TABLE ADD COLUMN statements
+				// These are parsed with COLUMN: prefix and create false warnings
+				// Columns are consolidated into CREATE TABLE and not tracked separately
+				if dep.DependencyType == DependencyTypeColumn {
+					continue
+				}
+
+				// Skip constraint dependencies from ALTER TABLE ADD CONSTRAINT statements
+				// These are parsed with CONSTRAINT: prefix and intentionally NOT tracked as separate objects
+				// to avoid duplicate output (constraint appears in both CREATE TABLE and ALTER TABLE).
+				// Constraints are integrated during consolidation - see unified_tracker.go line 727-730
+				if dep.DependencyType == DependencyTypeConstraint || dep.DependsOn.Type == types.TypeConstraint {
+					continue
+				}
+
 				warnings = append(warnings,
 					fmt.Sprintf("Object %s depends on %s which is never created",
 						objKey, dep.DependsOn.Name))

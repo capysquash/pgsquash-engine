@@ -1,7 +1,7 @@
 version: '3.8'
 
 # Full Stack - Complete development environment
-# Includes: pg-squash + PostgreSQL + Redis + Monitoring (optional)
+# Includes: pgsquash + PostgreSQL + pgAdmin (optional)
 
 services:
   pgsquash:
@@ -62,28 +62,6 @@ services:
           cpus: '2.0'
           memory: 1G
 
-  redis:
-    image: redis:7
-    container_name: pgsquash-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis}
-    volumes:
-      - redis-data:/data
-    networks:
-      - pgsquash-net
-    healthcheck:
-      test: ["CMD", "redis-cli", "--pass", "${REDIS_PASSWORD:-redis}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-    profiles:
-      - "redis"
-
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgsquash-pgadmin
@@ -105,47 +83,36 @@ volumes:
   postgres-data:
     driver: local
     labels:
-      - "pg-squash.volume=postgres"
-  redis-data:
-    driver: local
-    labels:
-      - "pg-squash.volume=redis"
+      - "pgsquash.volume=postgres"
   pgsquash-logs:
     driver: local
     labels:
-      - "pg-squash.volume=logs"
+      - "pgsquash.volume=logs"
   pgadmin-data:
     driver: local
     labels:
-      - "pg-squash.volume=pgadmin"
+      - "pgsquash.volume=pgadmin"
 
 networks:
   pgsquash-net:
     driver: bridge
     labels:
-      - "pg-squash.network=main"
+      - "pgsquash.network=main"
 
 # Usage Examples:
 #
-# 1. Start core services (pg-squash + PostgreSQL):
-#    docker-compose -f docker/dev-environment/full-stack.yml up -d
+# 1. Start core services (pgsquash + PostgreSQL):
+#    docker compose -f docker/dev-environment/full-stack.yml up -d
 #
-# 2. With Redis:
-#    docker-compose -f docker/dev-environment/full-stack.yml --profile redis up -d
+# 2. With management tools (pgAdmin):
+#    docker compose -f docker/dev-environment/full-stack.yml --profile management up -d
 #
-# 3. With management tools (pgAdmin):
-#    docker-compose -f docker/dev-environment/full-stack.yml --profile management up -d
+# 3. Run pgsquash command:
+#    docker compose -f docker/dev-environment/full-stack.yml exec pgsquash squash /app/migrations/*.sql
 #
-# 4. Everything:
-#    docker-compose -f docker/dev-environment/full-stack.yml --profile redis --profile management up -d
-#
-# 5. Run pg-squash command:
-#    docker-compose -f docker/dev-environment/full-stack.yml exec pgsquash squash /app/migrations/*.sql
-#
-# 6. Access services:
+# 4. Access services:
 #    - pgAdmin: http://localhost:5050
 #    - PostgreSQL: localhost:5432
-#    - Redis: localhost:6379
 #
-# 7. Stop all:
-#    docker-compose -f docker/dev-environment/full-stack.yml down
+# 5. Stop all:
+#    docker compose -f docker/dev-environment/full-stack.yml down

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // TransformSQL performs Prisma-specific SQL transformations
@@ -97,12 +99,8 @@ func (pp *PrismaPlugin) FixFunctionVolatility(ctx context.Context, functionSQL s
 		return functionSQL, nil
 	}
 
-	// Check if volatility marker already exists
-	hasVolatilityMarker := strings.Contains(strings.ToUpper(functionSQL), " IMMUTABLE") ||
-		strings.Contains(strings.ToUpper(functionSQL), " STABLE") ||
-		strings.Contains(strings.ToUpper(functionSQL), " VOLATILE")
-
-	if hasVolatilityMarker {
+	// Check if volatility marker already exists (using shared utility)
+	if utils.HasVolatilityMarker(functionSQL) {
 		return functionSQL, nil
 	}
 

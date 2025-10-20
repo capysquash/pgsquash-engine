@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/capysquash/pg-squash-engine/internal/ai/providers"
-	"github.com/capysquash/pg-squash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/ai/providers"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // Type aliases to avoid import cycles
@@ -35,9 +35,10 @@ const (
 
 // HealthCache stores cached health check results for providers
 type HealthCache struct {
-	healthy   bool
-	lastCheck time.Time
-	ttl       time.Duration
+	healthy    bool
+	lastCheck  time.Time
+	ttl        time.Duration
+	lastError  string // Error message from last health check (if any)
 }
 
 // ProviderManager manages multiple AI providers and routes requests
@@ -279,13 +280,14 @@ func (pm *ProviderManager) Analyze(ctx context.Context, req *AnalysisRequest) (*
 		isPrimary := i == 0
 
 		// Check health cache before attempting (skip known-unhealthy providers)
-		if !pm.isProviderHealthy(ctx, providerType) {
-			fmt.Printf("⚠️  Skipping unhealthy provider: %s\n", providerType)
+		healthReason := pm.getProviderHealthReason(ctx, providerType)
+		if healthReason != "" {
+			fmt.Printf("⚠️  Skipping unhealthy provider: %s (%s)\n", providerType, healthReason)
 			// If this was the primary provider, record that it was skipped
 			if isPrimary {
-				primaryError = fmt.Errorf("primary provider %s marked as unhealthy and skipped", providerType)
+				primaryError = fmt.Errorf("primary provider %s marked as unhealthy: %s", providerType, healthReason)
 			}
-			allErrors = append(allErrors, fmt.Sprintf("%s: skipped (unhealthy)", providerType))
+			allErrors = append(allErrors, fmt.Sprintf("%s: skipped (%s)", providerType, healthReason))
 			continue
 		}
 
