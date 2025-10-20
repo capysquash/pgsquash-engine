@@ -666,7 +666,7 @@ pgsquash analyze migrations/*.sql --stream --workers 8
 | ------------------------ | -------------- | --------------------------------------------- |
 | < 50 files               | No             | Basic mode is faster (less overhead)          |
 | 50-200 files             | Optional       | Depends on file sizes                         |
-| 200-1000 files           | Yes            | Significantly faster with parallel processing |
+| 100-300 files            | Yes            | Significantly faster with parallel processing |
 | 1000+ files              | Required       | Won't fit in memory otherwise                 |
 | Agency with 20+ projects | Yes            | Process all projects in single run            |
 
@@ -746,7 +746,7 @@ fmt.Printf("Throughput: %.2f MB/s\n", stats.ThroughputMBps)
 **Standard mode** (all in memory):
 
 ```
-100 migrations × 2MB each = 200MB memory
+50 migrations × 2MB each = 100MB memory
 Processing time: 45 seconds
 ```
 
@@ -870,7 +870,7 @@ go tool pprof mem.prof
 
 ### Performance Benchmarks
 
-Typical performance (1000 migrations, 2MB average):
+Typical performance (400 migrations, 2MB average):
 
 | Mode                   | Memory | Time | Throughput   |
 | ---------------------- | ------ | ---- | ------------ |

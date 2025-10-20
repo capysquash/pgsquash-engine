@@ -332,5 +332,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostgreSQL 18 support
 - 1.0.0 release
 
+### Post-1.0.0 Features
+
+- **Smart Split Feature** (v1.3.0) - Split squashed migrations into multiple organized files
+  - Category-based, dependency-level, and size-based splitting strategies
+  - Enables better code review, parallel migrations, and incremental deployment
+  - CLI: `pgsquash squash --split category` or `--split hybrid`
+
 [unreleased]: https://github.com/CAPYSQUASH/pgsquash-engine/compare/v0.8.5-beta...HEAD
 [0.8.5-beta]: https://github.com/CAPYSQUASH/pgsquash-engine/releases/tag/v0.8.5-beta

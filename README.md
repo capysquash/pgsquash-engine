@@ -8,13 +8,13 @@
 
 ## Why pgsquash?
 
-**Tired of migration archaeology?** As your project grows, migration folders become unmanageable. Dozens of files with overlapping changes, conflicting indexes, and forgotten ALTER statements. Onboarding new developers means explaining migration history instead of building features.
+**Tired of migration archaeology?** As your project grows, migration folders become unmanageable. 100-300 files with overlapping changes, conflicting indexes, and forgotten ALTER statements. Onboarding new developers means explaining migration history instead of building features.
 
 **Keep your vibe.** pgsquash intelligently consolidates and optimizes your migration history while preserving dependencies, respecting safety constraints, and validating every change. Works with your existing setup—Supabase projects, Prisma schemas, Clerk auth. No migration rewrites, no new syntax to learn. Just cleaner, safer SQL.
 
 ## What it does
 
-- **Intelligently consolidates** hundreds of migration files into clean, organized output
+- **Intelligently consolidates** 100-300+ migration files into clean, organized output
 - **Parser-grade accuracy** using PostgreSQL's own parser (`pg_query_go`)—the same parser PostgreSQL uses internally
 - **Dependency-aware** processing that automatically resolves and orders statements safely
 - **Safety-first** approach with multiple levels from paranoid (production) to aggressive (dev)

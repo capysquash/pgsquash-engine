@@ -779,7 +779,7 @@ type Transformation struct {
 
 ### Streaming Data Flow
 
-For large datasets (>100 migrations):
+For large datasets (>150 migrations):
 
 ```
 1. Initialize Streaming Components

@@ -144,8 +144,8 @@ RESOURCE LIMIT RECOMMENDATIONS
 =============================================================================
 
 Memory Limits:
-  --memory="512m"   - Standard squashing (< 100 migrations)
-  --memory="1g"     - Large squashing (100-500 migrations)
+  --memory="512m"   - Standard squashing (< 150 migrations)
+  --memory="1g"     - Large squashing (150-400 migrations)
   --memory="2g"     - Very large or with validation
 
 CPU Limits:

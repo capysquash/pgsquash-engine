@@ -45,8 +45,8 @@
 
 **For Developers**: "Autopilot for your Postgres migrations"
 
-- Reduce migration files by 60-80%
-- Cut deployment time by 40-70%
+- Reduce migration files by 35-50% (standard mode)
+- Cut deployment time by 30-50%
 - Docker-validated safety guarantees
 - Zero database access required
 
@@ -802,22 +802,22 @@ go test ./... -cover
     "next": "^15.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    
+
     // Styling
     "tailwindcss": "^4.0.0",
     "@radix-ui/react-*": "latest",
     "motion": "latest",
-    
+
     // Database
     "drizzle-orm": "latest",
     "@neondatabase/serverless": "latest",
-    
+
     // Authentication
     "@clerk/nextjs": "latest",
-    
+
     // Payments
     "stripe": "latest",
-    
+
     // Utilities
     "typescript": "^5.0.0",
     "zod": "latest"
