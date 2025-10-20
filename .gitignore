@@ -9,7 +9,13 @@ pgsquash-*
 
 # Test binary, built with `go test -c`
 *.test
-
+docs/internal
+docs/internal/audits
+docs/internal/decisions
+docs/internal/deployments
+docs/internal/refactors
+docs/internal/COMPREHENSIVE_TEST_SCENARIOS.md
+docs/internal/PGSQUASH_ENGINE_RELEASE_NOTES_v0.8.5-beta.md
 # Output of the go coverage tool
 *.out
 
