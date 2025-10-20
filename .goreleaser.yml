@@ -168,7 +168,7 @@ changelog:
 release:
   github:
     owner: CAPYSQUASH
-    name: pgsquash
+    name: pgsquash-engine
   draft: false
   prerelease: auto
   mode: replace
@@ -199,10 +199,10 @@ release:
     #### Docker
     ```bash
     # GitHub Container Registry
-    docker pull ghcr.io/CAPYSQUASH/pgsquash:{{ .Version }}
+    docker pull ghcr.io/capysquash/pgsquash:{{ .Version }}
 
     # Docker Hub
-    docker pull pgsquash/pgsquash:{{ .Version }}
+    docker pull idominikos/pgsquash:{{ .Version }}
     ```
 
     #### Manual Installation
@@ -219,12 +219,12 @@ release:
 
     ```bash
     # GitHub Container Registry
-    docker pull ghcr.io/CAPYSQUASH/pgsquash:{{ .Version }}
-    docker pull ghcr.io/CAPYSQUASH/pgsquash:latest
+    docker pull ghcr.io/capysquash/pgsquash:{{ .Version }}
+    docker pull ghcr.io/capysquash/pgsquash:latest
 
     # Docker Hub
-    docker pull pgsquash/pgsquash:{{ .Version }}
-    docker pull pgsquash/pgsquash:latest
+    docker pull idominikos/pgsquash:{{ .Version }}
+    docker pull idominikos/pgsquash:latest
     ```
 
     ## 📦 Checksums

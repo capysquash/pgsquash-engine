@@ -28,6 +28,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run tests
+        run: |
+          go mod download
+          go test -v ./...
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

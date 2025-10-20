@@ -2196,7 +2196,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 					fmt.Printf("  " + color.RedString("⚠ %s") + "\n", w.Message)
 				case utils.SeverityHigh:
 					fmt.Printf("  " + color.YellowString("⚠ %s") + "\n", w.Message)
-				} else {
+				default:
 					fmt.Printf("  ℹ %s\n", w.Message)
 				}
 				if w.Suggestion != "" {
