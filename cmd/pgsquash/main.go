@@ -3,14 +3,14 @@ package main
 import (
 	"os"
 
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/cli"
+	// Use public API packages
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/cli"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/utils"
+
+	// Still need internal/errors for structured error handling
+	// This could be exported in the future if needed externally
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/clerk"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/drizzle"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/prisma"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/supabase"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // pgsquash: The PostgreSQL migration consolidation engine
@@ -64,25 +64,11 @@ func main() {
 func registerPlugins() {
 	logger := utils.GetDefaultLogger().WithPrefix("PLUGINS")
 
-	// Register auth service plugins
-	if err := plugins.Register(clerk.NewClerkPlugin()); err != nil {
-		logger.Warn("Failed to register Clerk plugin: %v", err)
+	// Register all built-in plugins using the public API
+	if err := plugins.RegisterDefault(); err != nil {
+		logger.Warn("Failed to register some plugins: %v", err)
 	}
 
-	if err := plugins.Register(supabase.NewSupabasePlugin()); err != nil {
-		logger.Warn("Failed to register Supabase plugin: %v", err)
-	}
-
-	// Register ORM plugins
-	if err := plugins.Register(prisma.NewPrismaPlugin()); err != nil {
-		logger.Warn("Failed to register Prisma plugin: %v", err)
-	}
-
-	if err := plugins.Register(drizzle.NewDrizzlePlugin()); err != nil {
-		logger.Warn("Failed to register Drizzle plugin: %v", err)
-	}
-
-	// Future plugins can be registered here:
-	// plugins.Register(auth0.NewAuth0Plugin())
-	// plugins.Register(nextauth.NewNextAuthPlugin())
+	// Future custom plugins can be added here if the API is extended
+	// For now, all built-in plugins are registered via RegisterDefault()
 }
