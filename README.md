@@ -4,6 +4,8 @@
 
 **Current version:** 0.8.5 (Beta)
 
+> **Note:** You can use either `pgsquash` or `capysquash` as the command - they're identical! Both are included in all installations.
+
 > **Heads up:** This tool rewrites your SQL files. Back up your migrations first, run the output through tests, and double-check that everything looks right before deploying to production.
 
 ## Why pgsquash?
@@ -28,8 +30,10 @@
 There's a built-in TUI if you prefer a visual interface:
 
 ```bash
-# Launch the dashboard
+# Launch the dashboard (use pgsquash or capysquash - they're identical)
 pgsquash tui migrations/
+# or
+capysquash tui migrations/
 
 # Or add --tui to any command
 pgsquash analyze migrations/ --tui

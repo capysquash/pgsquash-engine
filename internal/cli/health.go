@@ -142,6 +142,38 @@ func SetVersionInfo(version, buildDate, gitCommit string) {
 	}
 }
 
+// SetBrandName updates the CLI branding (called from main package for different binaries)
+func SetBrandName(brandName string) {
+	if brandName == "capysquash" {
+		rootCmd.Use = "capysquash"
+		rootCmd.Short = "CAPYSQUASH - Intelligent PostgreSQL migration consolidation"
+		rootCmd.Long = `CAPYSQUASH intelligently consolidates PostgreSQL migration files into
+clean, production-ready SQL while preserving data integrity, respecting
+dependencies, and validating safety at every step.
+
+CAPYSQUASH is the leading platform for PostgreSQL migration optimization,
+powered by the pgsquash engine with parser-grade accuracy.`
+		
+		// Update command examples to use capysquash branding
+		if aiFixCmd != nil {
+			aiFixCmd.Long = `Use AI to automatically analyze and fix broken migrations.
+This command runs validation, analyzes errors, and uses AI to suggest and apply fixes
+in an interactive loop until migrations validate successfully.
+
+Requires: ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT
+
+Example:
+  capysquash ai-fix migrations/
+  capysquash ai-fix migrations/ --max-attempts 10 --auto-apply`
+		}
+		
+		if initConfigCmd != nil {
+			initConfigCmd.Long = `Create a default capysquash.config.json file with all available options.`
+		}
+	}
+	// Default is pgsquash branding (already set in rootCmd initialization)
+}
+
 func getVersion() string {
 	// Check environment variable override first (for testing/debugging)
 	if envVersion := os.Getenv("PGSQUASH_VERSION"); envVersion != "" {
