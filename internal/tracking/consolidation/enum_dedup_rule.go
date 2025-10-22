@@ -1,10 +1,11 @@
 package consolidation
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
@@ -42,6 +43,8 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 		return nil, errors.New(errors.ErrorCodeConsolidationFailed, errors.CategoryConsolidation, "rule cannot be applied to lifecycle", map[string]interface{}{"rule": "EnumDedupRule"})
 	}
 
+	// Get safety level to determine behavior
+	safetyLevel := engine.GetSafetyLevel()
 	tracker := engine.GetTracker()
 
 	// Collect all ENUM definitions
@@ -142,7 +145,7 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 		return result, nil
 	}
 
-	// This is the earliest/first ENUM - keep it and merge any ALTER TYPE ADD VALUE statements
+	// This is the earliest/first ENUM - keep it and apply safety-mode specific behavior
 	firstEnum := enumStmts[0]
 	warnings := []string{}
 
@@ -150,35 +153,119 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 	var alterTypeStmts []types.Statement
 	for _, event := range lifecycle.History {
 		if event.Statement.Operation == types.OpAlter &&
-		   event.Statement.ObjectType == types.TypeEnum &&
-		   event.Statement.AlterTypeNewValue != "" {
+			event.Statement.ObjectType == types.TypeEnum &&
+			event.Statement.AlterTypeNewValue != "" {
 			alterTypeStmts = append(alterTypeStmts, event.Statement)
 		}
 	}
 
-	// If we have ALTER TYPE ADD VALUE statements, merge them into CREATE TYPE
+	// Apply safety-mode specific behavior
 	consolidatedSQL := firstEnum.SQL
-	if len(alterTypeStmts) > 0 {
-		// Extract existing enum values from CREATE TYPE statement
-		enumPattern := regexp.MustCompile(`(?is)CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\((.*?)\)`)
-		matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
-		if len(matches) > 1 {
-			// Parse existing values
-			existingValues := parseEnumValues(matches[1])
 
-			// Add new values from ALTER TYPE statements
-			for _, alterStmt := range alterTypeStmts {
-				if alterStmt.AlterTypeNewValue != "" && !contains(existingValues, alterStmt.AlterTypeNewValue) {
-					existingValues = append(existingValues, alterStmt.AlterTypeNewValue)
+	switch safetyLevel {
+	case "paranoid":
+		// PARANOID: Preserve exact ALTER TYPE ... ADD VALUE sequence
+		// Don't merge anything, keep CREATE TYPE + all ALTER TYPE statements separate
+		if len(alterTypeStmts) > 0 {
+			var sqlParts []string
+			sqlParts = append(sqlParts, firstEnum.SQL)
+			for _, stmt := range alterTypeStmts {
+				sqlParts = append(sqlParts, stmt.SQL)
+			}
+			consolidatedSQL = strings.Join(sqlParts, ";\n") + ";"
+			warnings = append(warnings, fmt.Sprintf("Paranoid mode: Preserved exact sequence of %d ALTER TYPE statements", len(alterTypeStmts)))
+		}
+
+	case "conservative":
+		// CONSERVATIVE: Collapse only when final order equals original and all are appends
+		if len(alterTypeStmts) > 0 {
+			enumPattern := regexp.MustCompile(`(?is)CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\((.*?)\)`)
+			matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
+			if len(matches) > 1 {
+				existingValues := parseEnumValues(matches[1])
+				originalCount := len(existingValues)
+
+				// Verify all ALTER TYPE statements are appends (no reorders)
+				allAppends := true
+				newValues := make([]string, len(existingValues))
+				copy(newValues, existingValues)
+
+				for _, alterStmt := range alterTypeStmts {
+					if alterStmt.AlterTypeNewValue != "" {
+						// Check if it's truly an append (not already in list)
+						if contains(existingValues, alterStmt.AlterTypeNewValue) {
+							allAppends = false
+							break
+						}
+						newValues = append(newValues, alterStmt.AlterTypeNewValue)
+					}
+				}
+
+				if allAppends {
+					// Safe to merge - all are appends
+					valuesList := strings.Join(quoteEnumValues(newValues), ", ")
+					consolidatedSQL = regexp.MustCompile(`(?is)(CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\().*?(\))`).
+						ReplaceAllString(firstEnum.SQL, fmt.Sprintf("${1}%s${2}", valuesList))
+					warnings = append(warnings, fmt.Sprintf("Conservative mode: Merged %d append-only ALTER TYPE statements", len(alterTypeStmts)))
+				} else {
+					// Not safe - preserve sequence
+					var sqlParts []string
+					sqlParts = append(sqlParts, firstEnum.SQL)
+					for _, stmt := range alterTypeStmts {
+						sqlParts = append(sqlParts, stmt.SQL)
+					}
+					consolidatedSQL = strings.Join(sqlParts, ";\n") + ";"
+					warnings = append(warnings, "Conservative mode: Preserved ALTER TYPE sequence (detected non-append operations)")
 				}
 			}
+		}
 
-			// Reconstruct CREATE TYPE with all values
-			valuesList := strings.Join(quoteEnumValues(existingValues), ", ")
-			consolidatedSQL = regexp.MustCompile(`(?is)(CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\().*?(\))`).
-				ReplaceAllString(firstEnum.SQL, fmt.Sprintf("${1}%s${2}", valuesList))
+	case "standard", "aggressive":
+		// STANDARD/AGGRESSIVE: Merge ALTER TYPE statements into CREATE TYPE
+		if len(alterTypeStmts) > 0 {
+			enumPattern := regexp.MustCompile(`(?is)CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\((.*?)\)`)
+			matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
+			if len(matches) > 1 {
+				// Parse existing values
+				existingValues := parseEnumValues(matches[1])
 
-			warnings = append(warnings, fmt.Sprintf("Merged %d ALTER TYPE ADD VALUE statement(s) into CREATE TYPE", len(alterTypeStmts)))
+				// Add new values from ALTER TYPE statements
+				for _, alterStmt := range alterTypeStmts {
+					if alterStmt.AlterTypeNewValue != "" && !contains(existingValues, alterStmt.AlterTypeNewValue) {
+						existingValues = append(existingValues, alterStmt.AlterTypeNewValue)
+					}
+				}
+
+				// Reconstruct CREATE TYPE with all values
+				valuesList := strings.Join(quoteEnumValues(existingValues), ", ")
+				consolidatedSQL = regexp.MustCompile(`(?is)(CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\().*?(\))`).
+					ReplaceAllString(firstEnum.SQL, fmt.Sprintf("${1}%s${2}", valuesList))
+
+				mode := "Standard"
+				if safetyLevel == "aggressive" {
+					mode = "Aggressive"
+				}
+				warnings = append(warnings, fmt.Sprintf("%s mode: Merged %d ALTER TYPE ADD VALUE statement(s) into CREATE TYPE", mode, len(alterTypeStmts)))
+			}
+		}
+
+	default:
+		// Fallback to standard behavior
+		if len(alterTypeStmts) > 0 {
+			enumPattern := regexp.MustCompile(`(?is)CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\((.*?)\)`)
+			matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
+			if len(matches) > 1 {
+				existingValues := parseEnumValues(matches[1])
+				for _, alterStmt := range alterTypeStmts {
+					if alterStmt.AlterTypeNewValue != "" && !contains(existingValues, alterStmt.AlterTypeNewValue) {
+						existingValues = append(existingValues, alterStmt.AlterTypeNewValue)
+					}
+				}
+				valuesList := strings.Join(quoteEnumValues(existingValues), ", ")
+				consolidatedSQL = regexp.MustCompile(`(?is)(CREATE\s+TYPE\s+[a-zA-Z_][a-zA-Z0-9_]*\s+AS\s+ENUM\s*\().*?(\))`).
+					ReplaceAllString(firstEnum.SQL, fmt.Sprintf("${1}%s${2}", valuesList))
+				warnings = append(warnings, fmt.Sprintf("Merged %d ALTER TYPE ADD VALUE statement(s) into CREATE TYPE", len(alterTypeStmts)))
+			}
 		}
 	}
 

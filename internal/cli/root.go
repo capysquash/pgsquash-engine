@@ -642,8 +642,8 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			migrationMap[i] = m.Content
 		}
 
-		// Process migrations
-		finalSQL, warnings, err = engine.Squash(migrationMap)
+		// Process migrations with separate files
+		squashResult, err := engine.SquashWithSeparateFiles(migrationMap)
 		if err != nil {
 			return errors.NewError(
 				errors.ErrorCodeConsolidationFailed,
@@ -653,7 +653,43 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			).WithInnerError(err).WithAdditional("migration_count", len(migrations)).WithSuggestion("Review migration files for syntax errors or complex dependencies")
 		}
 
+		finalSQL = squashResult.BaselineSQL
+		warnings = squashResult.Warnings
 		migrationCount = len(migrations)
+
+		// Write data operations file if present
+		if squashResult.DataOperationsSQL != "" {
+			dataPath := filepath.Join(cfg.Output.Directory, "010_data.sql")
+			if err := os.WriteFile(dataPath, []byte(squashResult.DataOperationsSQL), 0644); err != nil {
+				return errors.NewError(
+					errors.ErrorCodeSQLGenerationFailed,
+					fmt.Sprintf("Failed to write data operations file '%s'", dataPath),
+					errors.SeverityError,
+					errors.CategoryConsolidation,
+				).WithFile(dataPath).WithInnerError(err).WithSuggestion("Ensure sufficient disk space and write permissions")
+			}
+			fmt.Println(color.GreenString("✓ Data operations written to: %s", dataPath))
+		}
+
+		// Write provenance map
+		if squashResult.ProvenanceMap != nil {
+			provTracker := squasher.NewProvenanceTracker(
+				"0.9.0",
+				cfg.SafetyLevel,
+				cfg.PostgreSQLFeatures.Version,
+				squashResult.Extensions,
+			)
+			provTracker.GetSquashMap().Inputs = squashResult.ProvenanceMap.Inputs
+			provTracker.GetSquashMap().Outputs = squashResult.ProvenanceMap.Outputs
+			provTracker.GetSquashMap().Warnings = squashResult.ProvenanceMap.Warnings
+			provTracker.GetSquashMap().ContentHash = squashResult.ProvenanceMap.ContentHash
+
+			if err := provTracker.WriteSquashMap(cfg.Output.Directory); err != nil {
+				fmt.Println(color.YellowString("⚠️  Warning: Could not write .squashmap.json: %v", err))
+			} else {
+				fmt.Println(color.GreenString("✓ Provenance map written to: %s", filepath.Join(cfg.Output.Directory, ".squashmap.json")))
+			}
+		}
 	}
 
 	// Handle explain mode - show detailed consolidation plan
@@ -727,7 +763,7 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		).WithFile(cfg.Output.Directory).WithSuggestion("Check filesystem permissions and available disk space")
 	}
 
-	outputPath := filepath.Join(cfg.Output.Directory, "001_squashed_migration.sql")
+	outputPath := filepath.Join(cfg.Output.Directory, "000_baseline.sql")
 	if err := os.WriteFile(outputPath, []byte(finalSQL), 0644); err != nil {
 		return errors.NewError(
 			errors.ErrorCodeSQLGenerationFailed,

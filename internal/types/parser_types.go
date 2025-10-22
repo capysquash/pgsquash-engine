@@ -39,7 +39,60 @@ type Statement struct {
 
 	// ALTER TYPE specific fields
 	AlterTypeNewValue string // New ENUM value being added via ALTER TYPE ADD VALUE
+
+	// Statement metadata for transaction and lock analysis
+	Metadata StatementMetadata
 }
+
+// StatementMetadata contains metadata about statement execution requirements
+type StatementMetadata struct {
+	// Lock level required by this statement
+	LockLevel LockLevel
+
+	// Whether this statement cannot run inside a transaction
+	RequiresNoTransaction bool
+
+	// PostgreSQL version gate (e.g., "PG<12" for ENUM additions)
+	VersionGate string
+
+	// Whether this is a concurrent operation
+	Concurrent bool
+
+	// Whether this statement should be preserved verbatim (manual pragma)
+	PreserveVerbatim bool
+
+	// Estimated execution time category
+	ExecutionTime ExecutionTimeCategory
+
+	// Whether this statement is idempotent
+	Idempotent bool
+}
+
+// LockLevel represents the PostgreSQL lock level required by a statement
+type LockLevel string
+
+const (
+	LockNone                  LockLevel = "NONE"                     // No lock required
+	LockAccessShare           LockLevel = "ACCESS_SHARE"             // SELECT
+	LockRowShare              LockLevel = "ROW_SHARE"                // SELECT FOR UPDATE/SHARE
+	LockRowExclusive          LockLevel = "ROW_EXCLUSIVE"            // INSERT, UPDATE, DELETE
+	LockShareUpdateExclusive  LockLevel = "SHARE_UPDATE_EXCLUSIVE"   // VACUUM, CREATE INDEX CONCURRENTLY
+	LockShare                 LockLevel = "SHARE"                    // CREATE INDEX (non-concurrent)
+	LockShareRowExclusive     LockLevel = "SHARE_ROW_EXCLUSIVE"      // Rare, some ALTER TABLE
+	LockExclusive             LockLevel = "EXCLUSIVE"                // REFRESH MATERIALIZED VIEW CONCURRENTLY
+	LockAccessExclusive       LockLevel = "ACCESS_EXCLUSIVE"         // Most DDL, TRUNCATE, VACUUM FULL
+)
+
+// ExecutionTimeCategory estimates how long a statement might take
+type ExecutionTimeCategory string
+
+const (
+	ExecutionInstant ExecutionTimeCategory = "INSTANT" // < 1ms (most DDL on empty tables)
+	ExecutionFast    ExecutionTimeCategory = "FAST"    // < 100ms
+	ExecutionMedium  ExecutionTimeCategory = "MEDIUM"  // < 1s
+	ExecutionSlow    ExecutionTimeCategory = "SLOW"    // > 1s (backfills, large indexes)
+	ExecutionUnknown ExecutionTimeCategory = "UNKNOWN"
+)
 
 // ObjectType represents the type of database object
 type ObjectType string

@@ -23,9 +23,17 @@ import (
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/transformation"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
-	_ "github.com/lib/pq"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
+
+// SquashResult represents the result of a squash operation with multiple output files
+type SquashResult struct {
+	BaselineSQL       string     // DDL-only SQL (000_baseline.sql)
+	DataOperationsSQL string     // Data operations SQL (010_data.sql)
+	Warnings          []string   // Warnings generated during squash
+	ProvenanceMap     *SquashMap // Provenance tracking information
+	Extensions        []string   // Extensions detected/required
+}
 
 type SafetyLevel string
 
@@ -375,6 +383,14 @@ func (e *Engine) GetTracker() *tracking.Tracker {
 	return e.tracker
 }
 
+// GetSafetyLevel returns the current safety level
+func (e *Engine) GetSafetyLevel() string {
+	if e.config == nil {
+		return "standard"
+	}
+	return e.config.SafetyLevel
+}
+
 // GetConfig returns the configuration for use by consolidation rules
 func (e *Engine) GetConfig() interface{} {
 	return e.config
@@ -613,6 +629,73 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 	e.logger.Info("Enhanced squashing completed in %v", processingTime)
 
 	return finalSQL, e.warnings, nil
+}
+
+// SquashWithSeparateFiles performs squashing and returns separate files for DDL and data operations
+func (e *Engine) SquashWithSeparateFiles(migrations map[int]string) (*SquashResult, error) {
+	// Perform regular squashing to get baseline DDL
+	baselineSQL, warnings, err := e.Squash(migrations)
+	if err != nil {
+		return nil, err
+	}
+
+	// Generate separate data operations SQL
+	dataSQL, err := e.generateDataOperationsSQL()
+	if err != nil {
+		return nil, errors.NewError(
+			errors.ErrorCodeSQLGenerationFailed,
+			"failed to generate data operations SQL",
+			errors.SeverityError,
+			errors.CategoryConsolidation,
+		).WithInnerError(err)
+	}
+
+	// Detect extensions
+	detector := NewExtensionDetector()
+	var allContent strings.Builder
+	for _, sql := range migrations {
+		allContent.WriteString(sql)
+		allContent.WriteString("\n")
+	}
+	analysis := detector.AnalyzeMigrations(allContent.String())
+
+	// Create provenance tracker
+	provenance := NewProvenanceTracker(
+		"0.9.0", // TODO: Get from version constant
+		e.config.SafetyLevel,
+		e.config.PostgreSQLFeatures.Version,
+		analysis.RequiredExtensions,
+	)
+
+	// Add input files
+	for i := range migrations {
+		provenance.AddInputFile(fmt.Sprintf("migration_%d.sql", i))
+	}
+
+	// Add output files
+	provenance.AddOutputFile("000_baseline.sql")
+	if dataSQL != "" {
+		provenance.AddOutputFile("010_data.sql")
+	}
+
+	// Compute content hash
+	provenance.ComputeContentHash(baselineSQL + dataSQL)
+
+	// Add warnings
+	for _, warning := range warnings {
+		provenance.AddWarning(warning)
+	}
+
+	// Build result
+	result := &SquashResult{
+		BaselineSQL:       baselineSQL,
+		DataOperationsSQL: dataSQL,
+		Warnings:          warnings,
+		ProvenanceMap:     provenance.GetSquashMap(),
+		Extensions:        analysis.RequiredExtensions,
+	}
+
+	return result, nil
 }
 
 // SquashStreaming processes migrations with streaming approach for large datasets
@@ -1127,7 +1210,7 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 		types.CategoryTriggers,    // 5. Triggers (CREATE TRIGGER)
 		types.CategoryIndexes,     // 6. Indexes (CREATE INDEX)
 		types.CategorySecurity,    // 7. RLS Policies (CREATE POLICY)
-		types.CategoryData,        // 8. Data operations LAST (INSERT/UPDATE)
+		// Data operations are NOT included here - they go to separate file
 	}
 
 	// Initialize unified dependency resolver
@@ -1214,38 +1297,6 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 
 		// Sort objects by dependencies within category
 		sortedObjects := unifiedResolver.SortConsolidationResults(categoryObjectsMap, category, e.lifecycles)
-
-		// Special handling for CategoryData: Use DataOperationTracker instead of consolidatedObjects
-		// Data operations (INSERT/UPDATE/DELETE) are NOT in consolidatedObjects because they don't have lifecycles
-		if category == types.CategoryData {
-			// Get sorted data operations from dedicated tracker
-			sortedDataOps := e.dataOperationTracker.GetSortedOperations()
-
-			if len(sortedDataOps) == 0 {
-				// No data operations - skip this category
-				continue
-			}
-
-			// Add category header for data operations
-			e.sqlBuilder.NL().Comment(fmt.Sprintf("=== %s OBJECTS ===", strings.ToUpper(string(category)))).NL()
-			e.sqlBuilder.Comment(fmt.Sprintf("Total data operations: %d (sorted by dependencies)", len(sortedDataOps))).NL()
-
-			// Output each data operation in dependency order
-			for _, dataOp := range sortedDataOps {
-				// Add a comment showing the operation type and table
-				e.sqlBuilder.Comment(fmt.Sprintf("%s on %s", dataOp.Operation, dataOp.Table))
-				e.sqlBuilder.Statement(dataOp.Statement.SQL)
-				e.sqlBuilder.NL().NL()
-			}
-
-			// Log statistics
-			stats := e.dataOperationTracker.GetStatistics()
-			e.logger.Info("☑ Added %d data operations to output: %d INSERTs, %d UPDATEs, %d DELETEs",
-				stats["total_operations"], stats["insert_count"], stats["update_count"], stats["delete_count"])
-
-			// Skip to next category (CategoryData handled specially, don't process through normal flow)
-			continue
-		}
 
 		// Check if we have any objects or circular FK statements to add
 		hasObjects := len(sortedObjects) > 0
@@ -1373,6 +1424,45 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 	finalSQL = e.fixEliminatedEnumReferences(finalSQL)
 
 	return finalSQL, nil
+}
+
+// generateDataOperationsSQL generates SQL for data operations (INSERT/UPDATE/DELETE) as a separate file
+func (e *Engine) generateDataOperationsSQL() (string, error) {
+	// Get sorted data operations from dedicated tracker
+	sortedDataOps := e.dataOperationTracker.GetSortedOperations()
+
+	if len(sortedDataOps) == 0 {
+		return "", nil // No data operations
+	}
+
+	// Create a new builder for data operations
+	dataBuilder := builder.NewSQLBuilder(builder.DefaultBuildOptions())
+
+	// Add header comment
+	dataBuilder.Comment("Data Operations - Generated by pgsquash")
+	dataBuilder.Comment("IMPORTANT: These are non-idempotent operations (INSERT/UPDATE/DELETE)")
+	dataBuilder.Comment("Run these AFTER the baseline schema is applied")
+	dataBuilder.Comment(fmt.Sprintf("Safety level: %s", e.config.SafetyLevel))
+	dataBuilder.Comment(fmt.Sprintf("Generated at: %s", time.Now().Format(time.RFC3339)))
+	dataBuilder.NL()
+
+	dataBuilder.Comment(fmt.Sprintf("Total data operations: %d (sorted by dependencies)", len(sortedDataOps)))
+	dataBuilder.NL()
+
+	// Output each data operation in dependency order
+	for _, dataOp := range sortedDataOps {
+		// Add a comment showing the operation type and table
+		dataBuilder.Comment(fmt.Sprintf("%s on %s", dataOp.Operation, dataOp.Table))
+		dataBuilder.Statement(dataOp.Statement.SQL)
+		dataBuilder.NL().NL()
+	}
+
+	// Log statistics
+	stats := e.dataOperationTracker.GetStatistics()
+	e.logger.Info("☑ Generated separate data operations file: %d operations (%d INSERTs, %d UPDATEs, %d DELETEs)",
+		stats["total_operations"], stats["insert_count"], stats["update_count"], stats["delete_count"])
+
+	return dataBuilder.String(), nil
 }
 
 func (e *Engine) getObjectsByCategory(consolidatedObjects map[string]*tracking.ConsolidationResult, category types.Category) []*tracking.ConsolidationResult {

@@ -1,11 +1,12 @@
 package squasher
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/auth"
 )
@@ -18,14 +19,34 @@ type ExtensionDetector struct {
 
 // ExtensionInfo holds information about a PostgreSQL extension
 type ExtensionInfo struct {
-	Name              string   // Extension name
-	PackageName       string   // APT package name for installation
-	DockerImage       string   // Preferred Docker image that includes this extension
-	Dependencies      []string // Other extensions this depends on
-	InstallCommand    string   // Custom installation command if needed
-	ValidationSQL     string   // SQL to test if extension is available
-	RequiresCASCADE   bool     // Whether this extension typically needs CASCADE
-	RequiresPostGIS   bool     // Whether this requires PostGIS base
+	Name            string   // Extension name
+	PackageName     string   // APT package name for installation
+	DockerImage     string   // Preferred Docker image that includes this extension
+	Dependencies    []string // Other extensions this depends on
+	InstallCommand  string   // Custom installation command if needed
+	ValidationSQL   string   // SQL to test if extension is available
+	RequiresCASCADE bool     // Whether this extension typically needs CASCADE
+	RequiresPostGIS bool     // Whether this requires PostGIS base
+}
+
+// ExtensionRef represents a specific extension reference with version and schema
+type ExtensionRef struct {
+	Name    string // Extension name
+	Version string // Extension version (e.g., "0.6.0")
+	Schema  string // Schema where extension is installed (e.g., "public")
+	Line    int    // Line number where extension is defined
+}
+
+// Key returns a unique key for this extension reference
+func (e ExtensionRef) Key() string {
+	return fmt.Sprintf("%s@%s:%s", e.Name, e.Version, e.Schema)
+}
+
+// CanMergeWith checks if this extension reference can be merged with another
+func (e ExtensionRef) CanMergeWith(other ExtensionRef) bool {
+	return e.Name == other.Name &&
+		e.Version == other.Version &&
+		e.Schema == other.Schema
 }
 
 // NewExtensionDetector creates a new extension detector with known extensions
@@ -129,14 +150,14 @@ const (
 
 // ExtensionAnalysis holds the results of extension detection
 type ExtensionAnalysis struct {
-	RequiredExtensions    []string                    // List of extensions found
-	ExtensionDetails      map[string]ExtensionInfo    // Detailed info for each extension
-	RecommendedDockerBase string                      // Best Docker image to use
-	InstallationScript    string                      // Script to install extensions
-	ValidationScript      string                      // Script to validate extensions
-	MissingExtensions     []string                    // Extensions we don't know about
-	AuthService           AuthServiceType             // Detected authentication service
-	AuthCompatibilitySQL  string                      // SQL to create service compatibility
+	RequiredExtensions    []string                 // List of extensions found
+	ExtensionDetails      map[string]ExtensionInfo // Detailed info for each extension
+	RecommendedDockerBase string                   // Best Docker image to use
+	InstallationScript    string                   // Script to install extensions
+	ValidationScript      string                   // Script to validate extensions
+	MissingExtensions     []string                 // Extensions we don't know about
+	AuthService           AuthServiceType          // Detected authentication service
+	AuthCompatibilitySQL  string                   // SQL to create service compatibility
 }
 
 // AnalyzeMigrations scans migration content to detect required extensions
@@ -211,13 +232,19 @@ func (ed *ExtensionDetector) AnalyzeMigrations(migrations map[int]string) *Exten
 // detectExtensionsInContent scans SQL content for extension references
 func (ed *ExtensionDetector) detectExtensionsInContent(content string) []string {
 	var extensions []string
+	seen := make(map[string]bool)
 
-	// Pattern 1: Explicit CREATE EXTENSION statements
-	createExtRegex := regexp.MustCompile(`(?i)CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?)([a-zA-Z0-9_-]+)(?:"?)`)
+	// Pattern 1: Explicit CREATE EXTENSION statements with VERSION and WITH SCHEMA
+	// Captures: name, optional version, optional schema
+	createExtRegex := regexp.MustCompile(`(?i)CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?)([a-zA-Z0-9_-]+)(?:"?)(?:\s+VERSION\s+['"]([^'"]+)['"])?(?:\s+WITH\s+SCHEMA\s+([a-zA-Z0-9_]+))?`)
 	matches := createExtRegex.FindAllStringSubmatch(content, -1)
 	for _, match := range matches {
 		if len(match) > 1 {
-			extensions = append(extensions, strings.TrimSpace(match[1]))
+			extName := strings.TrimSpace(match[1])
+			if !seen[extName] {
+				extensions = append(extensions, extName)
+				seen[extName] = true
+			}
 		}
 	}
 
@@ -266,16 +293,10 @@ func (ed *ExtensionDetector) detectExtensionsInContent(content string) []string 
 			// Use case-insensitive search but check for actual function calls
 			// This prevents false positives from column names or type names
 			if strings.Contains(contentLower, strings.ToLower(indicator)) {
-				// Avoid duplicates
-				found := false
-				for _, existing := range extensions {
-					if strings.ToLower(existing) == extension {
-						found = true
-						break
-					}
-				}
-				if !found {
+				// Avoid duplicates using the seen map
+				if !seen[extension] {
 					extensions = append(extensions, extension)
+					seen[extension] = true
 				}
 				break // Found one indicator, no need to check others for this extension
 			}
@@ -283,6 +304,51 @@ func (ed *ExtensionDetector) detectExtensionsInContent(content string) []string 
 	}
 
 	return extensions
+}
+
+// DetectExtensionRefs scans SQL content and returns detailed extension references with versions
+func (ed *ExtensionDetector) DetectExtensionRefs(content string) []ExtensionRef {
+	var refs []ExtensionRef
+
+	// Enhanced regex to capture VERSION and WITH SCHEMA clauses
+	createExtRegex := regexp.MustCompile(`(?mi)CREATE\s+EXTENSION\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"?)([a-zA-Z0-9_-]+)(?:"?)(?:\s+VERSION\s+['"]([^'"]+)['"])?(?:\s+WITH\s+SCHEMA\s+([a-zA-Z0-9_]+))?`)
+
+	lines := strings.Split(content, "\n")
+	currentLine := 0
+
+	for _, line := range lines {
+		currentLine++
+		matches := createExtRegex.FindAllStringSubmatch(line, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				ref := ExtensionRef{
+					Name:    strings.TrimSpace(match[1]),
+					Version: "",
+					Schema:  "",
+					Line:    currentLine,
+				}
+
+				// Capture version if present
+				if len(match) > 2 && match[2] != "" {
+					ref.Version = strings.TrimSpace(match[2])
+				}
+
+				// Capture schema if present
+				if len(match) > 3 && match[3] != "" {
+					ref.Schema = strings.TrimSpace(match[3])
+				}
+
+				refs = append(refs, ref)
+			}
+		}
+	}
+
+	return refs
+}
+
+// CanMergeExtensions checks if two extension references can be safely merged
+func CanMergeExtensions(ext1, ext2 ExtensionRef) bool {
+	return ext1.CanMergeWith(ext2)
 }
 
 // selectBestDockerImage determines the best Docker image based on required extensions
@@ -487,14 +553,14 @@ func (ed *ExtensionDetector) detectAuthService(migrations map[int]string) AuthSe
 
 		// Supabase patterns - look for actual function calls, not just mentions
 		if strings.Contains(content, "auth.users") ||
-		   (strings.Contains(content, "auth.uid()") && !strings.Contains(content, "No legacy auth.uid()")) {
+			(strings.Contains(content, "auth.uid()") && !strings.Contains(content, "No legacy auth.uid()")) {
 			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Detected Supabase authentication service")
 			return AuthServiceSupabase
 		}
 
 		// Auth0 patterns - more specific
 		if strings.Contains(contentLower, "auth0") ||
-		   (strings.Contains(content, "\"sub\"") && strings.Contains(content, "\"iss\"")) {
+			(strings.Contains(content, "\"sub\"") && strings.Contains(content, "\"iss\"")) {
 			utils.GetDefaultLogger().WithPrefix("EXT-DETECTOR").Info("Detected Auth0 authentication service")
 			return AuthServiceAuth0
 		}

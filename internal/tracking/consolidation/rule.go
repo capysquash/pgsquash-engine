@@ -15,16 +15,17 @@ type ConsolidationRule interface {
 // ConsolidationEngine interface for the engine that applies consolidation rules
 type ConsolidationEngine interface {
 	GetTracker() *tracking.Tracker
-	GetConfig() interface{} // This would be the actual config type
+	GetConfig() interface{}     // This would be the actual config type
 	GetAIAnalyzer() interface{} // Returns *ai.Analyzer if available, nil otherwise
+	GetSafetyLevel() string     // Returns the current safety level (paranoid, conservative, standard, aggressive)
 }
 
 // ConsolidationRuleEngine manages and applies consolidation rules
 // It now uses the RuleRegistry for dynamic rule management
 type ConsolidationRuleEngine struct {
-	rules    []ConsolidationRule // Legacy: kept for backward compatibility
-	registry *RuleRegistry       // New: use registry for dynamic rules
-	useRegistry bool              // Whether to use registry (true) or legacy (false)
+	rules       []ConsolidationRule // Legacy: kept for backward compatibility
+	registry    *RuleRegistry       // New: use registry for dynamic rules
+	useRegistry bool                // Whether to use registry (true) or legacy (false)
 }
 
 // NewConsolidationRuleEngine creates a new rule engine with all extracted rules
