@@ -74,7 +74,18 @@ Tests materialized view handling and REFRESH operations.
 
 **Files:** 4 migrations with MV lifecycle
 
-## 🏃 Running Tests
+### 6. `pragma_examples`
+Tests manual override pragmas (`-- pgsquash:ignore`, `-- pgsquash:no-merge`).
+
+**Scenarios tested:**
+- Pragma detection in comments
+- PreserveVerbatim functionality
+- Inline pragma parsing
+- Data operation pragma handling
+
+**Files:** 3 migrations demonstrating pragma usage
+
+## Running Tests
 
 ### Unit Tests
 ```bash

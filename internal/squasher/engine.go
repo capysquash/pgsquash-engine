@@ -893,6 +893,11 @@ func (e *Engine) parseAndTrackMigrations(ctx context.Context, migrations map[int
 		// Collect data operations separately (INSERT/UPDATE/DELETE)
 		for stmtIndex, stmt := range migration.Statements {
 			if stmt.IsDataOp {
+				// Analyze pragmas for data operations too
+				sa := parser.NewStatementAnalyzer(e.config.PostgreSQLFeatures.TargetVersion)
+				sa.AnalyzeStatement(&stmt)
+				sa.AnalyzePragmas(&stmt)
+
 				if err := e.dataOperationTracker.AddOperation(stmt, sequence, stmtIndex); err != nil {
 					e.logger.Info("Warning: failed to track data operation at migration %d, statement %d: %v", sequence, stmtIndex, err)
 				}

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/metadata"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )
 
@@ -37,6 +38,9 @@ type UnifiedTracker struct {
 	processedCount   int64
 	statementCounter int64  // Track total statements even in streaming mode
 	dataOpCounter    int64  // Track data operations even in streaming mode
+
+	// Statement analysis
+	statementAnalyzer *parser.StatementAnalyzer
 }
 
 // ObjectLifecycle tracks complete database object lifecycle with advanced metadata integration
@@ -621,8 +625,9 @@ func NewUnifiedTracker() *UnifiedTracker {
 			Database:   "",
 			SearchPath: []string{"public"},
 		}),
-		cycleDetector:  NewAdvancedDDLCycleDetector(cycleConfig),
-		detectedCycles: make([]DDLCycle, 0),
+		cycleDetector:     NewAdvancedDDLCycleDetector(cycleConfig),
+		detectedCycles:    make([]DDLCycle, 0),
+		statementAnalyzer: parser.NewStatementAnalyzer("15"), // Default to PostgreSQL 15
 	}
 }
 
@@ -676,12 +681,29 @@ func (ut *UnifiedTracker) ProcessMigration(m *types.Migration, sequence int) {
 		}
 	}
 
+	// Collect data operations separately (INSERT/UPDATE/DELETE)
+	for _, stmt := range m.Statements {
+		if stmt.IsDataOp {
+			// Analyze pragmas for data operations too
+			ut.statementAnalyzer.AnalyzeStatement(&stmt)
+			ut.statementAnalyzer.AnalyzePragmas(&stmt)
+
+			// Note: Data operations are handled by the engine's dataOperationTracker
+			// This analysis is for pragma detection only
+		}
+	}
+
 	for stmtIndex, stmt := range m.Statements {
 		// Process all statements, not just those with ObjectName
 		// Some statements like INSERT/UPDATE/DELETE don't have ObjectName but should be tracked for data operations
 		if stmt.ObjectName == "" && !stmt.IsDataOp {
 			continue // Only skip if it's not a data operation and has no object name
 		}
+
+		// Analyze pragmas (manual override comments) - CRITICAL for safety
+		// This must happen before statement processing to respect user intentions
+		ut.statementAnalyzer.AnalyzeStatement(&stmt)
+		ut.statementAnalyzer.AnalyzePragmas(&stmt)
 
 		// Create enhanced lifecycle event
 		event := ut.createLifecycleEvent(stmt, m.Filename, sequence, stmtIndex)
