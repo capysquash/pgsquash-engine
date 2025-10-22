@@ -944,31 +944,26 @@ func (sv *SchemaValidator) validateWithTwoDatabases(ctx context.Context, origina
 		return result, err
 	}
 
-	// Compare schemas
-	originalDB, err := sql.Open("postgres", originalDSN)
+	// Compare schemas using pg_dump normalization
+	schema1, err := sv.DumpAndNormalizeContainerDatabase(ctx, containerInfo.ID, "validation_original")
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to connect to original db: %v", err)
+		result.Error = fmt.Sprintf("failed to dump original schema: %v", err)
 		return result, err
 	}
-	defer func() { _ = originalDB.Close() }()
 
-	squashedDB, err := sql.Open("postgres", squashedDSN)
+	schema2, err := sv.DumpAndNormalizeContainerDatabase(ctx, containerInfo.ID, "validation_squashed")
 	if err != nil {
-		result.Error = fmt.Sprintf("failed to connect to squashed db: %v", err)
+		result.Error = fmt.Sprintf("failed to dump squashed schema: %v", err)
 		return result, err
 	}
-	defer func() { _ = squashedDB.Close() }()
 
-	differences, err := sv.compareSchemas(originalDB, squashedDB)
-	if err != nil {
-		result.Error = fmt.Sprintf("schema comparison failed: %v", err)
-		return result, err
-	}
+	// Compare normalized schemas
+	diff := CompareNormalizedSchemas(schema1, schema2)
 
 	result.Duration = time.Since(startTime)
-	result.Success = differences == ""
-	if differences != "" {
-		result.Differences = differences
+	result.Success = !diff.HasDifferences
+	if diff.HasDifferences {
+		result.Differences = diff.FormatDiff()
 	}
 
 	return result, nil
@@ -1014,22 +1009,17 @@ func (sv *SchemaValidator) validateWithTwoContainers(ctx context.Context, origin
 		return result, err
 	}
 
-	// Compare schemas between containers
-	originalDB, _ := sql.Open("postgres", originalDSN)
-	squashedDB, _ := sql.Open("postgres", squashedDSN)
-	defer func() { _ = originalDB.Close() }()
-	defer func() { _ = squashedDB.Close() }()
-
-	differences, err := sv.compareSchemas(originalDB, squashedDB)
+	// Compare schemas using pg_dump normalization
+	diff, err := sv.compareSchemasWithNormalization(ctx, originalContainer.ID, squashedContainer.ID)
 	if err != nil {
 		result.Error = fmt.Sprintf("schema comparison failed: %v", err)
 		return result, err
 	}
 
 	result.Duration = time.Since(startTime)
-	result.Success = differences == ""
-	if differences != "" {
-		result.Differences = differences
+	result.Success = !diff.HasDifferences
+	if diff.HasDifferences {
+		result.Differences = diff.FormatDiff()
 	}
 
 	return result, nil
@@ -2154,7 +2144,36 @@ func (sv *SchemaValidator) applyMigrationsToContainer(ctx context.Context, conta
 	return sv.applyMigrationsToDatabase(dsn, migrationPath)
 }
 
-//nolint:unused // Reserved for future schema comparison feature
+// compareSchemasWithNormalization compares schemas using pg_dump normalization pipeline
+// This is the production-grade comparison method that handles subtle differences
+func (sv *SchemaValidator) compareSchemasWithNormalization(ctx context.Context, container1ID, container2ID string) (*SchemaDiff, error) {
+	// Dump and normalize schema from both containers
+	schema1, err := sv.DumpAndNormalizeContainerSchema(ctx, container1ID)
+	if err != nil {
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"failed to dump schema from original container",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err)
+	}
+
+	schema2, err := sv.DumpAndNormalizeContainerSchema(ctx, container2ID)
+	if err != nil {
+		return nil, errors.NewError(
+			errors.ErrorCodeValidationFailed,
+			"failed to dump schema from squashed container",
+			errors.SeverityError,
+			errors.CategoryValidation,
+		).WithInnerError(err)
+	}
+
+	// Compare normalized schemas
+	diff := CompareNormalizedSchemas(schema1, schema2)
+	return diff, nil
+}
+
+//nolint:unused // Kept for backward compatibility, use DumpAndNormalizeContainerSchema instead
 func (sv *SchemaValidator) dumpContainerSchema(ctx context.Context, containerInfo *ContainerInfo) (string, error) {
 	cmd := exec.CommandContext(ctx, "docker", "exec", containerInfo.ID,
 		"pg_dump", "-U", "postgres", "-d", "postgres", "--schema-only")
@@ -2172,25 +2191,10 @@ func (sv *SchemaValidator) dumpContainerSchema(ctx context.Context, containerInf
 	return string(output), nil
 }
 
-//nolint:unused // Reserved for future schema comparison feature
-func (sv *SchemaValidator) compareFileWithSchema(filePath, schema string) (string, error) {
-	// Read file content
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-
-	fileContent := string(content)
-
-	// Simple comparison - in real implementation this would be more sophisticated
-	if fileContent == schema {
-		return "", nil
-	}
-
-	return "Schema differences detected (simplified comparison)", nil
-}
-
 func (sv *SchemaValidator) compareSchemas(db1, db2 *sql.DB) (string, error) {
+	// Note: This method is kept for backward compatibility but is deprecated.
+	// For container-based validation, use compareSchemasWithNormalization instead.
+
 	// Compare tables
 	tables1, err := sv.getTables(db1)
 	if err != nil {

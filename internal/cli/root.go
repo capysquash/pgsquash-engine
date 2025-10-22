@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -56,6 +57,9 @@ var (
 	// Validation options
 	validationMode    string
 	workflowOutputDir string
+	noValidate        bool
+	failOnDiff        bool
+	openReport        bool
 
 	// Init-config options
 	forceOverwrite bool
@@ -281,6 +285,14 @@ func init() {
 		"Maximum cycle detection depth (default: 10)")
 	squashCmd.Flags().BoolVar(&showCycleDetails, "cycle-details", false,
 		"Show detailed information about detected cycles")
+
+	// Validation flags
+	squashCmd.Flags().BoolVar(&noValidate, "no-validate", false,
+		"Skip automatic validation after squashing")
+	squashCmd.Flags().BoolVar(&failOnDiff, "fail-on-diff", false,
+		"Exit with error code 1 if schema differences are detected during validation")
+	squashCmd.Flags().BoolVar(&openReport, "open-report", false,
+		"Open validation report in $EDITOR after validation")
 
 	// AI fix command flags
 	aiFixCmd.Flags().IntVar(&maxFixAttempts, "max-attempts", 5,
@@ -745,7 +757,119 @@ func runSquash(cmd *cobra.Command, args []string) error {
 	// Print success report
 	printSquashSummary(migrationCount, len(strings.Split(finalSQL, "\n")), time.Since(startTime), warnings, outputPath)
 
+	// Run automatic validation unless --no-validate is specified
+	if !noValidate {
+		fmt.Println("\n" + color.CyanString("🔍 Running automatic validation..."))
+
+		// Get original migrations path
+		var originalPath string
+		if len(args) > 0 {
+			// Check if it's a directory or file
+			info, err := os.Stat(args[0])
+			if err == nil {
+				if info.IsDir() {
+					originalPath = args[0]
+				} else {
+					originalPath = filepath.Dir(args[0])
+				}
+			}
+		}
+
+		if originalPath == "" {
+			fmt.Println(color.YellowString("⚠️  Could not determine original migrations path, skipping validation"))
+			fmt.Println(color.YellowString("    Run 'pgsquash validate <original> <squashed>' manually if needed"))
+		} else {
+			// Run validation
+			valResult, valErr := runValidationCheck(cfg, originalPath, cfg.Output.Directory)
+
+			if valErr != nil {
+				fmt.Println(color.RedString("❌ Validation failed: %v", valErr))
+				if failOnDiff {
+					return errors.NewError(
+						errors.ErrorCodeValidationFailed,
+						"Schema validation detected differences",
+						errors.SeverityError,
+						errors.CategoryValidation,
+					).WithInnerError(valErr).WithSuggestion("Review validation report for details")
+				}
+				fmt.Println(color.YellowString("⚠️  Warning: Validation failed but continuing (use --fail-on-diff to exit on validation errors)"))
+			} else if valResult != nil && !valResult.Success {
+				fmt.Println(color.RedString("❌ Schema differences detected!"))
+				fmt.Println(valResult.DockerValidation.Differences)
+
+				if openReport {
+					reportPath := filepath.Join(cfg.Output.Directory, "validation-report.md")
+					if err := os.WriteFile(reportPath, []byte(valResult.DockerValidation.Differences), 0644); err == nil {
+						fmt.Println(color.CyanString("📝 Validation report saved to: %s", reportPath))
+						openInEditor(reportPath)
+					}
+				}
+
+				if failOnDiff {
+					return errors.NewError(
+						errors.ErrorCodeValidationFailed,
+						"Schema differences detected between original and squashed migrations",
+						errors.SeverityError,
+						errors.CategoryValidation,
+					).WithSuggestion("Review the differences above and ensure squashing is correct")
+				}
+			} else {
+				fmt.Println(color.GreenString("✅ Validation passed - schemas are identical"))
+			}
+		}
+	}
+
 	return nil
+}
+
+// runValidationCheck performs validation and returns the result
+func runValidationCheck(cfg *config.Config, originalPath, squashedPath string) (*validation.ValidationResult, error) {
+	// Create validator with config
+	valConfig := &validation.ValidationConfig{
+		Level:                    validation.ValidationLevelStandard,
+		ValidateExpressions:      true,
+		ValidateConstraints:      true,
+		ValidateDependencies:     true,
+		DockerApproach:           validation.ApproachTwoDatabases,
+		PostgreSQLVersion:        "15",
+		EnableExtensionDetection: true,
+		AutoInstallExtensions:    true,
+		Verbose:                  verbose,
+	}
+
+	if cfg.Validation != nil {
+		if cfg.Validation.PostgreSQLVersion != "" {
+			valConfig.PostgreSQLVersion = cfg.Validation.PostgreSQLVersion
+		}
+		if cfg.Validation.ApproachUsed != "" {
+			valConfig.DockerApproach = validation.ValidationApproach(cfg.Validation.ApproachUsed)
+		}
+	}
+
+	validator := validation.NewSchemaValidator(valConfig)
+	defer validator.Close()
+
+	ctx := context.Background()
+	result, err := validator.ValidateWithDocker(ctx, originalPath, squashedPath)
+
+	return result, err
+}
+
+// openInEditor opens a file in the user's preferred editor
+func openInEditor(path string) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim" // fallback
+	}
+
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("Failed to open editor: %v\n", err)
+	}
 }
 
 func runValidate(cmd *cobra.Command, args []string) error {
