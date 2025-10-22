@@ -61,6 +61,13 @@ var (
 	failOnDiff        bool
 	openReport        bool
 
+	// Transaction planning options
+	showPlan        bool
+	explainLocks    bool
+	splitBySchema   string
+	branchCheck     bool
+	iKnowWhatImDoing bool
+
 	// Init-config options
 	forceOverwrite bool
 
@@ -293,6 +300,20 @@ func init() {
 		"Exit with error code 1 if schema differences are detected during validation")
 	squashCmd.Flags().BoolVar(&openReport, "open-report", false,
 		"Open validation report in $EDITOR after validation")
+
+	// Transaction planning and lock analysis flags
+	squashCmd.Flags().BoolVar(&showPlan, "plan", false,
+		"Show transaction batching plan without executing")
+	squashCmd.Flags().BoolVar(&explainLocks, "explain-locks", false,
+		"Show detailed lock-level analysis for all statements")
+	squashCmd.Flags().StringVar(&splitBySchema, "split-by", "",
+		"Split output by: schema, object, or none (default: none)")
+
+	// Branch safety flags
+	squashCmd.Flags().BoolVar(&branchCheck, "branch-check", false,
+		"Enforce protected branch requirement (fails if not on main/master)")
+	squashCmd.Flags().BoolVar(&iKnowWhatImDoing, "i-know-what-im-doing", false,
+		"Override all safety warnings (use with caution)")
 
 	// AI fix command flags
 	aiFixCmd.Flags().IntVar(&maxFixAttempts, "max-attempts", 5,
