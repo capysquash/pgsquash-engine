@@ -1,6 +1,6 @@
 # Environment Variables
 
-Environment variables let you configure pgsquash without editing config files—great for different environments, CI/CD pipelines, and team setups.
+Environment variables let you configure pgsquash without editing config files - great for different environments, CI/CD pipelines, and team setups.
 
 ## Quick Reference by Use Case
 
@@ -183,7 +183,7 @@ pgsquash squash migrations/*.sql --ai
 
 **Get your key:** <https://Platform.openai.com/>
 
-Provides similar analysis to Claude—choose based on your preference or existing API access.
+Provides similar analysis to Claude - choose based on your preference or existing API access.
 
 ---
 
@@ -286,7 +286,7 @@ export CORS_ORIGIN="https://app.example.com,https://staging.example.com"
 api-server
 ```
 
-⚠️ **Security:** Never use `*` in production—restrict to your actual domains.
+⚠️ **Security:** Never use `*` in production - restrict to your actual domains.
 
 ---
 
@@ -325,7 +325,7 @@ export GITHUB_WEBHOOK_SECRET="your-webhook-secret"
 api-server
 ```
 
-⚠️ **Security:** Use a strong random secret—this prevents attackers from triggering fake PR analysis.
+⚠️ **Security:** Use a strong random secret - this prevents attackers from triggering fake PR analysis.
 
 **Setup:** Set the same secret in:
 

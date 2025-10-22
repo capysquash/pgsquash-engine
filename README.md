@@ -2,9 +2,9 @@
 
 **The PostgreSQL migration consolidation engine.** Intelligently reorganizes your migration history into clean, production-ready SQL—without breaking anything.
 
-**Current version:** 0.8.5 (Beta)
+**Current version:** 0.9.0 (Beta)
 
-> **Note:** You can use either `pgsquash` or `capysquash` as the command - they're identical! Both are included in all installations.
+> **Note:** pgsquash is the engine that powers capysquash, you can use either `pgsquash` or `capysquash` as the command - they're identical but the pgsquash cli/tui will be phased out over time in favor of capysquash for clearer separation between engine, cli and platform.
 
 > **Heads up:** This tool rewrites your SQL files. Back up your migrations first, run the output through tests, and double-check that everything looks right before deploying to production.
 

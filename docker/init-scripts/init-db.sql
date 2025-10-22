@@ -9,8 +9,8 @@
 -- ====================================
 -- UUID datatype is built-in PostgreSQL since version 8.3 - no extension needed
 -- Only create uuid-ossp extension if you need UUID generation functions:
---   • uuid_generate_v1(), uuid_generate_v1mc()
---   • uuid_generate_v3(), uuid_generate_v4(), uuid_generate_v5()
+--   ► uuid_generate_v1(), uuid_generate_v1mc()
+--   ► uuid_generate_v3(), uuid_generate_v4(), uuid_generate_v5()
 --
 -- If your migrations only use UUID datatype (e.g., column type), you don't need this extension.
 -- If you use uuid_generate_v4() or similar functions, keep this extension enabled.

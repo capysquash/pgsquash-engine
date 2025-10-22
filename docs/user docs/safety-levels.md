@@ -238,7 +238,7 @@ Production-safe mode with only well-tested consolidations.
 
 ### Rules Applied
 
-1. ✓ **CreateAlterConsolidationRule**
+1. ☑ **CreateAlterConsolidationRule**
 
    ```sql
    -- Before
@@ -252,21 +252,21 @@ Production-safe mode with only well-tested consolidations.
    );
    ```
 
-2. ✓ **ColumnEvolutionRule**
+2. ☑ **ColumnEvolutionRule**
 
    ```sql
    -- Tracks column changes across migrations
    -- Preserves important intermediate states
    ```
 
-3. ✓ **ConditionalSchemaRule**
+3. ☑ **ConditionalSchemaRule**
 
    ```sql
    -- Uses IF NOT EXISTS where appropriate
    CREATE TABLE IF NOT EXISTS users (...);
    ```
 
-4. ✓ **AdvancedColumnLifecycleRule**
+4. ☑ **AdvancedColumnLifecycleRule**
 
    ```sql
    -- Handles complex column evolution
@@ -338,7 +338,7 @@ Balanced mode with proven optimizations for staging and testing.
 
 All Conservative rules plus:
 
-5. ✓ **DropCreateCycleRule**
+5. ☑ **DropCreateCycleRule**
 
    ```sql
    -- Before
@@ -350,14 +350,14 @@ All Conservative rules plus:
    CREATE TABLE temp (id UUID);  -- Final version only
    ```
 
-6. ✓ **RLSConsolidationRule**
+6. ☑ **RLSConsolidationRule**
 
    ```sql
    -- Groups related RLS policies
    -- Consolidates policy definitions
    ```
 
-7. ✓ **TransactionBoundaryRule**
+7. ☑ **TransactionBoundaryRule**
 
    ```sql
    -- Optimizes transaction boundaries
@@ -433,7 +433,7 @@ Maximum optimization for development environments.
 
 All Standard rules plus:
 
-8. ✓ **FunctionDeduplicationRule**
+8. ☑ **FunctionDeduplicationRule**
 
    ```sql
    -- Removes duplicate function definitions
@@ -441,7 +441,7 @@ All Standard rules plus:
    -- AI-powered comparison (optional)
    ```
 
-9. ✓ **DeadCodeRemovalRule** (Without DB)
+9. ☑ **DeadCodeRemovalRule** (Without DB)
 
    ```sql
    -- Removes unused functions/triggers

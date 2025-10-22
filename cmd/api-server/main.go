@@ -102,11 +102,11 @@ func NewServer() *Server {
 	if err != nil {
 		logger.Fatal("Failed to initialize operation tracker: %v", err)
 	}
-	logger.Info("✓ Operation tracker initialized")
+	logger.Info("☑ Operation tracker initialized")
 
 	// Initialize rate limiter (10 req/sec, burst 20)
 	rateLimiter := middleware.NewRateLimiter(10, 20)
-	logger.Info("✓ Rate limiter initialized (10 req/s, burst 20)")
+	logger.Info("☑ Rate limiter initialized (10 req/s, burst 20)")
 
 	// Initialize GitHub integration components
 	githubToken := getEnv("GITHUB_TOKEN", "")
@@ -143,13 +143,13 @@ func NewServer() *Server {
 			logger.Info("⚠ GitHub App authentication failed: %v", err)
 			logger.Info("Falling back to personal access token if available...")
 		} else {
-			logger.Info("✓ GitHub App authentication initialized")
+			logger.Info("☑ GitHub App authentication initialized")
 			logger.Info("  App ID: %s", githubAppID)
 
 			// Create webhook handler with GitHub App client
 			if webhookSecret != "" {
 				webhookHandler = github.NewWebhookHandlerWithApp(webhookSecret, appClient, engine)
-				logger.Info("✓ GitHub App webhook handler initialized")
+				logger.Info("☑ GitHub App webhook handler initialized")
 				logger.Info("  Multi-repository support enabled")
 			} else {
 				logger.Info("⚠ Webhook secret not set - webhooks disabled")
@@ -162,7 +162,7 @@ func NewServer() *Server {
 		githubClient := github.NewClient(githubToken)
 
 		webhookHandler = github.NewWebhookHandler(webhookSecret, githubClient, engine)
-		logger.Info("✓ GitHub webhook handler initialized (using personal access token)")
+		logger.Info("☑ GitHub webhook handler initialized (using personal access token)")
 		logger.Info("  Consider upgrading to GitHub App for better security and rate limits")
 	}
 
@@ -174,7 +174,7 @@ func NewServer() *Server {
 
 	if clientID != "" && clientSecret != "" {
 		oauthHandler = github.NewOAuthHandler(clientID, clientSecret, redirectURL)
-		logger.Info("✓ GitHub OAuth handler initialized")
+		logger.Info("☑ GitHub OAuth handler initialized")
 	} else {
 		logger.Info("⚠ GitHub OAuth not configured (set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET)")
 	}
@@ -241,20 +241,20 @@ func (s *Server) setupRoutes() {
 	api.HandleFunc("/operations/{id}/progress", s.handleOperationProgress).Methods("GET")
 	api.HandleFunc("/operations/{id}", s.handleCancelOperation).Methods("DELETE")
 
-	s.logger.Info("✓ All API endpoints registered (19 total: 6 read-only + 13 mutation/advanced)")
+	s.logger.Info("☑ All API endpoints registered (19 total: 6 read-only + 13 mutation/advanced)")
 
 	// GitHub integration endpoints (webhook has its own auth via signature)
 	if s.webhookHandler != nil {
 		github := s.router.PathPrefix("/github").Subrouter()
 		github.HandleFunc("/webhook", s.webhookHandler.HandleWebhook).Methods("POST")
-		s.logger.Info("✓ GitHub webhook endpoint registered at /github/webhook")
+		s.logger.Info("☑ GitHub webhook endpoint registered at /github/webhook")
 	}
 
 	if s.oauthHandler != nil {
 		github := s.router.PathPrefix("/github").Subrouter()
 		github.HandleFunc("/login", s.handleGitHubLogin).Methods("GET")
 		github.HandleFunc("/callback", s.oauthHandler.HandleCallback).Methods("GET")
-		s.logger.Info("✓ GitHub OAuth endpoints registered at /github/login and /github/callback")
+		s.logger.Info("☑ GitHub OAuth endpoints registered at /github/login and /github/callback")
 	}
 
 	// Setup CORS (applied globally)

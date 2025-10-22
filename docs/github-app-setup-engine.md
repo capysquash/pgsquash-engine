@@ -30,12 +30,12 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
 
 ### Benefits for Your Team
 
-✅ **Better Security** - App credentials instead of user tokens
-✅ **Higher Rate Limits** - 3x more API calls
-✅ **Easier Management** - One app for all repositories
-✅ **Automatic Webhooks** - No manual webhook configuration
-✅ **Team Ownership** - Not tied to a specific user account
-✅ **Per-Repo Configuration** - Use `.capysquash.yml` for custom settings
+☑ **Better Security** - App credentials instead of user tokens
+☑ **Higher Rate Limits** - 3x more API calls
+☑ **Easier Management** - One app for all repositories
+☑ **Automatic Webhooks** - No manual webhook configuration
+☑ **Team Ownership** - Not tied to a specific user account
+☑ **Per-Repo Configuration** - Use `.capysquash.yml` for custom settings
 
 ---
 
@@ -60,7 +60,7 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
 
 **Permissions:**
 
-- ✅ Repository permissions:
+- ☑ Repository permissions:
   - Contents: **Read & write**
   - Pull requests: **Read & write**
   - Issues: **Read & write**
@@ -69,11 +69,11 @@ Complete guide to setting up the pgsquash GitHub App for automated migration ana
 
 **Subscribe to events:**
 
-- ✅ Pull request
-- ✅ Pull request review
-- ✅ Pull request review comment
-- ✅ Issue comment
-- ✅ Push
+- ☑ Pull request
+- ☑ Pull request review
+- ☑ Pull request review comment
+- ☑ Issue comment
+- ☑ Push
 
 6. Click **Create GitHub App**
 
@@ -133,7 +133,7 @@ docker run -d \
 
 1. Open a pull request with migration changes
 2. Watch for pgsquash comment within 30 seconds
-3. ✅ Success! You're done.
+3. ☑ Success! You're done.
 
 ---
 
@@ -177,7 +177,7 @@ docker run -d \
      ```
      Save this - you'll need it for API server configuration
 
-   - **Active**: ✅ Check this box
+   - **Active**: ☑ Check this box
 
 4. **Permissions:** Set the minimum required permissions:
 
@@ -191,11 +191,11 @@ docker run -d \
 
 5. **Subscribe to events:** Select these events:
 
-   - ✅ **Pull request** - Triggers analysis when PRs are opened/synchronized
-   - ✅ **Pull request review** - Allows responding to reviews
-   - ✅ **Pull request review comment** - Process review comments
-   - ✅ **Issue comment** - Listen for bot commands (e.g., `/pgsquash analyze`)
-   - ✅ **Push** - Optional: Analyze on every push
+   - ☑ **Pull request** - Triggers analysis when PRs are opened/synchronized
+   - ☑ **Pull request review** - Allows responding to reviews
+   - ☑ **Pull request review comment** - Process review comments
+   - ☑ **Issue comment** - Listen for bot commands (e.g., `/pgsquash analyze`)
+   - ☑ **Push** - Optional: Analyze on every push
 
 6. **Where can this GitHub App be installed?**
 

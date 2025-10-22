@@ -188,7 +188,7 @@ func (p *ConsolidationPlan) FormatPlan() string {
 
 	// Consolidations
 	if len(p.Consolidations) > 0 {
-		sb.WriteString("\n✓ PLANNED CONSOLIDATIONS\n")
+		sb.WriteString("\n☑ PLANNED CONSOLIDATIONS\n")
 		sb.WriteString("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
 
 		for i, consolidation := range p.Consolidations {

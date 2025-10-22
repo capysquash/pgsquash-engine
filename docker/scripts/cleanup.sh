@@ -73,9 +73,9 @@ done
 # Confirmation prompt
 if [ "$FORCE" = false ]; then
     echo "🧹 This will clean up pgsquash Docker resources:"
-    [ "$CLEAN_VALIDATION" = true ] && echo "  • Validation containers"
-    [ "$CLEAN_ALL" = true ] && echo "  • All pgsquash containers and images"
-    [ "$CLEAN_VOLUMES" = true ] && echo "  • Docker volumes"
+    [ "$CLEAN_VALIDATION" = true ] && echo "  ► Validation containers"
+    [ "$CLEAN_ALL" = true ] && echo "  ► All pgsquash containers and images"
+    [ "$CLEAN_VOLUMES" = true ] && echo "  ► Docker volumes"
     echo ""
     read -p "Continue? (y/N) " -n 1 -r
     echo
@@ -159,14 +159,14 @@ else
 fi
 
 # Summary
-log_success "✅ Cleanup completed!"
+log_success "☑ Cleanup completed!"
 echo ""
 log_info "📊 Current Docker usage:"
 docker system df
 
 echo ""
 log_info "💡 Tips:"
-log_info "  • Run '$0 --all' to clean everything"
-log_info "  • Run '$0 --all --volumes' to also remove volumes"
-log_info "  • Run 'docker ps -a' to see remaining containers"
-log_info "  • Run 'docker images' to see remaining images"
+log_info "  ► Run '$0 --all' to clean everything"
+log_info "  ► Run '$0 --all --volumes' to also remove volumes"
+log_info "  ► Run 'docker ps -a' to see remaining containers"
+log_info "  ► Run 'docker images' to see remaining images"

@@ -1,6 +1,6 @@
 # Quickstart
 
-Get up and running in 5 minutes. pgsquash intelligently consolidates your migration history using PostgreSQL's own parser—no changes to your existing migration files needed.
+Get up and running in 5 minutes. pgsquash intelligently consolidates your migration history using PostgreSQL's own parser - no changes to your existing migration files needed.
 
 ## What You Need
 
@@ -8,7 +8,7 @@ Get up and running in 5 minutes. pgsquash intelligently consolidates your migrat
 - SQL migration files (any format)
 - Docker (optional, for schema validation)
 
-> **Using Supabase?** No special config needed—pgsquash auto-detects RLS policies, storage schemas, and auth patterns.
+> **Using Supabase?** No special config needed - pgsquash auto-detects RLS policies, storage schemas, and auth patterns.
 > **Using Prisma/Drizzle?** Your ORM metadata tables are automatically preserved.
 
 ## Installation
@@ -52,7 +52,7 @@ pgsquash analyze migrations/*.sql
    - 8 overlapping ALTER TABLE statements
    - 12 duplicate function definitions
 
-✅ Detected Integrations:
+☑ Detected Integrations:
    - Supabase (auth.users, RLS policies)
    - Clerk (JWT v2 organization claims)
 ```
@@ -63,7 +63,7 @@ pgsquash analyze migrations/*.sql
 pgsquash squash migrations/*.sql --dry-run
 ```
 
-Shows exactly what will be consolidated, how dependencies will be resolved, and which optimizations will be applied—all without modifying any files.
+Shows exactly what will be consolidated, how dependencies will be resolved, and which optimizations will be applied - all without modifying any files.
 
 ### Step 3: Consolidate Your Migrations
 
@@ -84,7 +84,7 @@ clean/
 └── 007_data.sql            # Seed data (if any, dependency-sorted)
 ```
 
-Every dependency is automatically resolved—tables before foreign keys, schemas before objects, functions before triggers, etc. Circular foreign key dependencies are detected and handled with two-phase constraint creation.
+Every dependency is automatically resolved - tables before foreign keys, schemas before objects, functions before triggers, etc. Circular foreign key dependencies are detected and handled with two-phase constraint creation.
 
 ### Step 4: Validate (requires Docker)
 
@@ -100,8 +100,8 @@ pgsquash validate migrations/ clean/
 4. Performs byte-level schema comparison using `pg_dump`
 5. Auto-generates compatibility layers for auth services (Supabase, Clerk)
 
-**If schemas match:** ✅ Safe to deploy—schemas are byte-for-byte identical
-**If schemas differ:** ❌ Shows detailed diff with exact mismatches and suggestions
+**If schemas match:** ☑ Safe to deploy - schemas are byte-for-byte identical
+**If schemas differ:** ☒ Shows detailed diff with exact mismatches and suggestions
 
 ## Common workflows
 

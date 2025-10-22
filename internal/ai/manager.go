@@ -35,10 +35,10 @@ const (
 
 // HealthCache stores cached health check results for providers
 type HealthCache struct {
-	healthy    bool
-	lastCheck  time.Time
-	ttl        time.Duration
-	lastError  string // Error message from last health check (if any)
+	healthy   bool
+	lastCheck time.Time
+	ttl       time.Duration
+	lastError string // Error message from last health check (if any)
 }
 
 // ProviderManager manages multiple AI providers and routes requests
@@ -330,9 +330,9 @@ func (pm *ProviderManager) Analyze(ctx context.Context, req *AnalysisRequest) (*
 				} else {
 					response.Metadata["primary_error"] = "primary provider was not available"
 				}
-				fmt.Printf("✓ AI provider %s succeeded (fallback)\n", providerType)
+				fmt.Printf("☑ AI provider %s succeeded (fallback)\n", providerType)
 			} else {
-				fmt.Printf("✓ AI provider %s succeeded\n", providerType)
+				fmt.Printf("☑ AI provider %s succeeded\n", providerType)
 			}
 			return response, nil
 		}

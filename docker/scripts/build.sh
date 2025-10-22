@@ -359,15 +359,15 @@ show_summary() {
     log_success "🎉 Build completed successfully!"
     echo
     log_info "📊 Build Summary:"
-    log_info "  • Image: $FULL_IMAGE_NAME:$VERSION"
-    log_info "  • Platforms: $PlatformS"
-    log_info "  • Build Date: $BUILD_DATE"
-    log_info "  • Git Commit: $GIT_COMMIT"
+    log_info "  ► Image: $FULL_IMAGE_NAME:$VERSION"
+    log_info "  ► Platforms: $PlatformS"
+    log_info "  ► Build Date: $BUILD_DATE"
+    log_info "  ► Git Commit: $GIT_COMMIT"
     if [[ -n "$GIT_TAG" ]]; then
-        log_info "  • Git Tag: $GIT_TAG"
+        log_info "  ► Git Tag: $GIT_TAG"
     fi
-    log_info "  • Pushed to Registry: $PUSH"
-    log_info "  • Loaded Locally: $LOAD"
+    log_info "  ► Pushed to Registry: $PUSH"
+    log_info "  ► Loaded Locally: $LOAD"
     echo
     if [[ "$PUSH" == "true" ]]; then
         log_info "🚀 Image published and ready to use:"
@@ -388,12 +388,12 @@ main() {
     show_banner
 
     log_info "🔧 Configuration:"
-    log_info "  • Registry: ${REGISTRY:-"(none)"}"
-    log_info "  • Repository: $REPOSITORY"
-    log_info "  • Version: $VERSION"
-    log_info "  • Platforms: $PlatformS"
-    log_info "  • Push: $PUSH"
-    log_info "  • Load: $LOAD"
+    log_info "  ► Registry: ${REGISTRY:-"(none)"}"
+    log_info "  ► Repository: $REPOSITORY"
+    log_info "  ► Version: $VERSION"
+    log_info "  ► Platforms: $PlatformS"
+    log_info "  ► Push: $PUSH"
+    log_info "  ► Load: $LOAD"
     echo
 
     pre_build_checks

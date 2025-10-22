@@ -227,13 +227,13 @@ perform_health_check() {
 # Show startup information
 show_startup_info() {
     log_info "🔧 Configuration:"
-    log_info "  • Home Directory: $PGSQUASH_HOME"
-    log_info "  • Config File: $PGSQUASH_CONFIG"
-    log_info "  • Migrations: $PGSQUASH_MIGRATIONS_DIR"
-    log_info "  • Output: $PGSQUASH_OUTPUT_DIR"
-    log_info "  • Safety Level: $PGSQUASH_SAFETY_LEVEL"
-    log_info "  • Docker Enabled: $PGSQUASH_DOCKER_ENABLED"
-    log_info "  • Auto Validate: $PGSQUASH_AUTO_VALIDATE"
+    log_info "  ► Home Directory: $PGSQUASH_HOME"
+    log_info "  ► Config File: $PGSQUASH_CONFIG"
+    log_info "  ► Migrations: $PGSQUASH_MIGRATIONS_DIR"
+    log_info "  ► Output: $PGSQUASH_OUTPUT_DIR"
+    log_info "  ► Safety Level: $PGSQUASH_SAFETY_LEVEL"
+    log_info "  ► Docker Enabled: $PGSQUASH_DOCKER_ENABLED"
+    log_info "  ► Auto Validate: $PGSQUASH_AUTO_VALIDATE"
     echo
 }
 
@@ -252,7 +252,7 @@ init_pgsquash() {
     perform_health_check
 
     echo
-    log_success "✅ pgsquash setup completed successfully!"
+    log_success "☑ pgsquash setup completed successfully!"
     show_startup_info
 }
 
@@ -262,10 +262,10 @@ handle_init() {
     log_success "🎉 pgsquash is ready to use!"
     echo
     log_info "💡 Quick start commands:"
-    log_info "  • Analyze migrations:    pgsquash analyze /app/migrations/*.sql"
-    log_info "  • Squash migrations:     pgsquash squash /app/migrations/*.sql --output /app/output/"
-    log_info "  • Validate with Docker:  pgsquash validate --docker /app/migrations/"
-    log_info "  • Full workflow:         pgsquash workflow --input /app/migrations/ --output /app/output/"
+    log_info "  ► Analyze migrations:    pgsquash analyze /app/migrations/*.sql"
+    log_info "  ► Squash migrations:     pgsquash squash /app/migrations/*.sql --output /app/output/"
+    log_info "  ► Validate with Docker:  pgsquash validate --docker /app/migrations/"
+    log_info "  ► Full workflow:         pgsquash workflow --input /app/migrations/ --output /app/output/"
 }
 
 handle_squash() {

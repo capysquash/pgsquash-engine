@@ -1519,7 +1519,7 @@ func (sv *SchemaValidator) createEnhancedContainer(ctx context.Context, extensio
 		if err := sv.dockerClient.ContainerRestart(ctx, resp.ID, container.StopOptions{Timeout: &stopTimeout}); err != nil {
 			sv.logInfo("⚠️  Warning: Failed to restart container: %v", err)
 		} else {
-			sv.logInfo("✓ Container restarted successfully")
+			sv.logInfo("☑ Container restarted successfully")
 		}
 	}
 
@@ -1597,7 +1597,7 @@ func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, image
 	_, err := sv.dockerClient.ImageInspect(ctx, imageName)
 	if err == nil {
 		// Image exists, no need to pull
-		sv.logInfo("✓ Docker image '%s' found locally", imageName)
+		sv.logInfo("☑ Docker image '%s' found locally", imageName)
 		return nil
 	}
 
@@ -1612,7 +1612,7 @@ func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, image
 		reader, err := sv.dockerClient.ImagePull(ctx, imageName, image.PullOptions{})
 		if err != nil {
 			if sv.config.Verbose {
-				color.Red("❌ Failed to pull Docker image '%s'\n", imageName)
+				color.Red("☒ Failed to pull Docker image '%s'\n", imageName)
 				color.Yellow("\nTo fix this, try running manually:\n")
 				color.Yellow("  docker pull %s\n\n", imageName)
 			}
@@ -1646,7 +1646,7 @@ func (sv *SchemaValidator) ensureDockerImageAvailable(ctx context.Context, image
 		}
 
 		if sv.config.Verbose {
-			color.Green("✓ Successfully pulled image: %s\n", imageName)
+			color.Green("☑ Successfully pulled image: %s\n", imageName)
 		}
 		return nil
 	}
@@ -1690,7 +1690,7 @@ func (sv *SchemaValidator) stopAndRemoveContainer(ctx context.Context, container
 			sv.logInfo("⚠️  Failed to remove container %s: %v", containerID, err)
 		}
 	} else {
-		sv.logInfo("✓ Successfully cleaned up container %s", containerID)
+		sv.logInfo("☑ Successfully cleaned up container %s", containerID)
 	}
 }
 
@@ -1753,7 +1753,7 @@ func (sv *SchemaValidator) waitForPostgreSQLReady(ctx context.Context, container
 			).WithSuggestion("PostgreSQL may have failed to start - check container logs: docker logs " + containerInfo.ID)
 		case <-ticker.C:
 			if err := db.PingContext(ctx); err == nil {
-				sv.logInfo("✓ PostgreSQL ready and accepting connections")
+				sv.logInfo("☑ PostgreSQL ready and accepting connections")
 				return nil
 			}
 		}
@@ -1792,7 +1792,7 @@ func (sv *SchemaValidator) installExtensions(ctx context.Context, containerInfo 
 			}
 			failedExtensions = append(failedExtensions, ext)
 		} else {
-			sv.logInfo("✓ Installed extension: %s", ext)
+			sv.logInfo("☑ Installed extension: %s", ext)
 		}
 	}
 
@@ -1884,7 +1884,7 @@ func (sv *SchemaValidator) installExtensionsViaPackageManager(ctx context.Contex
 	}
 
 	if len(packagesToInstall) == 0 {
-		sv.logInfo("✓ No system packages needed for requested extensions")
+		sv.logInfo("☑ No system packages needed for requested extensions")
 		return nil
 	}
 
@@ -1929,7 +1929,7 @@ func (sv *SchemaValidator) installExtensionsViaPackageManager(ctx context.Contex
 	cleanCmd := []string{"apt-get", "clean"}
 	_ = sv.execInContainer(ctx, containerID, cleanCmd) // Ignore error - best effort
 
-	sv.logInfo("✓ Successfully installed Debian packages")
+	sv.logInfo("☑ Successfully installed Debian packages")
 	return nil
 }
 
@@ -2078,7 +2078,7 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 			).WithInnerError(err).WithSuggestion("Plugin compatibility SQL may have errors - check plugin configuration")
 		}
 		if sv.config.Verbose {
-			color.Green("✅ Compatibility layers created successfully\n")
+			color.Green("☑ Compatibility layers created successfully\n")
 		}
 	}
 

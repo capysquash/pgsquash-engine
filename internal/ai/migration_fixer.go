@@ -35,10 +35,10 @@ type FixAttempt struct {
 
 // FixResult contains the overall result of the fixing process
 type FixResult struct {
-	Success      bool
-	Attempts     []FixAttempt
-	FinalError   string
-	TotalFixes   int
+	Success       bool
+	Attempts      []FixAttempt
+	FinalError    string
+	TotalFixes    int
 	FilesModified []string
 }
 
@@ -88,7 +88,7 @@ func (mf *MigrationFixer) FixMigrationsUntilValid(
 		if currentError == nil {
 			result.Success = true
 			if mf.verbose {
-				color.Green("✅ All migrations fixed successfully!\n")
+				color.Green("☑ All migrations fixed successfully!\n")
 			}
 			return result, nil
 		}
@@ -118,7 +118,7 @@ func (mf *MigrationFixer) FixMigrationsUntilValid(
 		}
 
 		if mf.verbose {
-			color.Green("✅ Fix applied: %s\n", fix.Description)
+			color.Green("☑ Fix applied: %s\n", fix.Description)
 		}
 
 		// Re-run validation if validation function is provided
@@ -131,7 +131,7 @@ func (mf *MigrationFixer) FixMigrationsUntilValid(
 
 			if currentError == nil {
 				if mf.verbose {
-					color.Green("✅ Validation passed after fix!\n")
+					color.Green("☑ Validation passed after fix!\n")
 				}
 				result.Success = true
 				return result, nil
@@ -473,7 +473,7 @@ func (mf *MigrationFixer) applyFix(fix *AIFix, migrationPath string) error {
 	}
 
 	if mf.verbose {
-		color.Green("✓ Applied fix to %s (backup created at %s)\n", fullPath, backupPath)
+		color.Green("☑ Applied fix to %s (backup created at %s)\n", fullPath, backupPath)
 	}
 
 	return nil

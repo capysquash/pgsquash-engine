@@ -1055,12 +1055,12 @@ grep "myauth.get_user_id" test/squashed.sql
 **Example:**
 
 ```go
-// ❌ Too broad - will match unrelated migrations
+// ☒ Too broad - will match unrelated migrations
 if strings.Contains(sql, "auth") {
     return true
 }
 
-// ✅ Specific - unlikely to false-match
+// ☑ Specific - unlikely to false-match
 if strings.Contains(sql, "myauth.get_user_id()") ||
    strings.Contains(sql, "CREATE SCHEMA myauth") ||
    (strings.Contains(sql, "-- MyAuth") && strings.Contains(sql, "migration")) {

@@ -153,7 +153,7 @@ dependencies, and validating safety at every step.
 
 CAPYSQUASH is the leading platform for PostgreSQL migration optimization,
 powered by the pgsquash engine with parser-grade accuracy.`
-		
+
 		// Update command examples to use capysquash branding
 		if aiFixCmd != nil {
 			aiFixCmd.Long = `Use AI to automatically analyze and fix broken migrations.
@@ -166,7 +166,23 @@ Example:
   capysquash ai-fix migrations/
   capysquash ai-fix migrations/ --max-attempts 10 --auto-apply`
 		}
-		
+
+		// Update TUI command examples
+		if tuiCmd != nil {
+			tuiCmd.Long = `Launch the interactive terminal user interface (TUI) for CAPYSQUASH.
+
+The TUI provides a visual interface for:
+  ► Analyzing migrations and viewing lifecycle patterns
+  ► Configuring squashing settings interactively
+  ► Visualizing dependency graphs
+  ► Monitoring squashing progress in real-time
+
+Examples:
+  capysquash tui migrations/
+  capysquash tui
+`
+		}
+
 		if initConfigCmd != nil {
 			initConfigCmd.Long = `Create a default capysquash.config.json file with all available options.`
 		}

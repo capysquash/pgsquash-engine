@@ -99,9 +99,9 @@ func main() {
 
     // 7. Check results
     if result.Success {
-        log.Println("✅ AI validation passed!")
+        log.Println("☑ AI validation passed!")
     } else {
-        log.Println("❌ AI validation found issues:")
+        log.Println("☒ AI validation found issues:")
         for _, issue := range result.SemanticIssues {
             log.Printf("  - [%s] %s", issue.Severity, issue.Description)
         }
@@ -134,7 +134,7 @@ if dockerResult.Success {
 
     // Check AI results
     if aiResult.Success {
-        log.Println("✅ All validations passed!")
+        log.Println("☑ All validations passed!")
     } else {
         log.Println("⚠️  AI detected potential issues:")
         printAIResults(aiResult)

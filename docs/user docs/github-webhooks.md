@@ -1,8 +1,8 @@
 # GitHub Webhooks Guide
 
-**Status**: ✅ Fully Implemented - Production Ready
+**Status**: ☑ Fully Implemented - Production Ready
 
-Stop reviewing migrations manually—catch issues before they hit production.
+Stop reviewing migrations manually - catch issues before they hit production.
 
 ## Why Automate Migration Analysis?
 
@@ -25,14 +25,14 @@ Stop reviewing migrations manually—catch issues before they hit production.
 
 ## What You Get
 
-✅ **Instant PR feedback** - Analysis runs on every push
-✅ **Bot commands** - `/pgsquash analyze` or `/pgsquash consolidate` in PR comments
-✅ **Zero config for common stacks** - Auto-detects Supabase, Clerk, Prisma
-✅ **PR comments with validation results** - Posts analysis findings directly on the PR
-✅ **GitHub check runs** - Pass/fail status based on thresholds
-✅ **Per-repository configuration** - Use `.capysquash.yml` for custom settings
-✅ **Multi-path detection** - Automatically finds migrations/, db/migrations/, supabase/, prisma/
-✅ **Platform-style formatted comments** - Rich output with emojis and actionable recommendations
+☑ **Instant PR feedback** - Analysis runs on every push
+☑ **Bot commands** - `/pgsquash analyze` or `/pgsquash consolidate` in PR comments
+☑ **Zero config for common stacks** - Auto-detects Supabase, Clerk, Prisma
+☑ **PR comments with validation results** - Posts analysis findings directly on the PR
+☑ **GitHub check runs** - Pass/fail status based on thresholds
+☑ **Per-repository configuration** - Use `.capysquash.yml` for custom settings
+☑ **Multi-path detection** - Automatically finds migrations/, db/migrations/, supabase/, prisma/
+☑ **Platform-style formatted comments** - Rich output with emojis and actionable recommendations
 
 ## Integration Options
 
@@ -62,8 +62,8 @@ Stop reviewing migrations manually—catch issues before they hit production.
 1. Go to <https://github.com/settings/tokens/new>
 2. Give it a name like "pgsquash webhook"
 3. Select permissions:
-   - ✅ `repo` (Full repository access)
-   - ✅ `write:repo_hook` (Webhook management)
+   - ☑ `repo` (Full repository access)
+   - ☑ `write:repo_hook` (Webhook management)
 4. Click **Generate token**
 5. Copy the token (starts with `ghp_`)
 
@@ -73,7 +73,7 @@ Stop reviewing migrations manually—catch issues before they hit production.
 openssl rand -hex 32
 ```
 
-Copy this secret—you'll need it twice (GitHub webhook settings + API server config).
+Copy this secret - you'll need it twice (GitHub webhook settings + API server config).
 
 ### Step 3: Deploy API Server
 
@@ -126,7 +126,7 @@ export GITHUB_WEBHOOK_SECRET="your_secret_here"
    - **Secret:** Paste your webhook secret from Step 2
    - **Events:** Select "Pull requests" and "Issue comments"
 3. Click **Add webhook**
-4. GitHub will send a test ping—check that it shows a green ✓
+4. GitHub will send a test ping - check that it shows a green ☑
 
 ### Step 5: Test the Integration
 
@@ -139,9 +139,9 @@ Open a pull request that touches migration files. Within seconds, you'll see a c
 **Consolidation potential:** 45%
 
 ### Issues Found
-⚠️ Missing index on `posts.user_id` (foreign key without index—slow joins)
+⚠️ Missing index on `posts.user_id` (foreign key without index - slow joins)
 ⚠️ RLS policy `posts_select` references undefined function `is_admin()`
-✅ Supabase auth patterns detected and validated
+☑ Supabase auth patterns detected and validated
 
 ### Recommendations
 - Add `CREATE INDEX idx_posts_user_id ON posts(user_id);`
@@ -165,7 +165,7 @@ CREATE TABLE comments (
 
 Bot catches:
 
-- ✅ Dependencies are correct (posts and users tables exist)
+- ☑ Dependencies are correct (posts and users tables exist)
 - ⚠️ Missing indexes on foreign keys
 - ℹ️ Could consolidate with earlier table creations (if 15+ migrations exist)
 
@@ -197,7 +197,7 @@ Bot catches:
 **Migration Files:** 12
 **Consolidation Ratio:** 68.5%
 
-### ✅ Consolidation Recommended
+### ☑ Consolidation Recommended
 
 This PR can benefit from migration consolidation:
 - Original statements: 142
@@ -372,7 +372,7 @@ ratio = optimized_statements / original_statements
 - Original: 142 statements across 20 files
 - Optimized: 97 statements in 1 file
 - Ratio: 97/142 = 0.68 (68%)
-- Result: Auto-consolidation triggered ✅
+- Result: Auto-consolidation triggered ☑
 
 ### Disable Auto-Consolidation
 
@@ -540,8 +540,8 @@ export PGSQUASH_LOG_LEVEL=debug
 **Log entries to watch:**
 
 ```
-[INFO] ✓ GitHub webhook handler initialized
-[INFO] ✓ GitHub webhook endpoint registered at /github/webhook
+[INFO] ☑ GitHub webhook handler initialized
+[INFO] ☑ GitHub webhook endpoint registered at /github/webhook
 [DEBUG] Received webhook: pull_request (action: opened)
 [DEBUG] Found 12 migration files in PR #42
 [INFO] Posted analysis comment to PR #42

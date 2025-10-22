@@ -1,6 +1,6 @@
 # Advanced Features Guide
 
-Enterprise-scale migration management—when the basic CLI isn't enough.
+Enterprise-scale migration management - when the basic CLI isn't enough.
 
 ## When You Need These Features
 
@@ -638,7 +638,7 @@ pgsquash analyze migrations/*.sql
 # killed: out of memory
 ```
 
-Basic mode loads everything into memory at once—doesn't work at this scale.
+Basic mode loads everything into memory at once - doesn't work at this scale.
 
 **With streaming:**
 
@@ -646,8 +646,8 @@ Basic mode loads everything into memory at once—doesn't work at this scale.
 pgsquash analyze migrations/*.sql --stream --workers 8
 
 # Result:
-# Processing batch 1/17... ✓
-# Processing batch 2/17... ✓
+# Processing batch 1/17... ☑
+# Processing batch 2/17... ☑
 # ...
 # Complete: 847 files analyzed in 4m 23s
 # Memory usage: 512 MB (constant)

@@ -245,7 +245,7 @@ func newEngineInternal(engineCfg EngineConfig) *Engine {
 	} else {
 		aiAnalyzer = analyzer
 		providers := analyzer.GetAvailableProviders()
-		logger.Info("✓ AI analyzer initialized with providers: %v", providers)
+		logger.Info("☑ AI analyzer initialized with providers: %v", providers)
 	}
 
 	return &Engine{
@@ -940,7 +940,7 @@ func (e *Engine) analyzeDependenciesAndRisks(ctx context.Context) error {
 
 						// Add optimization safety notice
 						if cycle.CanOptimize {
-							e.warnings = append(e.warnings, "  ✓ This cycle can be safely optimized")
+							e.warnings = append(e.warnings, "  ☑ This cycle can be safely optimized")
 						} else {
 							e.warnings = append(e.warnings, "  ⚠ This cycle should be preserved as-is for safety")
 						}
@@ -1176,7 +1176,7 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 		cycles := circularFKHandler.DetectCircularDependencies(tableStatements)
 
 		if len(cycles) > 0 {
-			e.logger.Info("✓ Detected %d circular FK dependency chains - applying 2-phase constraint generation", len(cycles))
+			e.logger.Info("☑ Detected %d circular FK dependency chains - applying 2-phase constraint generation", len(cycles))
 
 			// Remove circular FKs from tables and generate ALTER statements
 			modifiedTables, alterStmts, err := circularFKHandler.RemoveCircularFKsFromTables(tableStatements, cycles)
@@ -1205,7 +1205,7 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 				e.logger.Info("Generated %d ALTER TABLE statements for circular FK constraints", len(alterStmts))
 			}
 		} else {
-			e.logger.Info("✓ No circular FK dependencies detected - all tables can be created directly")
+			e.logger.Info("☑ No circular FK dependencies detected - all tables can be created directly")
 		}
 	}
 
@@ -1240,7 +1240,7 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 
 			// Log statistics
 			stats := e.dataOperationTracker.GetStatistics()
-			e.logger.Info("✓ Added %d data operations to output: %d INSERTs, %d UPDATEs, %d DELETEs",
+			e.logger.Info("☑ Added %d data operations to output: %d INSERTs, %d UPDATEs, %d DELETEs",
 				stats["total_operations"], stats["insert_count"], stats["update_count"], stats["delete_count"])
 
 			// Skip to next category (CategoryData handled specially, don't process through normal flow)
@@ -1295,7 +1295,7 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 				e.sqlBuilder.Statement(alterStmt.SQL)
 				e.sqlBuilder.NL().NL()
 			}
-			e.logger.Info("✓ Added %d circular FK ALTER TABLE statements to Constraints category", len(circularFKAlterStatements))
+			e.logger.Info("☑ Added %d circular FK ALTER TABLE statements to Constraints category", len(circularFKAlterStatements))
 		}
 	}
 
@@ -1475,7 +1475,7 @@ func (e *Engine) validateAgainstDatabase(ctx context.Context, sql string) error 
 	}
 
 	if len(result.BreakingChanges) > 0 {
-		e.logger.Info("❌ Breaking changes detected: %d", len(result.BreakingChanges))
+		e.logger.Info("☒ Breaking changes detected: %d", len(result.BreakingChanges))
 		for _, breaking := range result.BreakingChanges {
 			e.warnings = append(e.warnings,
 				fmt.Sprintf("BREAKING: %s | Impact: %s | Mitigation: %s",
@@ -1497,9 +1497,9 @@ func (e *Engine) validateAgainstDatabase(ctx context.Context, sql string) error 
 
 	// Log summary
 	if result.IsValid {
-		e.logger.Info("✓ Database validation passed: schema is compatible")
+		e.logger.Info("☑ Database validation passed: schema is compatible")
 	} else {
-		e.logger.Info("❌ Database validation failed: schema incompatibilities detected")
+		e.logger.Info("☒ Database validation failed: schema incompatibilities detected")
 		return errors.NewError(
 			errors.ErrorCodeValidationFailed,
 			fmt.Sprintf("schema validation failed: found %d errors, %d warnings, %d breaking changes",
@@ -2205,7 +2205,7 @@ func (e *Engine) initializePlugins(ctx context.Context, migrations map[int]strin
 		for _, p := range activePlugins {
 			pluginNames = append(pluginNames, p.Name())
 		}
-		e.logger.Info("✓ Activated plugins: %v", pluginNames)
+		e.logger.Info("☑ Activated plugins: %v", pluginNames)
 	} else {
 		e.logger.Info("ℹ No plugins activated (no third-party patterns detected)")
 	}

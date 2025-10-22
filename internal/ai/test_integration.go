@@ -19,7 +19,7 @@ func TestAIIntegration() {
 	fmt.Println("\n1. Testing Analyzer...")
 	analyzer, err := NewAnalyzer()
 	if err == nil && analyzer != nil {
-		fmt.Println("✅ Modern analyzer available")
+		fmt.Println("☑ Modern analyzer available")
 
 		providers := analyzer.GetAvailableProviders()
 		fmt.Printf("   Available providers: %v\n", providers)
@@ -35,35 +35,35 @@ func TestAIIntegration() {
 		fmt.Println("   Health check results:")
 		for providerType, err := range healthResults {
 			if err == nil {
-				fmt.Printf("     %s: ✅ Healthy\n", providerType)
+				fmt.Printf("     %s: ☑ Healthy\n", providerType)
 			} else {
-				fmt.Printf("     %s: ❌ Error: %v\n", providerType, err)
+				fmt.Printf("     %s: ☒ Error: %v\n", providerType, err)
 			}
 		}
 	} else {
-		fmt.Println("❌ Modern analyzer not available (no API keys configured)")
+		fmt.Println("☒ Modern analyzer not available (no API keys configured)")
 	}
 
 	// Test API Key Configuration
 	fmt.Println("\n2. Testing API Key Configuration...")
 	if os.Getenv("ANTHROPIC_API_KEY") != "" || os.Getenv("OPENAI_API_KEY") != "" {
-		fmt.Println("✅ API keys configured")
+		fmt.Println("☑ API keys configured")
 	} else {
-		fmt.Println("❌ No API keys available")
+		fmt.Println("☒ No API keys available")
 	}
 
 	// Test provider-specific functionality
 	fmt.Println("\n3. Testing Provider-Specific Features...")
 
 	if claudeKey := os.Getenv("ANTHROPIC_API_KEY"); claudeKey != "" {
-		fmt.Println("✅ Claude API key found")
+		fmt.Println("☑ Claude API key found")
 		testClaudeSpecificFeatures()
 	} else {
 		fmt.Println("⚠️  Claude API key not found (set ANTHROPIC_API_KEY)")
 	}
 
 	if openaiKey := os.Getenv("OPENAI_API_KEY"); openaiKey != "" {
-		fmt.Println("✅ OpenAI API key found")
+		fmt.Println("☑ OpenAI API key found")
 		testOpenAISpecificFeatures()
 	} else {
 		fmt.Println("⚠️  OpenAI API key not found (set OPENAI_API_KEY)")
@@ -87,11 +87,11 @@ func testClaudeSpecificFeatures() {
 
 	claudeProvider, err := analyzer.GetProvider(ProviderClaude)
 	if err != nil {
-		fmt.Printf("     ❌ Error getting Claude provider: %v\n", err)
+		fmt.Printf("     ☒ Error getting Claude provider: %v\n", err)
 		return
 	}
 
-	fmt.Printf("     ✅ Claude provider: %s\n", claudeProvider.Name())
+	fmt.Printf("     ☑ Claude provider: %s\n", claudeProvider.Name())
 	fmt.Printf("     Supports streaming: %v\n", claudeProvider.SupportsStreaming())
 	fmt.Printf("     Supports tools: %v\n", claudeProvider.SupportsTools())
 	fmt.Printf("     Supports batch: %v\n", claudeProvider.SupportsBatch())
@@ -107,11 +107,11 @@ func testOpenAISpecificFeatures() {
 
 	openaiProvider, err := analyzer.GetProvider(ProviderOpenAI)
 	if err != nil {
-		fmt.Printf("     ❌ Error getting OpenAI provider: %v\n", err)
+		fmt.Printf("     ☒ Error getting OpenAI provider: %v\n", err)
 		return
 	}
 
-	fmt.Printf("     ✅ OpenAI provider: %s\n", openaiProvider.Name())
+	fmt.Printf("     ☑ OpenAI provider: %s\n", openaiProvider.Name())
 	fmt.Printf("     Supports streaming: %v\n", openaiProvider.SupportsStreaming())
 	fmt.Printf("     Supports tools: %v\n", openaiProvider.SupportsTools())
 	fmt.Printf("     Supports batch: %v\n", openaiProvider.SupportsBatch())
@@ -176,7 +176,7 @@ $$ LANGUAGE sql;`
 
 	equivalent, confidence, err := analyzer.AreFunctionsSemanticallyEquivalent(context.Background(), func1, func2)
 	if err != nil {
-		fmt.Printf("   ❌ Error: %v\n", err)
+		fmt.Printf("   ☒ Error: %v\n", err)
 	} else {
 		fmt.Printf("   Functions are equivalent: %v (confidence: %.2f)\n", equivalent, confidence)
 	}
@@ -195,7 +195,7 @@ $$ LANGUAGE sql;`
 
 	isDead, confidence, err := analyzer.IsDeadCode(context.Background(), schema, "unused_function")
 	if err != nil {
-		fmt.Printf("   ❌ Error: %v\n", err)
+		fmt.Printf("   ☒ Error: %v\n", err)
 	} else {
 		fmt.Printf("   Function 'unused_function' is dead code: %v (confidence: %.2f)\n", isDead, confidence)
 	}
@@ -216,7 +216,7 @@ $$ LANGUAGE plpgsql;`
 
 	patternsResp, err := analyzer.DetectAuthPatterns(context.Background(), authSQL)
 	if err != nil {
-		fmt.Printf("   ❌ Error: %v\n", err)
+		fmt.Printf("   ☒ Error: %v\n", err)
 	} else {
 		fmt.Printf("   Detected %d authentication patterns:\n", len(patternsResp.Patterns))
 		for i, pattern := range patternsResp.Patterns {

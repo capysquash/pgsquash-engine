@@ -1,6 +1,6 @@
 # GitHub Integration - Ecosystem Alignment
 
-**Status**: Fully Integrated with CAPYSQUASH Platform ✅
+**Status**: Fully Integrated with CAPYSQUASH Platform ☑
 
 This document describes how the pgsquash-engine GitHub integration works within the CAPYSQUASH ecosystem.
 
@@ -185,9 +185,9 @@ The engine automatically detects migrations in these standard paths:
 
 Files must meet ALL criteria:
 
-1. ✅ Has `.sql` extension
-2. ✅ Matches at least one `include` pattern (or standard path if no patterns specified)
-3. ✅ Does NOT match any `exclude` pattern
+1. ☑ Has `.sql` extension
+2. ☑ Matches at least one `include` pattern (or standard path if no patterns specified)
+3. ☑ Does NOT match any `exclude` pattern
 
 Example:
 
@@ -198,10 +198,10 @@ exclude:
   - "**/seeds/**"
 ```
 
-- ✅ `migrations/001_users.sql` - included
-- ✅ `migrations/auth/002_roles.sql` - included
-- ❌ `migrations/seeds/demo_data.sql` - excluded (matches exclude)
-- ❌ `scripts/backup.sql` - excluded (doesn't match include)
+- ☑ `migrations/001_users.sql` - included
+- ☑ `migrations/auth/002_roles.sql` - included
+- ☒ `migrations/seeds/demo_data.sql` - excluded (matches exclude)
+- ☒ `scripts/backup.sql` - excluded (doesn't match include)
 
 ---
 
@@ -212,7 +212,7 @@ The engine formats PR comments to align with the CAPYSQUASH platform style:
 ### Success (No Warnings)
 
 ````markdown
-## ✅ CAPYSQUASH Migration Analysis
+## ☑ CAPYSQUASH Migration Analysis
 
 **Status**: Analysis Successful
 **Migration Files**: 12
@@ -266,7 +266,7 @@ _Powered by [CAPYSQUASH](https://capysquash.dev) 🦫_
 ### Failed Checks
 
 ```markdown
-## ❌ CAPYSQUASH Migration Analysis
+## ☒ CAPYSQUASH Migration Analysis
 
 **Status**: Analysis Failed
 **Migration Files**: 15
@@ -292,16 +292,16 @@ The engine evaluates checks and sets GitHub check run conclusion:
 ### Check Evaluation Order
 
 1. **Critical Warnings** (`fail_on_critical: true`)
-   - Any critical warning → ❌ `failure`
+   - Any critical warning → ☒ `failure`
 
 2. **Warning Count** (`max_warnings: 5`)
-   - More than 5 warnings → ❌ `failure`
+   - More than 5 warnings → ☒ `failure`
 
 3. **Any Warnings** (`fail_on_warnings: true`)
-   - Any warning at all → ❌ `failure`
+   - Any warning at all → ☒ `failure`
 
 4. **Data Loss** (`fail_on_data_loss: true`)
-   - Data loss detected → ❌ `failure`
+   - Data loss detected → ☒ `failure`
 
 5. **Reduction Percentage** (`min_reduction_percent: 20`)
    - Less than 20% reduction → ⚪ `neutral`
@@ -310,14 +310,14 @@ The engine evaluates checks and sets GitHub check run conclusion:
    - No optimization found → ⚪ `neutral`
 
 7. **All Passed**
-   - No issues → ✅ `success`
+   - No issues → ☑ `success`
    - Warnings but within limits → ⚪ `neutral`
 
 ### Check Run States
 
-- ✅ **success** - No issues, all checks passed
+- ☑ **success** - No issues, all checks passed
 - ⚪ **neutral** - Warnings within acceptable limits
-- ❌ **failure** - Critical issues or exceeded thresholds
+- ☒ **failure** - Critical issues or exceeded thresholds
 
 ---
 
@@ -325,34 +325,34 @@ The engine evaluates checks and sets GitHub check run conclusion:
 
 ### CAPYSQUASH Platform Handles:
 
-- ✅ User authentication and authorization
-- ✅ Project management and organization
-- ✅ GitHub App installation and OAuth flow
-- ✅ Webhook signature verification and routing
-- ✅ Rate limiting and quota management
-- ✅ Result storage and history
-- ✅ Team collaboration features
-- ✅ Slack/Discord notifications
-- ✅ Usage analytics and billing
+- ☑ User authentication and authorization
+- ☑ Project management and organization
+- ☑ GitHub App installation and OAuth flow
+- ☑ Webhook signature verification and routing
+- ☑ Rate limiting and quota management
+- ☑ Result storage and history
+- ☑ Team collaboration features
+- ☑ Slack/Discord notifications
+- ☑ Usage analytics and billing
 
 ### pgsquash-engine Handles:
 
-- ✅ SQL parsing and AST generation
-- ✅ Migration analysis and dependency tracking
-- ✅ Consolidation logic and optimization
-- ✅ Safety level evaluation
-- ✅ Warning and recommendation generation
-- ✅ `.capysquash.yml` configuration loading
-- ✅ GitHub API interactions (direct mode)
-- ✅ PR comment formatting
-- ✅ Check run creation
+- ☑ SQL parsing and AST generation
+- ☑ Migration analysis and dependency tracking
+- ☑ Consolidation logic and optimization
+- ☑ Safety level evaluation
+- ☑ Warning and recommendation generation
+- ☑ `.capysquash.yml` configuration loading
+- ☑ GitHub API interactions (direct mode)
+- ☑ PR comment formatting
+- ☑ Check run creation
 
 ### GitHub App Handles:
 
-- ✅ Webhook delivery to platform
-- ✅ Repository access permissions
-- ✅ PR and commit status updates
-- ✅ Installation across organizations
+- ☑ Webhook delivery to platform
+- ☑ Repository access permissions
+- ☑ PR and commit status updates
+- ☑ Installation across organizations
 
 ---
 
@@ -418,11 +418,11 @@ GITHUB_WEBHOOK_SECRET=xxxxx
 
 **Benefits:**
 
-- ✅ 3x higher rate limits (15k vs 5k requests/hour)
-- ✅ Better security (app credentials vs user credentials)
-- ✅ Multi-repository support without extra configuration
-- ✅ Automatic webhook setup
-- ✅ Team ownership (not tied to individual user)
+- ☑ 3x higher rate limits (15k vs 5k requests/hour)
+- ☑ Better security (app credentials vs user credentials)
+- ☑ Multi-repository support without extra configuration
+- ☑ Automatic webhook setup
+- ☑ Team ownership (not tied to individual user)
 
 ---
 
@@ -460,7 +460,7 @@ INFO: Include patterns: [migrations/**/*.sql]
 After PR analysis, check GitHub PR:
 
 1. **Checks tab** - Should show "pgsquash/migration-analysis"
-2. **Status** - Green ✅, Yellow ⚪, or Red ❌
+2. **Status** - Green ☑, Yellow ⚪, or Red ☒
 3. **Details** - Click to see full analysis
 
 ### Debug Webhook Delivery
@@ -469,9 +469,9 @@ After PR analysis, check GitHub PR:
 
 Look for:
 
-- ✅ Response: 200 OK
+- ☑ Response: 200 OK
 - ⚠️ Response: 400/401 - Check webhook secret
-- ❌ Response: 500 - Check engine logs
+- ☒ Response: 500 - Check engine logs
 
 ---
 
@@ -648,11 +648,11 @@ signature := "sha256=" + hex.EncodeToString(hmac.New(sha256.New, secret).Sum(bod
 
 **Best practices:**
 
-- ✅ Store private key in environment variable or secrets manager
-- ✅ Use `GITHUB_APP_PRIVATE_KEY_PATH` for file-based keys
-- ✅ Set file permissions to 600 (read-only by owner)
-- ✅ Rotate keys every 90 days
-- ❌ Never commit private keys to repository
+- ☑ Store private key in environment variable or secrets manager
+- ☑ Use `GITHUB_APP_PRIVATE_KEY_PATH` for file-based keys
+- ☑ Set file permissions to 600 (read-only by owner)
+- ☑ Rotate keys every 90 days
+- ☒ Never commit private keys to repository
 
 ### Rate Limiting
 
@@ -688,4 +688,4 @@ The engine respects rate limits and includes rate limit info in logs.
 
 **Last Updated**: October 20, 2025
 **Integration Version**: v1.0
-**Status**: Production Ready ✅
+**Status**: Production Ready ☑

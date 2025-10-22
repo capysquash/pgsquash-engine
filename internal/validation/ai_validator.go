@@ -29,51 +29,51 @@ type AIValidationConfig struct {
 
 // AIValidationResult represents the result of AI-powered validation
 type AIValidationResult struct {
-	Success                bool                       `json:"success"`
-	SemanticIssues         []SemanticIssue            `json:"semantic_issues,omitempty"`
-	QualityReport          *QualityReport             `json:"quality_report,omitempty"`
-	DependencyIssues       []DependencyIssue          `json:"dependency_issues,omitempty"`
-	RepairSuggestions      []RepairSuggestion         `json:"repair_suggestions,omitempty"`
-	OptimizationSuggestions []ai.Optimization         `json:"optimization_suggestions,omitempty"`
+	Success                 bool               `json:"success"`
+	SemanticIssues          []SemanticIssue    `json:"semantic_issues,omitempty"`
+	QualityReport           *QualityReport     `json:"quality_report,omitempty"`
+	DependencyIssues        []DependencyIssue  `json:"dependency_issues,omitempty"`
+	RepairSuggestions       []RepairSuggestion `json:"repair_suggestions,omitempty"`
+	OptimizationSuggestions []ai.Optimization  `json:"optimization_suggestions,omitempty"`
 }
 
 // SemanticIssue represents a logical/semantic validation issue
 type SemanticIssue struct {
-	Type        string  `json:"type"`        // "logic_error", "inconsistency", "missing_constraint"
-	Severity    string  `json:"severity"`    // "critical", "warning", "info"
+	Type        string  `json:"type"`     // "logic_error", "inconsistency", "missing_constraint"
+	Severity    string  `json:"severity"` // "critical", "warning", "info"
 	Description string  `json:"description"`
-	Location    string  `json:"location"`    // File/object where issue was found
-	Reasoning   string  `json:"reasoning"`   // AI's explanation
+	Location    string  `json:"location"`  // File/object where issue was found
+	Reasoning   string  `json:"reasoning"` // AI's explanation
 	Confidence  float64 `json:"confidence"`
 	Suggestion  string  `json:"suggestion,omitempty"`
 }
 
 // QualityReport provides an overall quality assessment
 type QualityReport struct {
-	OverallScore    int      `json:"overall_score"` // 1-10 scale
+	OverallScore    int      `json:"overall_score"`   // 1-10 scale
 	Maintainability string   `json:"maintainability"` // "high", "medium", "low"
-	Complexity      int      `json:"complexity"` // 1-10 scale
-	BestPractices   []string `json:"best_practices"` // Followed best practices
-	Violations      []string `json:"violations"` // Violated best practices
+	Complexity      int      `json:"complexity"`      // 1-10 scale
+	BestPractices   []string `json:"best_practices"`  // Followed best practices
+	Violations      []string `json:"violations"`      // Violated best practices
 	Summary         string   `json:"summary"`
 }
 
 // DependencyIssue represents an AI-detected dependency problem
 type DependencyIssue struct {
-	Type        string  `json:"type"`        // "circular", "missing", "invalid_order"
-	Description string  `json:"description"`
-	Objects     []string `json:"objects"`     // Affected objects
-	Confidence  float64 `json:"confidence"`
-	Suggestion  string  `json:"suggestion"`
+	Type        string   `json:"type"` // "circular", "missing", "invalid_order"
+	Description string   `json:"description"`
+	Objects     []string `json:"objects"` // Affected objects
+	Confidence  float64  `json:"confidence"`
+	Suggestion  string   `json:"suggestion"`
 }
 
 // RepairSuggestion represents an AI-suggested fix
 type RepairSuggestion struct {
-	Issue       string  `json:"issue"`
-	Fix         string  `json:"fix"`          // SQL fix or description
-	Impact      string  `json:"impact"`       // Expected impact
-	Confidence  float64 `json:"confidence"`
-	AutoApply   bool    `json:"auto_apply"`   // Whether safe to auto-apply
+	Issue      string  `json:"issue"`
+	Fix        string  `json:"fix"`    // SQL fix or description
+	Impact     string  `json:"impact"` // Expected impact
+	Confidence float64 `json:"confidence"`
+	AutoApply  bool    `json:"auto_apply"` // Whether safe to auto-apply
 }
 
 // NewAIValidator creates a new AI-powered validator
@@ -102,10 +102,10 @@ func (av *AIValidator) ValidatePostProcessing(ctx context.Context, migrations []
 	}
 
 	result := &AIValidationResult{
-		Success:            true,
-		SemanticIssues:     make([]SemanticIssue, 0),
-		DependencyIssues:   make([]DependencyIssue, 0),
-		RepairSuggestions:  make([]RepairSuggestion, 0),
+		Success:           true,
+		SemanticIssues:    make([]SemanticIssue, 0),
+		DependencyIssues:  make([]DependencyIssue, 0),
+		RepairSuggestions: make([]RepairSuggestion, 0),
 	}
 
 	av.logInfo("🤖 Starting AI-powered post-processing validation...")
@@ -351,7 +351,7 @@ func (av *AIValidator) suggestOptimizations(ctx context.Context, sql string, res
 			Fix:        opt.Suggestion,
 			Impact:     opt.Impact,
 			Confidence: parseConfidence(opt.Priority), // high=0.9, medium=0.7, low=0.5
-			AutoApply:  false, // Never auto-apply optimizations
+			AutoApply:  false,                         // Never auto-apply optimizations
 		}
 		result.RepairSuggestions = append(result.RepairSuggestions, suggestion)
 	}
@@ -474,9 +474,9 @@ func (av *AIValidator) printSummary(result *AIValidationResult) {
 	color.Cyan("═══════════════════════════════════════════════════════\n")
 
 	if result.Success {
-		color.Green("✅ Overall Result: PASSED\n")
+		color.Green("☑ Overall Result: PASSED\n")
 	} else {
-		color.Red("❌ Overall Result: FAILED\n")
+		color.Red("☒ Overall Result: FAILED\n")
 	}
 
 	// Semantic issues

@@ -379,15 +379,15 @@ ALTER TABLE posts ADD CONSTRAINT posts_category_valid
 VACUUM ANALYZE;
 EOF
 
-log_success "✅ Created 11 sample migration files"
+log_success "☑ Created 11 sample migration files"
 log_info "Sample migrations include:"
-log_info "  • Basic schema creation"
-log_info "  • Column additions and modifications"
-log_info "  • Index creation and optimization"
-log_info "  • Constraints and relationships"
-log_info "  • Functions and triggers"
-log_info "  • Row Level Security (RLS)"
-log_info "  • Cycles and patterns for testing squashing"
+log_info "  ► Basic schema creation"
+log_info "  ► Column additions and modifications"
+log_info "  ► Index creation and optimization"
+log_info "  ► Constraints and relationships"
+log_info "  ► Functions and triggers"
+log_info "  ► Row Level Security (RLS)"
+log_info "  ► Cycles and patterns for testing squashing"
 echo
 log_info "These migrations are designed to test various pgsquash features:"
 log_info "  🔄 CREATE-ALTER consolidation"

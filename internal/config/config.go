@@ -145,28 +145,28 @@ type PluginSettings struct {
 
 // ValidationConfig configures Docker-based validation behavior
 type ValidationConfig struct {
-	Mode                   string `json:"mode"`                      // Validation approach: TWO_CONTAINERS, TWO_DATABASES, or SCHEMA_DIFF
-	DockerImage            string `json:"docker_image"`              // PostgreSQL Docker image (default: postgres:15)
-	TimeoutSeconds         int    `json:"timeout_seconds"`           // Validation timeout in seconds (default: 120)
-	ContainerReadyTimeout  int    `json:"container_ready_timeout"`   // Container startup timeout in seconds (default: 30)
-	EnableExtensionDetection bool `json:"enable_extension_detection"` // Auto-detect and install extensions (default: true)
-	AutoInstallExtensions  bool   `json:"auto_install_extensions"`   // Automatically install detected extensions (default: true)
-	EnableSQLFixes         bool   `json:"enable_sql_fixes"`          // Apply automatic SQL fixes during validation (default: false)
-	Verbose                bool   `json:"verbose"`                   // Show detailed validation output (default: true)
+	Mode                     string `json:"mode"`                       // Validation approach: TWO_CONTAINERS, TWO_DATABASES, or SCHEMA_DIFF
+	DockerImage              string `json:"docker_image"`               // PostgreSQL Docker image (default: postgres:15)
+	TimeoutSeconds           int    `json:"timeout_seconds"`            // Validation timeout in seconds (default: 120)
+	ContainerReadyTimeout    int    `json:"container_ready_timeout"`    // Container startup timeout in seconds (default: 30)
+	EnableExtensionDetection bool   `json:"enable_extension_detection"` // Auto-detect and install extensions (default: true)
+	AutoInstallExtensions    bool   `json:"auto_install_extensions"`    // Automatically install detected extensions (default: true)
+	EnableSQLFixes           bool   `json:"enable_sql_fixes"`           // Apply automatic SQL fixes during validation (default: false)
+	Verbose                  bool   `json:"verbose"`                    // Show detailed validation output (default: true)
 }
 
 // AIConfig configures AI-powered analysis and validation behavior
 type AIConfig struct {
-	Enabled                       bool    `json:"enabled"`                          // Enable AI features (default: false, requires API keys)
-	Provider                      string  `json:"provider"`                         // AI provider: "claude", "openai", "azure-openai", or "auto" (default: "auto")
-	MaxRetries                    int     `json:"max_retries"`                      // Max retry attempts for AI calls (default: 3)
-	TimeoutSeconds                int     `json:"timeout_seconds"`                  // Timeout for AI operations in seconds (default: 60)
-	EnableSemanticAnalysis        bool    `json:"enable_semantic_analysis"`         // Use AI for semantic function comparison (default: false)
-	EnableDeadCodeDetection       bool    `json:"enable_dead_code_detection"`       // Use AI for dead code detection (default: false)
-	EnableAuthPatternDetection    bool    `json:"enable_auth_pattern_detection"`    // Use AI to detect auth patterns (default: true if enabled)
-	EnablePostProcessingValidation bool   `json:"enable_post_processing_validation"` // Use AI for post-processing validation (default: false)
-	EnableAutoRepair              bool    `json:"enable_auto_repair"`               // Allow AI to automatically fix issues (default: false, requires manual review)
-	ConfidenceThreshold           float64 `json:"confidence_threshold"`             // Minimum confidence for AI suggestions (0.0-1.0, default: 0.85)
+	Enabled                        bool    `json:"enabled"`                           // Enable AI features (default: false, requires API keys)
+	Provider                       string  `json:"provider"`                          // AI provider: "claude", "openai", "azure-openai", or "auto" (default: "auto")
+	MaxRetries                     int     `json:"max_retries"`                       // Max retry attempts for AI calls (default: 3)
+	TimeoutSeconds                 int     `json:"timeout_seconds"`                   // Timeout for AI operations in seconds (default: 60)
+	EnableSemanticAnalysis         bool    `json:"enable_semantic_analysis"`          // Use AI for semantic function comparison (default: false)
+	EnableDeadCodeDetection        bool    `json:"enable_dead_code_detection"`        // Use AI for dead code detection (default: false)
+	EnableAuthPatternDetection     bool    `json:"enable_auth_pattern_detection"`     // Use AI to detect auth patterns (default: true if enabled)
+	EnablePostProcessingValidation bool    `json:"enable_post_processing_validation"` // Use AI for post-processing validation (default: false)
+	EnableAutoRepair               bool    `json:"enable_auto_repair"`                // Allow AI to automatically fix issues (default: false, requires manual review)
+	ConfidenceThreshold            float64 `json:"confidence_threshold"`              // Minimum confidence for AI suggestions (0.0-1.0, default: 0.85)
 }
 
 func DefaultConfig() *Config {
@@ -260,10 +260,10 @@ func DefaultConfig() *Config {
 			},
 		},
 		Plugins: PluginSettings{
-			AutoDetect:      true,     // Automatically detect applicable plugins
+			AutoDetect:      true,       // Automatically detect applicable plugins
 			EnabledPlugins:  []string{}, // Empty = enable all detected plugins
 			DisabledPlugins: []string{}, // Explicitly disable specific plugins
-			Verbose:         false,    // Don't log plugin details by default
+			Verbose:         false,      // Don't log plugin details by default
 		},
 		Validation: ValidationConfig{
 			Mode:                     "TWO_DATABASES", // Best balance of speed and accuracy
@@ -276,16 +276,16 @@ func DefaultConfig() *Config {
 			Verbose:                  true,            // Show detailed validation output
 		},
 		AI: AIConfig{
-			Enabled:                       false,   // Disabled by default, requires API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT)
-			Provider:                      "auto",  // Auto-detect best available provider (Claude > OpenAI > Azure)
-			MaxRetries:                    3,       // Retry AI calls up to 3 times with exponential backoff
-			TimeoutSeconds:                60,      // 1 minute timeout for AI operations
-			EnableSemanticAnalysis:        false,   // Conservative default - AI semantic analysis is experimental
-			EnableDeadCodeDetection:       false,   // Conservative default - may have false positives
-			EnableAuthPatternDetection:    true,    // Safe to enable when AI is on - helps detect auth patterns
-			EnablePostProcessingValidation: false,   // Conservative default - post-processing AI validation is experimental
-			EnableAutoRepair:              false,   // Conservative default - requires manual review
-			ConfidenceThreshold:           0.85,    // Only use AI suggestions with 85%+ confidence
+			Enabled:                        false,  // Disabled by default, requires API keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, or AZURE_OPENAI_ENDPOINT)
+			Provider:                       "auto", // Auto-detect best available provider (Claude > OpenAI > Azure)
+			MaxRetries:                     3,      // Retry AI calls up to 3 times with exponential backoff
+			TimeoutSeconds:                 60,     // 1 minute timeout for AI operations
+			EnableSemanticAnalysis:         false,  // Conservative default - AI semantic analysis is experimental
+			EnableDeadCodeDetection:        false,  // Conservative default - may have false positives
+			EnableAuthPatternDetection:     true,   // Safe to enable when AI is on - helps detect auth patterns
+			EnablePostProcessingValidation: false,  // Conservative default - post-processing AI validation is experimental
+			EnableAutoRepair:               false,  // Conservative default - requires manual review
+			ConfidenceThreshold:            0.85,   // Only use AI suggestions with 85%+ confidence
 		},
 	}
 }
@@ -524,8 +524,8 @@ func LoadConfig(configPath string) (*Config, error) {
 		// Validate config values
 		if err := cfg.Validate(); err != nil {
 			return nil, &ConfigValidationError{
-				Path:    configPath,
-				Errors:  err.(*ValidationErrors).Errors,
+				Path:   configPath,
+				Errors: err.(*ValidationErrors).Errors,
 			}
 		}
 
@@ -715,10 +715,10 @@ func (e *JSONSyntaxError) Error() string {
 			"  %s^\n"+
 			"  %s\n\n"+
 			"Common fixes:\n"+
-			"  • Check for missing or extra commas\n"+
-			"  • Ensure all strings are properly quoted\n"+
-			"  • Verify brackets {} and [] are balanced\n"+
-			"  • Remove trailing commas before closing brackets",
+			"  ► Check for missing or extra commas\n"+
+			"  ► Ensure all strings are properly quoted\n"+
+			"  ► Verify brackets {} and [] are balanced\n"+
+			"  ► Remove trailing commas before closing brackets",
 		e.Path, e.Line, e.Column,
 		e.Context,
 		strings.Repeat(" ", e.Column-1),

@@ -42,7 +42,7 @@ echo -e "${BLUE}================================================================
 echo -e "${BLUE}Step 1: Clean previous builds${NC}"
 echo -e "${BLUE}==============================================================================${NC}"
 rm -f bin/pgsquash bin/api-server pgsquash main
-echo -e "${GREEN}✓ Cleaned old binaries${NC}"
+echo -e "${GREEN}☑ Cleaned old binaries${NC}"
 echo ""
 
 echo -e "${BLUE}==============================================================================${NC}"
@@ -50,7 +50,7 @@ echo -e "${BLUE}Step 2: Download Go dependencies${NC}"
 echo -e "${BLUE}==============================================================================${NC}"
 go mod download
 go mod verify
-echo -e "${GREEN}✓ Dependencies downloaded and verified${NC}"
+echo -e "${GREEN}☑ Dependencies downloaded and verified${NC}"
 echo ""
 
 echo -e "${BLUE}==============================================================================${NC}"
@@ -63,7 +63,7 @@ CGO_ENABLED=1 go build -v \
   ./cmd/pgsquash
 
 if [ -f bin/pgsquash ]; then
-  echo -e "${GREEN}✓ CLI built successfully${NC}"
+  echo -e "${GREEN}☑ CLI built successfully${NC}"
   ls -lh bin/pgsquash
 
   # Test the binary
@@ -86,7 +86,7 @@ CGO_ENABLED=1 go build -v \
   ./cmd/api-server
 
 if [ -f bin/api-server ]; then
-  echo -e "${GREEN}✓ API Server built successfully${NC}"
+  echo -e "${GREEN}☑ API Server built successfully${NC}"
   ls -lh bin/api-server
 
   # Test the binary (just check if it exists and is executable)
@@ -106,30 +106,30 @@ echo -e "${BLUE}================================================================
 
 # Create symlink in project root for convenience
 ln -sf bin/pgsquash pgsquash
-echo -e "${GREEN}✓ Created symlink: pgsquash → bin/pgsquash${NC}"
+echo -e "${GREEN}☑ Created symlink: pgsquash → bin/pgsquash${NC}"
 
 ln -sf bin/api-server main
-echo -e "${GREEN}✓ Created symlink: main → bin/api-server${NC}"
+echo -e "${GREEN}☑ Created symlink: main → bin/api-server${NC}"
 echo ""
 
 echo -e "${BLUE}==============================================================================${NC}"
 echo -e "${BLUE}Build Summary${NC}"
 echo -e "${BLUE}==============================================================================${NC}"
 echo ""
-echo -e "${GREEN}✓ All binaries built successfully!${NC}"
+echo -e "${GREEN}☑ All binaries built successfully!${NC}"
 echo ""
 echo "Binaries location:"
-echo "  • CLI:        $(pwd)/bin/pgsquash"
-echo "  • API Server: $(pwd)/bin/api-server"
+echo "  ► CLI:        $(pwd)/bin/pgsquash"
+echo "  ► API Server: $(pwd)/bin/api-server"
 echo ""
 echo "Convenience symlinks:"
-echo "  • ./pgsquash  → bin/pgsquash"
-echo "  • ./main      → bin/api-server"
+echo "  ► ./pgsquash  → bin/pgsquash"
+echo "  ► ./main      → bin/api-server"
 echo ""
 echo "Build information:"
-echo "  • Version:     ${VERSION}"
-echo "  • Build Date:  ${BUILD_DATE}"
-echo "  • Git Commit:  ${GIT_COMMIT}"
+echo "  ► Version:     ${VERSION}"
+echo "  ► Build Date:  ${BUILD_DATE}"
+echo "  ► Git Commit:  ${GIT_COMMIT}"
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo "  1. Test CLI:        ./pgsquash --help"

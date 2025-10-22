@@ -125,7 +125,7 @@ Interactive configuration editing with real-time preview:
 **Visual Indicators:**
 
 - `●` Yellow indicator: Unsaved changes
-- `✓` Green message: Configuration saved
+- `☑` Green message: Configuration saved
 - Selected items highlighted in purple
 - Editing mode shows `◄ value ►` with border
 

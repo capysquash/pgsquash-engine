@@ -234,17 +234,17 @@ EOF
     # Summary
     echo
     log_info "Test Results Summary:"
-    log_info "  • Total Tests: $TESTS_TOTAL"
-    log_success "  • Passed: $TESTS_PASSED"
+    log_info "  ► Total Tests: $TESTS_TOTAL"
+    log_success "  ► Passed: $TESTS_PASSED"
 
     if [[ $TESTS_FAILED -gt 0 ]]; then
-        log_error "  • Failed: $TESTS_FAILED"
+        log_error "  ► Failed: $TESTS_FAILED"
         echo
-        log_error "❌ Some tests failed. Please check the output above."
+        log_error "☒ Some tests failed. Please check the output above."
         exit 1
     else
         echo
-        log_success "✅ All tests passed! pgsquash Docker setup is working correctly."
+        log_success "☑ All tests passed! pgsquash Docker setup is working correctly."
 
         cat << 'EOF'
 

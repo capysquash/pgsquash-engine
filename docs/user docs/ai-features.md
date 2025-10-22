@@ -102,12 +102,12 @@ Output:
 Testing AI Provider Integrations
 
 Testing Claude (Anthropic)...
-✓ Provider: Claude
+☑ Provider: Claude
   Status: Available
   Model: claude-3-5-sonnet-20241022
 
 Testing OpenAI...
-✓ Provider: OpenAI
+☑ Provider: OpenAI
   Status: Available
   Model: gpt-4
 

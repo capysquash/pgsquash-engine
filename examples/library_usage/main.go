@@ -44,7 +44,7 @@ func example1() {
 		return
 	}
 
-	fmt.Printf("✅ Success!\n")
+	fmt.Printf("☑ Success!\n")
 	fmt.Printf("   Files processed: %d\n", result.FilesProcessed)
 	fmt.Printf("   Warnings: %d\n", len(result.Warnings))
 	fmt.Printf("   SQL length: %d bytes\n", len(result.SQL))
@@ -75,7 +75,7 @@ func example2() {
 		return
 	}
 
-	fmt.Printf("✅ Success with conservative mode!\n")
+	fmt.Printf("☑ Success with conservative mode!\n")
 	fmt.Printf("   Files processed: %d\n", result.FilesProcessed)
 	fmt.Println()
 }
@@ -135,7 +135,7 @@ func example4() {
 		return
 	}
 
-	fmt.Printf("✅ Squashed specific files!\n")
+	fmt.Printf("☑ Squashed specific files!\n")
 	fmt.Printf("   Files: %d\n", result.FilesProcessed)
 	fmt.Println()
 }

@@ -133,7 +133,7 @@ mode_quick_validate() {
     log_info "Running validation with Docker Compose..."
     docker compose -f "$compose_file" run --rm pgsquash validate "$MIGRATIONS_DIR/*.sql"
 
-    log_success "✅ Quick validation completed successfully!"
+    log_success "☑ Quick validation completed successfully!"
   else
     log_warning "Compose file not found, using direct Docker..."
 
@@ -151,7 +151,7 @@ mode_quick_validate() {
       -e PGSQUASH_AUTO_VALIDATE=true \
       pgsquash:latest validate /app/migrations/*.sql
 
-    log_success "✅ Quick validation completed successfully!"
+    log_success "☑ Quick validation completed successfully!"
   fi
 
   if [ -d "output" ]; then
@@ -285,10 +285,10 @@ mode_full_validation() {
   fi
 
   if [ $squashed_errors -eq 0 ] && [ $comparison_result -eq 0 ]; then
-    log_success "✅ Validation PASSED: Squashed migration produces equivalent schema"
+    log_success "☑ Validation PASSED: Squashed migration produces equivalent schema"
     exit 0
   else
-    log_error "❌ Validation FAILED: Issues detected in squashed migration"
+    log_error "☒ Validation FAILED: Issues detected in squashed migration"
     exit 1
   fi
 }
@@ -396,7 +396,7 @@ services:
       retries: 5
 EOF
 
-  log_success "✅ Validation environment setup complete!"
+  log_success "☑ Validation environment setup complete!"
   log_info "Output directory: $OUTPUT_DIR"
   log_info ""
   log_info "To run validation:"

@@ -11,7 +11,7 @@ How pgsquash understands your SQL and why it doesn't break your schema during co
 - Case variations (`CREATE TABLE` vs `create table`)
 - Comments and whitespace differences
 
-**Result:** Broken foreign keys, missing dependencies, wrong statement ordering—production disasters waiting to happen.
+**Result:** Broken foreign keys, missing dependencies, wrong statement ordering - production disasters waiting to happen.
 
 **pgsquash's solution:** Use `pg_query_go`, the same parser PostgreSQL uses internally. We parse SQL into an Abstract Syntax Tree (AST) and analyze the actual structure, not string patterns.
 
@@ -19,10 +19,10 @@ How pgsquash understands your SQL and why it doesn't break your schema during co
 
 1. **Tracks dependencies accurately**: Knows that `posts.user_id` references `users.id`, even with schema qualifications
 2. **Safe consolidation**: Only merges operations when dependencies allow it
-3. **Auto-detects integrations**: Recognizes Supabase RLS, Clerk schemas, Prisma metadata—no config needed
+3. **Auto-detects integrations**: Recognizes Supabase RLS, Clerk schemas, Prisma metadata - no config needed
 4. **Catches issues early**: Detects circular dependencies, duplicate indexes, conflicting policies before validation
 
-**Performance:** All patterns are pre-compiled at startup (`internal/patterns/patterns.go`)—5-10× faster than dynamic regex compilation.
+**Performance:** All patterns are pre-compiled at startup (`internal/patterns/patterns.go`) - 5-10× faster than dynamic regex compilation.
 
 ## Pattern Categories
 
@@ -134,15 +134,15 @@ CREATE POLICY users_admin ON users FOR SELECT USING (is_admin = true);
 
 | Pattern                  | What It Detects            | Why It Matters                             |
 | ------------------------ | -------------------------- | ------------------------------------------ |
-| `auth.jwt()->'o'->>'id'` | JWT v2 organization claims | Multi-tenant apps—wrong org = data leak    |
+| `auth.jwt()->'o'->>'id'` | JWT v2 organization claims | Multi-tenant apps - wrong org = data leak    |
 | `clerk_user_id()`        | Custom helper function     | Breaking this function breaks all policies |
-| `auth.jwt()->>'sub'`     | Generic JWT subject        | User identity—used in every auth policy    |
+| `auth.jwt()->>'sub'`     | Generic JWT subject        | User identity - used in every auth policy    |
 
 #### Supabase Plugin Patterns
 
 | Pattern                              | What It Detects        | Why It Matters                                 |
 | ------------------------------------ | ---------------------- | ---------------------------------------------- |
-| `auth.uid()`                         | Supabase auth function | Core auth primitive—every RLS policy uses this |
+| `auth.uid()`                         | Supabase auth function | Core auth primitive - every RLS policy uses this |
 | `auth.users`                         | Auth schema table      | Can't consolidate if schema doesn't exist      |
 | `storage.objects`, `storage.buckets` | Storage tables         | File permissions depend on these               |
 | `supabase_realtime`                  | Realtime publication   | Real-time subscriptions break without this     |
@@ -162,9 +162,9 @@ CREATE POLICY "users_view_public"
   USING (is_public = true);  -- Lower priority
 
 -- Result:
--- ✅ Order preserved (auth policy evaluated first)
--- ✅ Validates auth schema exists during validation
--- ✅ Groups with other auth policies in output (006_permissions_security.sql)
+-- ☑ Order preserved (auth policy evaluated first)
+-- ☑ Validates auth schema exists during validation
+-- ☑ Groups with other auth policies in output (006_permissions_security.sql)
 ```
 
 ### 5. ORM Patterns

@@ -20,7 +20,7 @@ LDFLAGS="-X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.Comm
 # Build the binary
 go build -ldflags "${LDFLAGS}" -o pgsquash cmd/pgsquash/main.go
 
-echo "✓ Build completed: pgsquash"
+echo "☑ Build completed: pgsquash"
 echo "Version: ${VERSION}"
 echo "Build time: ${BUILD_TIME}"
 echo "Commit: ${COMMIT}"

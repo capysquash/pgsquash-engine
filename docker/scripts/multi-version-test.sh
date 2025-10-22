@@ -161,7 +161,7 @@ test_version() {
             log_info "  Applying $migration_name..."
 
             if docker exec -i "$container_name" psql -U postgres -d test < "$migration_file" >> "$version_log" 2>&1; then
-                echo "✓ $migration_name" >> "$version_log"
+                echo "☑ $migration_name" >> "$version_log"
             else
                 echo "✗ $migration_name" >> "$version_log"
                 ((error_count++))
@@ -238,9 +238,9 @@ SUMMARY_FILE="$OUTPUT_DIR/summary.txt"
 
     echo ""
     if [ ${#FAILED_VERSIONS[@]} -eq 0 ]; then
-        echo "✅ All versions PASSED"
+        echo "☑ All versions PASSED"
     else
-        echo "❌ Failed versions: ${FAILED_VERSIONS[*]}"
+        echo "☒ Failed versions: ${FAILED_VERSIONS[*]}"
     fi
 
     echo ""
@@ -258,9 +258,9 @@ docker rm -f $(docker ps -aq -f "label=pgsquash.test=multi-version" 2>/dev/null)
 
 # Exit with appropriate code
 if [ ${#FAILED_VERSIONS[@]} -eq 0 ]; then
-    log_success "✅ All PostgreSQL versions passed!"
+    log_success "☑ All PostgreSQL versions passed!"
     exit 0
 else
-    log_error "❌ Some versions failed. Check logs in: $OUTPUT_DIR/"
+    log_error "☒ Some versions failed. Check logs in: $OUTPUT_DIR/"
     exit 1
 fi

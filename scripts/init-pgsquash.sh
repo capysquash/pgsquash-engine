@@ -551,7 +551,7 @@ run_verification() {
 
     # Test binary availability
     if command -v pgsquash &> /dev/null; then
-        log_substep "✓ Binary accessible"
+        log_substep "☑ Binary accessible"
         pgsquash --version
     else
         log_error "Binary not accessible. Check PATH configuration."
@@ -559,7 +559,7 @@ run_verification() {
 
     # Test configuration
     if [[ -f "$CONFIG_DIR/.env" ]]; then
-        log_substep "✓ Configuration found"
+        log_substep "☑ Configuration found"
     else
         log_warning "Configuration file not found"
     fi
@@ -568,7 +568,7 @@ run_verification() {
     if [[ "$INSTALL_MODE" == "docker" ]]; then
         cd "$CONFIG_DIR"
         if docker-compose ps | grep -q "postgres-primary"; then
-            log_substep "✓ Docker services running"
+            log_substep "☑ Docker services running"
         else
             log_warning "Docker services not running"
         fi
@@ -577,7 +577,7 @@ run_verification() {
     # Test sample data (if generated)
     if [[ "$ENABLE_SAMPLE_DATA" == "true" ]]; then
         if [[ -d "$DATA_DIR/migrations" ]] && [[ -n "$(ls -A "$DATA_DIR/migrations")" ]]; then
-            log_substep "✓ Sample data available"
+            log_substep "☑ Sample data available"
         else
             log_warning "Sample data not found"
         fi
@@ -591,12 +591,12 @@ show_summary() {
     log_success "🎉 pgsquash installation completed!"
     echo
     log_info "📁 Installation Details:"
-    log_info "  • Install Directory: $INSTALL_DIR"
-    log_info "  • Config Directory:  $CONFIG_DIR"
-    log_info "  • Data Directory:    $DATA_DIR"
-    log_info "  • Install Mode:      $INSTALL_MODE"
+    log_info "  ► Install Directory: $INSTALL_DIR"
+    log_info "  ► Config Directory:  $CONFIG_DIR"
+    log_info "  ► Data Directory:    $DATA_DIR"
+    log_info "  ► Install Mode:      $INSTALL_MODE"
     if [[ -n "$DOCKER_COMPOSE_PROFILES" ]]; then
-        log_info "  • Docker Profiles:   $DOCKER_COMPOSE_PROFILES"
+        log_info "  ► Docker Profiles:   $DOCKER_COMPOSE_PROFILES"
     fi
     echo
     log_info "🚀 Quick Start Commands:"
@@ -723,11 +723,11 @@ main() {
     command=$(parse_args "$@")
 
     log_info "🔧 Configuration:"
-    log_info "  • Command: $command"
-    log_info "  • Install Mode: $INSTALL_MODE"
-    log_info "  • Install Dir: $INSTALL_DIR"
-    log_info "  • Config Dir: $CONFIG_DIR"
-    log_info "  • Data Dir: $DATA_DIR"
+    log_info "  ► Command: $command"
+    log_info "  ► Install Mode: $INSTALL_MODE"
+    log_info "  ► Install Dir: $INSTALL_DIR"
+    log_info "  ► Config Dir: $CONFIG_DIR"
+    log_info "  ► Data Dir: $DATA_DIR"
     echo
 
     # Execute command

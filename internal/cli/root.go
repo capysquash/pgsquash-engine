@@ -54,7 +54,7 @@ var (
 	autoApplyFixes bool
 
 	// Validation options
-	validationMode string
+	validationMode    string
 	workflowOutputDir string
 
 	// Init-config options
@@ -830,7 +830,7 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		}
 
 		if result.Success {
-			color.Green("✓ Validation successful: Schemas are equivalent.\n")
+			color.Green("☑ Validation successful: Schemas are equivalent.\n")
 			fmt.Printf("Validation completed in %v\n", result.Duration)
 			if len(result.ExtensionsDetected) > 0 {
 				fmt.Printf("Extensions detected: %v\n", result.ExtensionsDetected)
@@ -912,9 +912,9 @@ func runInitConfig(cmd *cobra.Command, args []string) error {
 	}
 
 	if forceOverwrite {
-		color.Green("✓ Configuration file overwritten: %s\n", configFile)
+		color.Green("☑ Configuration file overwritten: %s\n", configFile)
 	} else {
-		color.Green("✓ Generated default configuration: %s\n", configFile)
+		color.Green("☑ Generated default configuration: %s\n", configFile)
 	}
 	fmt.Printf("Edit this file to customize pgsquash Engine behavior\n")
 
@@ -935,7 +935,7 @@ func runAIDemo(cmd *cobra.Command, args []string) error {
 
 	// Run the AI demonstration
 	if err := ai.DemoAICapabilities(); err != nil {
-		color.Red("❌ AI demonstration failed: %v\n", err)
+		color.Red("☒ AI demonstration failed: %v\n", err)
 		return err
 	}
 
@@ -954,18 +954,18 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 	// Create provider manager with default config
 	providerManager, err := ai.NewProviderManager(nil)
 	if err != nil {
-		color.Red("❌ Failed to initialize AI providers: %v\n", err)
+		color.Red("☒ Failed to initialize AI providers: %v\n", err)
 		color.Yellow("\nℹ️  AI fixing requires API keys. Set one of:\n")
-		color.Yellow("   • ANTHROPIC_API_KEY for Claude\n")
-		color.Yellow("   • OPENAI_API_KEY for OpenAI\n")
-		color.Yellow("   • AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT for Azure\n")
+		color.Yellow("   ► ANTHROPIC_API_KEY for Claude\n")
+		color.Yellow("   ► OPENAI_API_KEY for OpenAI\n")
+		color.Yellow("   ► AZURE_OPENAI_ENDPOINT + AZURE_OPENAI_DEPLOYMENT for Azure\n")
 		return err
 	}
 
 	// Get default provider
 	provider, err := providerManager.GetDefaultProvider()
 	if err != nil {
-		color.Red("❌ No AI provider available: %v\n", err)
+		color.Red("☒ No AI provider available: %v\n", err)
 		return err
 	}
 
@@ -1064,7 +1064,7 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 	initialError := validationFunc(ctx, migrationPath)
 
 	if initialError == nil {
-		color.Green("✅ Migrations are already valid! No fixes needed.\n")
+		color.Green("☑ Migrations are already valid! No fixes needed.\n")
 		return nil
 	}
 
@@ -1074,7 +1074,7 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 	// Run the fixer with automatic validation re-runs
 	result, err := fixer.FixMigrationsUntilValid(ctx, migrationPath, initialError)
 	if err != nil {
-		color.Red("❌ AI fixing failed: %v\n", err)
+		color.Red("☒ AI fixing failed: %v\n", err)
 		return err
 	}
 
@@ -1085,13 +1085,13 @@ func runAIFix(cmd *cobra.Command, args []string) error {
 	color.Cyan("   Files modified: %d\n\n", len(result.FilesModified))
 
 	if result.Success {
-		color.Green("✅ Migrations fixed successfully!\n")
+		color.Green("☑ Migrations fixed successfully!\n")
 		color.Green("\nℹ️  Modified files:\n")
 		for _, file := range result.FilesModified {
-			color.Green("   • %s (backup created)\n", file)
+			color.Green("   ► %s (backup created)\n", file)
 		}
 	} else {
-		color.Red("❌ Could not fix all migration errors\n")
+		color.Red("☒ Could not fix all migration errors\n")
 		color.Red("   Last error: %s\n", result.FinalError)
 	}
 
@@ -1106,12 +1106,12 @@ func runSafeWorkflow(cmd *cobra.Command, args []string) error {
 	safetyLevel = "conservative"
 	enableBackup = true
 	enableRollback = true
-	enableTransformation = false  // Conservative approach
+	enableTransformation = false // Conservative approach
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		color.Red("❌ Failed to load configuration: %v\n", err)
+		color.Red("☒ Failed to load configuration: %v\n", err)
 		return err
 	}
 
@@ -1125,12 +1125,12 @@ func runSafeWorkflow(cmd *cobra.Command, args []string) error {
 	}
 
 	color.Yellow("📋 SAFE Workflow Configuration:\n")
-	color.Yellow("   • Safety Level: %s (minimal changes)\n", cfg.SafetyLevel)
-	color.Yellow("   • Docker Validation: TWO_CONTAINERS (maximum accuracy)\n")
-	color.Yellow("   • Output Directory: %s\n", cfg.Output.Directory)
-	color.Yellow("   • Backup: %v (pre-squash safety)\n", enableBackup)
-	color.Yellow("   • Rollback: %v (recovery planning)\n", enableRollback)
-	color.Yellow("   • Auto SQL Fix: disabled (manual review required)\n")
+	color.Yellow("   ► Safety Level: %s (minimal changes)\n", cfg.SafetyLevel)
+	color.Yellow("   ► Docker Validation: TWO_CONTAINERS (maximum accuracy)\n")
+	color.Yellow("   ► Output Directory: %s\n", cfg.Output.Directory)
+	color.Yellow("   ► Backup: %v (pre-squash safety)\n", enableBackup)
+	color.Yellow("   ► Rollback: %v (recovery planning)\n", enableRollback)
+	color.Yellow("   ► Auto SQL Fix: disabled (manual review required)\n")
 	fmt.Println()
 
 	// Execute squash with AI-enhanced validation
@@ -1145,13 +1145,13 @@ func runFastWorkflow(cmd *cobra.Command, args []string) error {
 	enableBackup = false
 	enableRollback = false
 	enableTransformation = true
-	streaming = true  // Enable for performance
+	streaming = true // Enable for performance
 	enableCycleDetection = true
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		color.Red("❌ Failed to load configuration: %v\n", err)
+		color.Red("☒ Failed to load configuration: %v\n", err)
 		return err
 	}
 
@@ -1166,13 +1166,13 @@ func runFastWorkflow(cmd *cobra.Command, args []string) error {
 	}
 
 	color.Yellow("📋 FAST Workflow Configuration:\n")
-	color.Yellow("   • Safety Level: %s (balanced optimization)\n", cfg.SafetyLevel)
-	color.Yellow("   • Docker Validation: SCHEMA_DIFF (fastest approach)\n")
-	color.Yellow("   • Output Directory: %s\n", cfg.Output.Directory)
-	color.Yellow("   • Streaming: %v (memory efficient)\n", streaming)
-	color.Yellow("   • DDL Cycle Detection: %v (resolves conflicts)\n", enableCycleDetection)
-	color.Yellow("   • SQL Transformation: %v (modern syntax)\n", enableTransformation)
-	color.Yellow("   • Auto SQL Fix: enabled (automatic corrections)\n")
+	color.Yellow("   ► Safety Level: %s (balanced optimization)\n", cfg.SafetyLevel)
+	color.Yellow("   ► Docker Validation: SCHEMA_DIFF (fastest approach)\n")
+	color.Yellow("   ► Output Directory: %s\n", cfg.Output.Directory)
+	color.Yellow("   ► Streaming: %v (memory efficient)\n", streaming)
+	color.Yellow("   ► DDL Cycle Detection: %v (resolves conflicts)\n", enableCycleDetection)
+	color.Yellow("   ► SQL Transformation: %v (modern syntax)\n", enableTransformation)
+	color.Yellow("   ► Auto SQL Fix: enabled (automatic corrections)\n")
 	fmt.Println()
 
 	// Execute squash with AI-enhanced fast processing
@@ -1184,13 +1184,13 @@ func runAnalyzeWorkflow(cmd *cobra.Command, args []string) error {
 
 	// Override settings for ANALYZE workflow
 	enableCycleDetection = true
-	cycleDetectionDepth = 10  // Deep analysis
+	cycleDetectionDepth = 10 // Deep analysis
 	showCycleDetails = true
 
 	// Load configuration
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		color.Red("❌ Failed to load configuration: %v\n", err)
+		color.Red("☒ Failed to load configuration: %v\n", err)
 		return err
 	}
 
@@ -1198,11 +1198,11 @@ func runAnalyzeWorkflow(cmd *cobra.Command, args []string) error {
 	cfg.Performance.ShowProgress = true
 
 	color.Yellow("📋 ANALYZE Workflow Configuration:\n")
-	color.Yellow("   • DDL Cycle Detection: %v (all algorithm types)\n", enableCycleDetection)
-	color.Yellow("   • Analysis Depth: %d levels\n", cycleDetectionDepth)
-	color.Yellow("   • AI Analysis: enabled if configured (semantic insights)\n")
-	color.Yellow("   • Detailed Reporting: %v (comprehensive findings)\n", showCycleDetails)
-	color.Yellow("   • Mode: Analysis only (no file modifications)\n")
+	color.Yellow("   ► DDL Cycle Detection: %v (all algorithm types)\n", enableCycleDetection)
+	color.Yellow("   ► Analysis Depth: %d levels\n", cycleDetectionDepth)
+	color.Yellow("   ► AI Analysis: enabled if configured (semantic insights)\n")
+	color.Yellow("   ► Detailed Reporting: %v (comprehensive findings)\n", showCycleDetails)
+	color.Yellow("   ► Mode: Analysis only (no file modifications)\n")
 	fmt.Println()
 
 	// Execute AI-powered comprehensive analysis
@@ -1247,7 +1247,7 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 	if err == nil && len(authPatternsResp.Patterns) > 0 {
 		color.Yellow("🔐 AI detected authentication patterns:\n")
 		for _, pattern := range authPatternsResp.Patterns {
-			color.Yellow("   • %s\n", pattern)
+			color.Yellow("   ► %s\n", pattern)
 		}
 		color.Yellow("   Extra validation recommended for auth-related changes\n")
 	}
@@ -1289,7 +1289,7 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 		color.Yellow("⚠️  AI detected %d potential schema inconsistencies (review recommended):\n", len(consistencyResp.Differences))
 		for i, issue := range consistencyResp.Differences {
 			if i < 3 { // Show first 3 to avoid overwhelming output
-				color.Yellow("   • %s\n", issue)
+				color.Yellow("   ► %s\n", issue)
 			}
 		}
 		if len(consistencyResp.Differences) > 3 {
@@ -1340,7 +1340,7 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
-		color.Green("✅ Squashed migrations written to: %s\n", outputFile)
+		color.Green("☑ Squashed migrations written to: %s\n", outputFile)
 	}
 
 	// Run Docker validation
@@ -1349,18 +1349,18 @@ func executeSquashWithAIValidation(args []string, cfg *config.Config, validation
 
 		validationConfig := validation.DefaultValidationConfig()
 		validationConfig.EnableExtensionDetection = true
-		validationConfig.EnableSQLFixes = false // No auto-fix in SAFE mode
-		validationConfig.DockerApproach = validation.ApproachTwoContainers // SAFE uses TWO_CONTAINERS
+		validationConfig.EnableSQLFixes = false                                  // No auto-fix in SAFE mode
+		validationConfig.DockerApproach = validation.ApproachTwoContainers       // SAFE uses TWO_CONTAINERS
 		validationConfig.AuthCompatibilitySQL = engine.GetAuthCompatibilitySQL() // Inject auth compatibility
-		validationConfig.Verbose = true // Show auth layer creation
+		validationConfig.Verbose = true                                          // Show auth layer creation
 		validator := validation.NewSchemaValidator(validationConfig, nil, nil)
 
 		ctx := context.Background()
 		result, err := validator.ValidateWithDocker(ctx, filepath.Dir(args[0]), outputDir)
 		if err != nil {
-			color.Red("❌ Docker validation failed: %v\n", err)
+			color.Red("☒ Docker validation failed: %v\n", err)
 		} else if result != nil && len(result.Errors) == 0 {
-			color.Green("✅ Docker validation passed!\n")
+			color.Green("☑ Docker validation passed!\n")
 		} else {
 			color.Yellow("⚠️  Schema differences detected - see validation report\n")
 		}
@@ -1454,7 +1454,7 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 		color.Green("⚡ AI Performance Suggestions:\n")
 		for i, opt := range optimizationsResp.Optimizations {
 			if i < 5 { // Show top 5 suggestions
-				color.Green("   • %s\n", opt)
+				color.Green("   ► %s\n", opt)
 			}
 		}
 		if len(optimizationsResp.Optimizations) > 5 {
@@ -1498,7 +1498,7 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
-		color.Green("✅ Optimized migrations written to: %s\n", outputFile)
+		color.Green("☑ Optimized migrations written to: %s\n", outputFile)
 	}
 
 	// Fast Docker validation
@@ -1507,10 +1507,10 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 
 		validationConfig := validation.DefaultValidationConfig()
 		validationConfig.EnableExtensionDetection = true
-		validationConfig.EnableSQLFixes = true // Enable auto-fix for FAST mode
-		validationConfig.DockerApproach = validation.ApproachSchemaDiff // FAST uses SCHEMA_DIFF
+		validationConfig.EnableSQLFixes = true                                   // Enable auto-fix for FAST mode
+		validationConfig.DockerApproach = validation.ApproachSchemaDiff          // FAST uses SCHEMA_DIFF
 		validationConfig.AuthCompatibilitySQL = engine.GetAuthCompatibilitySQL() // Inject auth compatibility
-		validationConfig.Verbose = true // Show auth layer creation
+		validationConfig.Verbose = true                                          // Show auth layer creation
 		validator := validation.NewSchemaValidator(validationConfig, nil, nil)
 
 		ctx := context.Background()
@@ -1518,16 +1518,16 @@ func executeSquashWithAIOptimization(args []string, cfg *config.Config, validati
 		if err != nil {
 			color.Yellow("⚠️  Validation completed with warnings: %v\n", err)
 		} else if result != nil && len(result.Errors) == 0 {
-			color.Green("✅ Fast validation passed!\n")
+			color.Green("☑ Fast validation passed!\n")
 		}
 	}
 
 	// AI Summary
 	color.Green("⚡ AI Optimization Summary:\n")
-	color.Green("   • Equivalent function pairs found: %d\n", equivalentPairs)
-	color.Green("   • Performance optimizations suggested: %d\n", len(optimizationsResp.Optimizations))
+	color.Green("   ► Equivalent function pairs found: %d\n", equivalentPairs)
+	color.Green("   ► Performance optimizations suggested: %d\n", len(optimizationsResp.Optimizations))
 	if complexityWarnings > 0 {
-		color.Yellow("   • High complexity warnings: %d\n", complexityWarnings)
+		color.Yellow("   ► High complexity warnings: %d\n", complexityWarnings)
 	}
 
 	// Print summary
@@ -1556,7 +1556,7 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	// Initialize AI analyzer
 	analyzer, aiErr := ai.NewAnalyzer()
 	if aiErr != nil {
-		color.Red("❌ AI analyzer unavailable: %v\n", aiErr)
+		color.Red("☒ AI analyzer unavailable: %v\n", aiErr)
 		// Fall back to basic analysis
 		return executeComprehensiveAnalysis(args, cfg)
 	}
@@ -1640,11 +1640,11 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	fmt.Println()
 
 	color.Cyan("🔐 Security Analysis:\n")
-	fmt.Printf("   • Authentication Patterns: %s\n", authAnalysis)
+	fmt.Printf("   ► Authentication Patterns: %s\n", authAnalysis)
 	fmt.Println()
 
 	color.Cyan("🧹 Code Quality Analysis:\n")
-	fmt.Printf("   • Dead Code Functions: %d\n", deadCodeCount)
+	fmt.Printf("   ► Dead Code Functions: %d\n", deadCodeCount)
 	if len(deadFunctions) > 0 && len(deadFunctions) <= 5 {
 		for _, fn := range deadFunctions {
 			fmt.Printf("     - %s\n", fn)
@@ -1655,33 +1655,33 @@ func executeAIComprehensiveAnalysis(args []string, cfg *config.Config) error {
 		}
 		fmt.Printf("     ... and %d more\n", len(deadFunctions)-5)
 	}
-	fmt.Printf("   • High Complexity Migrations: %d\n", highComplexityCount)
-	fmt.Printf("   • Semantically Equivalent Function Pairs: %d\n", equivalentPairs)
+	fmt.Printf("   ► High Complexity Migrations: %d\n", highComplexityCount)
+	fmt.Printf("   ► Semantically Equivalent Function Pairs: %d\n", equivalentPairs)
 	fmt.Println()
 
 	color.Cyan("⚡ Performance Analysis:\n")
-	fmt.Printf("   • Optimization Opportunities: %d\n", optimizationCount)
+	fmt.Printf("   ► Optimization Opportunities: %d\n", optimizationCount)
 	if optimizationCount > 0 && optimizationsResp != nil {
 		fmt.Println("   Top suggestions:")
 		for i, opt := range optimizationsResp.Optimizations[:min(len(optimizationsResp.Optimizations), 3)] {
 			fmt.Printf("     %d. %s\n", i+1, opt)
 		}
 	}
-	fmt.Printf("   • Coverage Issues: %d functions with low usage\n", len(coverageIssues))
+	fmt.Printf("   ► Coverage Issues: %d functions with low usage\n", len(coverageIssues))
 	fmt.Println()
 
 	// Strategic Recommendations
 	color.Cyan("💡 AI Recommendations:\n")
 	if deadCodeCount > 0 {
-		color.Yellow("   • Run FAST workflow to automatically optimize %d functions\n", equivalentPairs)
+		color.Yellow("   ► Run FAST workflow to automatically optimize %d functions\n", equivalentPairs)
 	}
 	if len(authPatternsResp.Patterns) > 0 {
-		color.Yellow("   • Use SAFE workflow for production - auth patterns detected\n")
+		color.Yellow("   ► Use SAFE workflow for production - auth patterns detected\n")
 	}
 	if optimizationCount > 10 {
-		color.Green("   • High optimization potential - FAST workflow recommended\n")
+		color.Green("   ► High optimization potential - FAST workflow recommended\n")
 	} else if optimizationCount == 0 {
-		color.Green("   • Migrations appear well-optimized\n")
+		color.Green("   ► Migrations appear well-optimized\n")
 	}
 
 	color.Green("\n✨ AI Analysis Complete!\n")
@@ -1755,7 +1755,7 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 			).WithFile(outputFile).WithInnerError(err).WithSuggestion("Ensure sufficient disk space")
 		}
 
-		color.Green("✅ Squashed migrations written to: %s\n", outputFile)
+		color.Green("☑ Squashed migrations written to: %s\n", outputFile)
 	}
 
 	// Run validation if not dry run
@@ -1777,7 +1777,7 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 		}
 
 		validationConfig.AuthCompatibilitySQL = engine.GetAuthCompatibilitySQL() // Inject auth compatibility
-		validationConfig.Verbose = true // Show auth layer creation
+		validationConfig.Verbose = true                                          // Show auth layer creation
 
 		validator := validation.NewSchemaValidator(validationConfig, nil, nil)
 
@@ -1788,9 +1788,9 @@ func executeSquashWithValidation(args []string, cfg *config.Config, validationAp
 		ctx := context.Background()
 		result, err := validator.ValidateWithDocker(ctx, originalDir, outputFile)
 		if err != nil {
-			color.Red("❌ Validation failed: %v\n", err)
+			color.Red("☒ Validation failed: %v\n", err)
 		} else if result != nil && len(result.Errors) == 0 {
-			color.Green("✅ Schema validation passed!\n")
+			color.Green("☑ Schema validation passed!\n")
 		} else {
 			color.Yellow("⚠️  Schema differences detected - see validation report\n")
 		}
@@ -1860,24 +1860,24 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 				}
 			}
 		} else {
-			analysisResults = append(analysisResults, "✓ DDL Cycle Detection: No harmful cycles detected")
-			color.Green("  ✓ DDL cycle detection completed - no cycles found\n")
+			analysisResults = append(analysisResults, "☑ DDL Cycle Detection: No harmful cycles detected")
+			color.Green("  ☑ DDL cycle detection completed - no cycles found\n")
 		}
 	}
 
 	// Real dependency analysis
 	stats := tracker.GetStatistics()
-	analysisResults = append(analysisResults, fmt.Sprintf("✓ Dependency Analysis: %d objects tracked, %d dependencies resolved", stats.TotalObjects, stats.TotalDependencies))
-	color.Green("  ✓ Dependency graph analysis completed\n")
+	analysisResults = append(analysisResults, fmt.Sprintf("☑ Dependency Analysis: %d objects tracked, %d dependencies resolved", stats.TotalObjects, stats.TotalDependencies))
+	color.Green("  ☑ Dependency graph analysis completed\n")
 
 	// Real redundancy analysis
 	redundancies := tracker.GetRedundantObjects()
 	if len(redundancies) > 0 {
-		analysisResults = append(analysisResults, fmt.Sprintf("✓ Redundancy Detection: %d redundant operations identified", len(redundancies)))
-		color.Green("  ✓ Found %d optimization opportunities\n", len(redundancies))
+		analysisResults = append(analysisResults, fmt.Sprintf("☑ Redundancy Detection: %d redundant operations identified", len(redundancies)))
+		color.Green("  ☑ Found %d optimization opportunities\n", len(redundancies))
 	} else {
-		analysisResults = append(analysisResults, "✓ Redundancy Detection: No redundancies found")
-		color.Green("  ✓ Migrations are already optimized\n")
+		analysisResults = append(analysisResults, "☑ Redundancy Detection: No redundancies found")
+		color.Green("  ☑ Migrations are already optimized\n")
 	}
 
 	// Real risk assessment
@@ -1887,8 +1887,8 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 		color.Yellow("  ⚠️  %d potential risks identified\n", len(consistencyWarnings))
 		warnings = append(warnings, consistencyWarnings...)
 	} else {
-		analysisResults = append(analysisResults, "✓ Risk Assessment: Low risk - migrations are consistent")
-		color.Green("  ✓ Risk assessment completed\n")
+		analysisResults = append(analysisResults, "☑ Risk Assessment: Low risk - migrations are consistent")
+		color.Green("  ☑ Risk assessment completed\n")
 	}
 
 	// Print detailed analysis report
@@ -1908,7 +1908,7 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 		fmt.Println()
 		color.Yellow("⚠️  Warnings:\n")
 		for _, warning := range warnings {
-			color.Yellow("  • %s\n", warning)
+			color.Yellow("  ► %s\n", warning)
 		}
 	} else {
 		fmt.Println()
@@ -1916,9 +1916,9 @@ func executeComprehensiveAnalysis(args []string, cfg *config.Config) error {
 	}
 
 	color.Cyan("\n💡 Recommendations:\n")
-	color.Cyan("• Consider using 'fast' workflow for development environments\n")
-	color.Cyan("• Use 'safe' workflow for production deployments\n")
-	color.Cyan("• Review any warnings before proceeding with consolidation\n")
+	color.Cyan("► Consider using 'fast' workflow for development environments\n")
+	color.Cyan("► Use 'safe' workflow for production deployments\n")
+	color.Cyan("► Review any warnings before proceeding with consolidation\n")
 
 	return nil
 }
@@ -1935,14 +1935,14 @@ func extractFunctionsFromSQL(sql string) []string {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(strings.ToUpper(line), "CREATE OR REPLACE FUNCTION") ||
-		   strings.HasPrefix(strings.ToUpper(line), "CREATE FUNCTION") {
+			strings.HasPrefix(strings.ToUpper(line), "CREATE FUNCTION") {
 			inFunction = true
 			currentFunction.Reset()
 			currentFunction.WriteString(line + "\n")
 		} else if inFunction {
 			currentFunction.WriteString(line + "\n")
 			if strings.HasSuffix(strings.ToUpper(line), "$$;") ||
-			   strings.HasSuffix(strings.ToUpper(line), "$BODY$;") {
+				strings.HasSuffix(strings.ToUpper(line), "$BODY$;") {
 				functions = append(functions, currentFunction.String())
 				inFunction = false
 			}
@@ -2002,11 +2002,11 @@ func loadSingleMigration(file string) (*MigrationWithContent, error) {
 		// Check if this is a catastrophic failure (no statements parsed)
 		if m != nil && len(m.ParseErrors) > 0 && len(m.Statements) == 0 {
 			// Catastrophic failure - all statements lost
-			color.Red("❌ FATAL: %s - All statements failed to parse\n", filepath.Base(file))
+			color.Red("☒ FATAL: %s - All statements failed to parse\n", filepath.Base(file))
 			color.Red("   Parse errors: %d, Statements recovered: 0\n", len(m.ParseErrors))
 			for i, parseErr := range m.ParseErrors {
 				if i < 3 { // Show first 3 errors
-					color.Red("   • %s\n", parseErr)
+					color.Red("   ► %s\n", parseErr)
 				}
 			}
 			if len(m.ParseErrors) > 3 {
@@ -2026,7 +2026,7 @@ func loadSingleMigration(file string) (*MigrationWithContent, error) {
 				filepath.Base(file), len(m.ParseErrors), len(m.Statements))
 			for i, parseErr := range m.ParseErrors {
 				if i < 3 { // Show first 3 errors to avoid overwhelming output
-					color.Yellow("   • %s\n", parseErr)
+					color.Yellow("   ► %s\n", parseErr)
 				}
 			}
 			if len(m.ParseErrors) > 3 {
@@ -2096,7 +2096,7 @@ func printAnalysisReport(
 			if len(m.ParseErrors) > 0 {
 				fmt.Printf("%s", color.RedString("  File: %s\n", m.Filename))
 				for _, parseErr := range m.ParseErrors {
-					fmt.Printf("    • %s\n", parseErr)
+					fmt.Printf("    ► %s\n", parseErr)
 				}
 				fmt.Println()
 			}
@@ -2111,7 +2111,7 @@ func printAnalysisReport(
 	// Objects by type
 	fmt.Printf("\nObjects by type:\n")
 	for objType, count := range stats.ObjectsByType {
-		fmt.Printf("  • %s: %d\n", objType, count)
+		fmt.Printf("  ► %s: %d\n", objType, count)
 	}
 
 	// Redundancies
@@ -2120,7 +2120,7 @@ func printAnalysisReport(
 	if len(redundancies) > 0 {
 		totalSavings := 0
 		for _, r := range redundancies {
-			fmt.Printf("  • %s (%s): %s\n",
+			fmt.Printf("  ► %s (%s): %s\n",
 				color.WhiteString(r.Object), r.Type, r.Explanation)
 			fmt.Printf("    Potential savings: %d statements\n", r.Savings.StatementsReduced)
 			totalSavings += r.Savings.StatementsReduced
@@ -2142,12 +2142,12 @@ func printAnalysisReport(
 }
 
 func printSquashSummary(originalFiles, finalLines int, duration time.Duration, warnings []string, outputPath string) {
-	fmt.Print("\n" + color.GreenString("✓ Squashing completed successfully!") + "\n\n")
+	fmt.Print("\n" + color.GreenString("☑ Squashing completed successfully!") + "\n\n")
 
 	fmt.Printf("Results:\n")
-	fmt.Printf("  • Original files processed: %d\n", originalFiles)
-	fmt.Printf("  • Final lines of SQL: %d\n", finalLines)
-	fmt.Printf("  • Processing time: %v\n", duration)
+	fmt.Printf("  ► Original files processed: %d\n", originalFiles)
+	fmt.Printf("  ► Final lines of SQL: %d\n", finalLines)
+	fmt.Printf("  ► Processing time: %v\n", duration)
 
 	if len(warnings) > 0 {
 		wm := utils.NewWarningManager()
@@ -2161,14 +2161,14 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			fmt.Print("\n" + color.BlueString("🛡 Safety Features:") + "\n")
 			for _, w := range backupWarns {
 				cleanMsg := strings.Replace(w.Message, "Backup created: ", "Database backup: ", 1)
-				fmt.Printf("  ✓ %s\n", cleanMsg)
+				fmt.Printf("  ☑ %s\n", cleanMsg)
 			}
 		}
 
 		if rollbackWarns := byCategory[utils.CategoryRollback]; len(rollbackWarns) > 0 {
 			fmt.Print("\n" + color.BlueString("🔄 Rollback Capabilities:") + "\n")
 			for _, w := range rollbackWarns {
-				fmt.Printf("  ✓ %s\n", w.Message)
+				fmt.Printf("  ☑ %s\n", w.Message)
 			}
 		}
 
@@ -2176,14 +2176,14 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			fmt.Print("\n" + color.CyanString("⚡ SQL Transformations:") + "\n")
 			for _, w := range transformWarns {
 				cleanMsg := strings.Replace(w.Message, "Transformation: ", "", 1)
-				fmt.Printf("  ✓ %s\n", cleanMsg)
+				fmt.Printf("  ☑ %s\n", cleanMsg)
 			}
 		}
 
 		if optWarns := byCategory[utils.CategoryOptimization]; len(optWarns) > 0 {
 			fmt.Print("\n" + color.CyanString("⚡ Optimizations Applied:") + "\n")
 			for _, w := range optWarns {
-				fmt.Printf("  ✓ %s\n", w.Message)
+				fmt.Printf("  ☑ %s\n", w.Message)
 			}
 		}
 
@@ -2193,9 +2193,9 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			for _, w := range cycleWarns {
 				switch w.Severity {
 				case utils.SeverityCritical:
-					fmt.Printf("  " + color.RedString("⚠ %s") + "\n", w.Message)
+					fmt.Printf("  "+color.RedString("⚠ %s")+"\n", w.Message)
 				case utils.SeverityHigh:
-					fmt.Printf("  " + color.YellowString("⚠ %s") + "\n", w.Message)
+					fmt.Printf("  "+color.YellowString("⚠ %s")+"\n", w.Message)
 				default:
 					fmt.Printf("  ℹ %s\n", w.Message)
 				}
@@ -2231,7 +2231,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			if critical := bySeverity[utils.SeverityCritical]; len(critical) > 0 {
 				fmt.Print("\n" + color.RedString("  🔴 Critical (%d):", len(critical)) + "\n")
 				for _, w := range critical {
-					fmt.Printf("    • %s\n", w.Message)
+					fmt.Printf("    ► %s\n", w.Message)
 					if w.Suggestion != "" {
 						fmt.Printf("      → %s\n", color.CyanString(w.Suggestion))
 					}
@@ -2242,7 +2242,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			if high := bySeverity[utils.SeverityHigh]; len(high) > 0 {
 				fmt.Print("\n" + color.YellowString("  🟠 High Severity (%d):", len(high)) + "\n")
 				for _, w := range high {
-					fmt.Printf("    • %s\n", w.Message)
+					fmt.Printf("    ► %s\n", w.Message)
 					if w.Suggestion != "" {
 						fmt.Printf("      → %s\n", color.CyanString(w.Suggestion))
 					}
@@ -2253,7 +2253,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			if medium := bySeverity[utils.SeverityMedium]; len(medium) > 0 {
 				fmt.Print("\n" + color.YellowString("  🟡 Medium Severity (%d):", len(medium)) + "\n")
 				for _, w := range medium {
-					fmt.Printf("    • %s\n", w.Message)
+					fmt.Printf("    ► %s\n", w.Message)
 				}
 			}
 
@@ -2261,7 +2261,7 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 			if low := bySeverity[utils.SeverityLow]; len(low) > 0 {
 				fmt.Printf("\n  ℹ️  Info (%d):\n", len(low))
 				for _, w := range low {
-					fmt.Printf("    • %s\n", w.Message)
+					fmt.Printf("    ► %s\n", w.Message)
 				}
 			}
 		}
@@ -2270,16 +2270,16 @@ func printSquashSummary(originalFiles, finalLines int, duration time.Duration, w
 	// Show enabled features
 	fmt.Print("\n" + color.MagentaString("🎯 Features Enabled:") + "\n")
 	if enableBackup {
-		fmt.Printf("  ✓ Pre-squash backup generation (requires prod_db_dsn in config)\n")
+		fmt.Printf("  ☑ Pre-squash backup generation (requires prod_db_dsn in config)\n")
 	}
 	if enableRollback {
-		fmt.Printf("  ✓ Rollback script generation\n")
+		fmt.Printf("  ☑ Rollback script generation\n")
 	}
 	if enableTransformation {
-		fmt.Printf("  ✓ SQL transformation and modernization\n")
+		fmt.Printf("  ☑ SQL transformation and modernization\n")
 	}
 	if enableCycleDetection {
-		fmt.Printf("  ✓ Advanced DDL cycle detection\n")
+		fmt.Printf("  ☑ Advanced DDL cycle detection\n")
 	}
 
 	fmt.Printf("\nOutput written to: %s\n", color.CyanString(outputPath))
@@ -2312,8 +2312,8 @@ func createTransformationConfig() *transformation.TransformationConfig {
 	config := transformation.DefaultTransformationConfig()
 
 	// Enable all safe transformations by default
-	config.EnableDMLToSelect = false    // Don't modify DML in migrations
-	config.EnableDropToComment = false  // Don't convert drops to comments
+	config.EnableDMLToSelect = false   // Don't modify DML in migrations
+	config.EnableDropToComment = false // Don't convert drops to comments
 	config.EnableUnsafeToSafe = true   // Convert unsafe operations to safe ones
 	config.EnableModernSyntax = true   // Use modern PostgreSQL syntax
 	config.EnablePerformance = true    // Apply performance optimizations
