@@ -59,8 +59,6 @@ func (sv *SchemaValidator) DumpAndNormalizeSchema(ctx context.Context, db *sql.D
 	// We need to execute pg_dump, which requires connection details
 	// For now, we'll use docker exec if we're in a container context
 
-	normalizer := DefaultSchemaNormalizer()
-
 	// We need to determine if this is a containerized database or a direct connection
 	// For the validation workflow, we'll assume it's a containerized setup
 
@@ -320,7 +318,7 @@ func (sn *SchemaNormalizer) sortBlocks(schema string) string {
 	}
 
 	// Sort blocks by type, then by name
-	sort.Slice(blocks, func(i, j int) {
+	sort.Slice(blocks, func(i, j int) bool {
 		typeI := sn.getBlockType(blocks[i])
 		typeJ := sn.getBlockType(blocks[j])
 

@@ -183,7 +183,6 @@ func (r *EnumDeduplicationRule) Apply(lifecycle *tracking.ObjectLifecycle, engin
 			matches := enumPattern.FindStringSubmatch(firstEnum.SQL)
 			if len(matches) > 1 {
 				existingValues := parseEnumValues(matches[1])
-				originalCount := len(existingValues)
 
 				// Verify all ALTER TYPE statements are appends (no reorders)
 				allAppends := true

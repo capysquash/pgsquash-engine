@@ -25,11 +25,11 @@ type DetailedHealthStatus struct {
 	Version   string    `json:"version"`
 	Timestamp time.Time `json:"timestamp"`
 	System    struct {
-		OS      string `json:"os"`
-		Arch    string `json:"arch"`
-		GoVer   string `json:"go_version"`
-		NumCPU  int    `json:"num_cpu"`
-		NumGo   int    `json:"num_goroutines"`
+		OS     string `json:"os"`
+		Arch   string `json:"arch"`
+		GoVer  string `json:"go_version"`
+		NumCPU int    `json:"num_cpu"`
+		NumGo  int    `json:"num_goroutines"`
 	} `json:"system"`
 	Docker struct {
 		Available bool   `json:"available"`
@@ -123,7 +123,7 @@ var versionInfo = struct {
 	buildDate string
 	gitCommit string
 }{
-	version:   "0.8.5-beta", // Default fallback
+	version:   "0.9.5-beta", // Default fallback
 	buildDate: "unknown",
 	gitCommit: "unknown",
 }

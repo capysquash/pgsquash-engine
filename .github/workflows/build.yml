@@ -41,7 +41,7 @@ jobs:
 
       - name: Build
         run: |
-          VERSION="0.8.5-beta"
+          VERSION="0.9.5-beta"
           BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           GIT_COMMIT=$(git rev-parse --short HEAD)
           go build -v -o pgsquash \

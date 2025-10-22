@@ -20,7 +20,7 @@ import (
 
 // Version information (set via ldflags during build)
 var (
-	version   = "0.8.5-beta" // Default version, can be overridden via ldflags: -ldflags "-X main.version=x.y.z"
+	version   = "0.9.5-beta" // Default version, can be overridden via ldflags: -ldflags "-X main.version=x.y.z"
 	buildDate = "unknown"
 	gitCommit = "unknown"
 )

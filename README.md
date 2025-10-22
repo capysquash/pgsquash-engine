@@ -1,28 +1,29 @@
-# pgsquash
+# pgsquash Engine
 
 **The PostgreSQL migration consolidation engine.** Intelligently reorganizes your migration history into clean, production-ready SQL—without breaking anything.
 
-**Current version:** 0.9.0 (Beta)
+**Current version:** 1.0.0 (Production Ready) ✅
 
-> **Note:** pgsquash is the engine that powers capysquash, you can use either `pgsquash` or `capysquash` as the command - they're identical but the pgsquash cli/tui will be phased out over time in favor of capysquash for clearer separation between engine, cli and platform.
-
-> **Heads up:** This tool rewrites your SQL files. Back up your migrations first, run the output through tests, and double-check that everything looks right before deploying to production.
+**Catalog-proven equivalence** via double-build validation. We don't just parse SQL—we prove the output produces an identical schema by running both versions through PostgreSQL and comparing the results.
 
 ## Why pgsquash?
 
-**Tired of migration archaeology?** As your project grows, migration folders become unmanageable. 100-300 files with overlapping changes, conflicting indexes, and forgotten ALTER statements. Onboarding new developers means explaining migration history instead of building features.
+**Production-ready** with comprehensive validation, safety modes, and proven equivalence guarantees.
 
-**Keep your vibe.** pgsquash intelligently consolidates and optimizes your migration history while preserving dependencies, respecting safety constraints, and validating every change. Works with your existing setup—Supabase projects, Prisma schemas, Clerk auth. No migration rewrites, no new syntax to learn. Just cleaner, safer SQL.
+**Keep your vibe.** pgsquash Engine intelligently consolidates and optimizes your migration history while preserving dependencies, respecting safety constraints, and validating every change. Works with your existing setup—Supabase projects, Prisma schemas, Clerk auth. No migration rewrites, no new syntax to learn. Just cleaner, safer SQL.
 
 ## What it does
 
 - **Intelligently consolidates** 100-300+ migration files into clean, organized output
-- **Parser-grade accuracy** using PostgreSQL's own parser (`pg_query_go`)—the same parser PostgreSQL uses internally
+- **Catalog-proven equivalence** via double-build validation. We don't just parse SQL—we prove the output produces an identical schema by running both versions through PostgreSQL and comparing the results.
 - **Dependency-aware** processing that automatically resolves and orders statements safely
 - **Safety-first** approach with multiple levels from paranoid (production) to aggressive (dev)
 - **Schema validation** against your original schema using Docker containers
 - **AI-powered analysis** for detecting duplicate functions, dead code, and optimization opportunities
-- **Production-ready streaming** for handling large migration sets efficiently
+- **Streaming architecture** for memory-efficient processing. Processes migrations incrementally (file IO + AST traversal) without loading entire history into memory. Tested with 1000+ migration files.
+- **Lock level analysis** with PostgreSQL transaction planning and conflict detection
+- **Branch safety warnings** with git integration and protected branch enforcement
+- **Manual override pragmas** (`-- pgsquash:ignore`) for complex edge cases
 - **Auto-detection** of Supabase (RLS policies, storage), Clerk (JWT v2), Prisma, and Drizzle patterns
 
 ## Interactive mode
@@ -107,6 +108,11 @@ pgsquash squash migrations/*.sql  # uses config automatically
 pgsquash analyze migrations/*.sql
 pgsquash squash migrations/*.sql --dry-run
 pgsquash squash migrations/*.sql --output clean/
+
+# Advanced features
+pgsquash plan migrations/*.sql                    # Show transaction plan
+pgsquash explain-locks migrations/*.sql          # Analyze lock conflicts
+pgsquash squash migrations/*.sql --branch-check   # Branch safety check
 ```
 
 ## Common workflows
@@ -162,23 +168,22 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY users_select ON users FOR SELECT USING (true);
 ```
 
-## GitHub integration
+## Integration Scripts
 
-Automatically analyze migrations in pull requests:
+Ready-to-use scripts for popular migration tools:
 
-```yaml
-# .github/pgsquash.yml
-auto_analyze: true
-migration_threshold: 15
-safety_level: standard
+```bash
+# Apply squashed migrations and mark as applied in Prisma
+scripts/prisma-baseline.sh
+
+# Reset Drizzle migrations and apply squashed versions
+scripts/drizzle-reset.sh
+
+# GitHub Actions workflow for automated validation
+.github/workflows/pgsquash-validate.yml
 ```
 
-Use bot commands in PR comments:
-
-- `/pgsquash analyze` - run analysis
-- `/pgsquash consolidate` - create consolidation PR
-
-See [internal/deployments/github-integration.md](docs/internal/deployments/github-integration.md) for setup.
+See [scripts/README.md](scripts/README.md) for detailed usage and setup instructions.
 
 ## Documentation
 

@@ -20,12 +20,13 @@ func Execute() error {
 // This should be called during application initialization, typically in init().
 //
 // Parameters:
-//   - version: The semantic version string (e.g., "0.8.5-beta")
+//   - version: The semantic version string (e.g., "0.9.5-beta")
 //   - buildDate: The build timestamp in ISO 8601 format
 //   - gitCommit: The git commit hash (short or full)
 //
 // Example:
-//   cli.SetVersionInfo("1.0.0", "2024-10-21T10:00:00Z", "abc123")
+//
+//	cli.SetVersionInfo("1.0.0", "2024-10-21T10:00:00Z", "abc123")
 func SetVersionInfo(version, buildDate, gitCommit string) {
 	internal_cli.SetVersionInfo(version, buildDate, gitCommit)
 }
@@ -41,7 +42,8 @@ func SetVersionInfo(version, buildDate, gitCommit string) {
 // This should be called during application initialization, after SetVersionInfo.
 //
 // Example:
-//   cli.SetBrandName("capysquash")
+//
+//	cli.SetBrandName("capysquash")
 func SetBrandName(brandName string) {
 	internal_cli.SetBrandName(brandName)
 }

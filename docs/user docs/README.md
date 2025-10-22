@@ -61,4 +61,4 @@ pgsquash init-config
 
 ---
 
-**Version**: 0.8.5 (beta)
+**Version**: 0.9.5 (beta)

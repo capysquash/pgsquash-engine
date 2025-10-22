@@ -652,18 +652,13 @@ func (e *Engine) SquashWithSeparateFiles(migrations map[int]string) (*SquashResu
 
 	// Detect extensions
 	detector := NewExtensionDetector()
-	var allContent strings.Builder
-	for _, sql := range migrations {
-		allContent.WriteString(sql)
-		allContent.WriteString("\n")
-	}
-	analysis := detector.AnalyzeMigrations(allContent.String())
+	analysis := detector.AnalyzeMigrations(migrations)
 
 	// Create provenance tracker
 	provenance := NewProvenanceTracker(
 		"0.9.0", // TODO: Get from version constant
 		e.config.SafetyLevel,
-		e.config.PostgreSQLFeatures.Version,
+		e.config.PostgreSQLFeatures.TargetVersion,
 		analysis.RequiredExtensions,
 	)
 

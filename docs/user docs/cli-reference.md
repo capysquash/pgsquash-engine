@@ -346,7 +346,7 @@ pgsquash health --detailed
 ```json
 {
   "status": "healthy",
-  "version": "0.8.5-beta",
+  "version": "0.9.5-beta",
   "docker": true,
   "timestamp": "2025-10-20T16:25:06Z"
 }
@@ -357,7 +357,7 @@ pgsquash health --detailed
 ```json
 {
   "status": "healthy",
-  "version": "0.8.5-beta",
+  "version": "0.9.5-beta",
   "timestamp": "2025-10-20T16:25:06Z",
   "system": {
     "os": "darwin",

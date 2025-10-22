@@ -62,10 +62,10 @@ var (
 	openReport        bool
 
 	// Transaction planning options
-	showPlan        bool
-	explainLocks    bool
-	splitBySchema   string
-	branchCheck     bool
+	showPlan         bool
+	explainLocks     bool
+	splitBySchema    string
+	branchCheck      bool
 	iKnowWhatImDoing bool
 
 	// Init-config options
@@ -82,7 +82,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "pgsquash",
 	Short:   "pgsquash Engine - Intelligent PostgreSQL migration consolidation",
-	Version: "0.8.5-beta",
+	Version: "0.9.5-beta",
 	Long: `pgsquash Engine intelligently consolidates PostgreSQL migration files into
 clean, production-ready SQL while preserving data integrity, respecting
 dependencies, and validating safety at every step.
@@ -674,6 +674,10 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			).WithInnerError(err).WithAdditional("migration_count", len(migrations)).WithSuggestion("Review migration files for syntax errors or complex dependencies")
 		}
 
+		// Detect extensions for provenance tracking
+		extDetector := squasher.NewExtensionDetector()
+		analysis := extDetector.AnalyzeMigrations(migrationMap)
+
 		finalSQL = squashResult.BaselineSQL
 		warnings = squashResult.Warnings
 		migrationCount = len(migrations)
@@ -694,18 +698,18 @@ func runSquash(cmd *cobra.Command, args []string) error {
 
 		// Write provenance map
 		if squashResult.ProvenanceMap != nil {
-			provTracker := squasher.NewProvenanceTracker(
-				"0.9.0",
+			provenance := squasher.NewProvenanceTracker(
+				"1.0.0",
 				cfg.SafetyLevel,
-				cfg.PostgreSQLFeatures.Version,
-				squashResult.Extensions,
+				cfg.PostgreSQLFeatures.TargetVersion,
+				analysis.RequiredExtensions,
 			)
-			provTracker.GetSquashMap().Inputs = squashResult.ProvenanceMap.Inputs
-			provTracker.GetSquashMap().Outputs = squashResult.ProvenanceMap.Outputs
-			provTracker.GetSquashMap().Warnings = squashResult.ProvenanceMap.Warnings
-			provTracker.GetSquashMap().ContentHash = squashResult.ProvenanceMap.ContentHash
+			provenance.GetSquashMap().Inputs = squashResult.ProvenanceMap.Inputs
+			provenance.GetSquashMap().Outputs = squashResult.ProvenanceMap.Outputs
+			provenance.GetSquashMap().Warnings = squashResult.ProvenanceMap.Warnings
+			provenance.GetSquashMap().ContentHash = squashResult.ProvenanceMap.ContentHash
 
-			if err := provTracker.WriteSquashMap(cfg.Output.Directory); err != nil {
+			if err := provenance.WriteSquashMap(cfg.Output.Directory); err != nil {
 				fmt.Println(color.YellowString("⚠️  Warning: Could not write .squashmap.json: %v", err))
 			} else {
 				fmt.Println(color.GreenString("✓ Provenance map written to: %s", filepath.Join(cfg.Output.Directory, ".squashmap.json")))
@@ -894,16 +898,17 @@ func runValidationCheck(cfg *config.Config, originalPath, squashedPath string) (
 		Verbose:                  verbose,
 	}
 
-	if cfg.Validation != nil {
-		if cfg.Validation.PostgreSQLVersion != "" {
-			valConfig.PostgreSQLVersion = cfg.Validation.PostgreSQLVersion
+	if cfg.Validation.Mode != "" || cfg.Validation.DockerImage != "" {
+		if cfg.Validation.DockerImage != "" {
+			// The validation package doesn't have DockerImage field, so we use the PostgreSQL version
+			// Docker image is handled by the validation package internally
 		}
-		if cfg.Validation.ApproachUsed != "" {
-			valConfig.DockerApproach = validation.ValidationApproach(cfg.Validation.ApproachUsed)
+		if cfg.Validation.Mode != "" {
+			valConfig.DockerApproach = validation.ValidationApproach(cfg.Validation.Mode)
 		}
 	}
 
-	validator := validation.NewSchemaValidator(valConfig)
+	validator := validation.NewSchemaValidator(valConfig, nil, nil)
 	defer validator.Close()
 
 	ctx := context.Background()

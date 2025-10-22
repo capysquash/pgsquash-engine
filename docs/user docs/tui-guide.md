@@ -467,7 +467,7 @@ pgsquash tui config
 
 ## Version Information
 
-**TUI Version**: 0.8.5-beta
+**TUI Version**: 0.9.5-beta
 **Bubble Tea**: 1.3.10
 **Lipgloss**: 1.1.0
 

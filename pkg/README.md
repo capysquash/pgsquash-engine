@@ -177,14 +177,14 @@ func main() {
     // Setup
     logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout)
     utils.SetDefaultLogger(logger)
-    
+
     // Configure
     cli.SetVersionInfo("1.0.0", "2025-10-21", "abc123")
     cli.SetBrandName("myapp")
-    
+
     // Register plugins
     plugins.RegisterDefault()
-    
+
     // Run CLI
     if err := cli.Execute(); err != nil {
         logger.Error("CLI failed: %v", err)
@@ -210,9 +210,9 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("Found %d redundancies\n", len(analysis.Redundancies))
-    
+
     // Squash if needed
     if len(analysis.Redundancies) > 0 {
         result, err := engine.SquashDirectory("./migrations", &engine.Config{
@@ -221,7 +221,7 @@ func main() {
         if err != nil {
             log.Fatal(err)
         }
-        
+
         fmt.Println("Squashed SQL:")
         fmt.Println(result.SQL)
     }
@@ -244,14 +244,14 @@ func main() {
     // Setup logging with custom prefix
     logger := utils.NewLogger(utils.LogLevelDebug, os.Stdout)
     utils.SetDefaultLogger(logger)
-    
+
     logger.Info("Starting custom migration processor")
-    
+
     // Register plugins for third-party detection
     if err := plugins.RegisterDefault(); err != nil {
         logger.Warn("Plugin setup: %v", err)
     }
-    
+
     // Process migrations with streaming for large datasets
     config := &engine.Config{
         SafetyLevel:     engine.Standard,
@@ -259,12 +259,12 @@ func main() {
         MemoryLimitMB:   512,
         Verbose:         true,
     }
-    
+
     result, err := engine.SquashDirectory("./migrations", config)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     logger.Info("Processed %d files", result.FilesProcessed)
 }
 ```
@@ -313,7 +313,7 @@ The public API follows semantic versioning:
 - **Minor** version: New features, backward compatible
 - **Patch** version: Bug fixes
 
-Current version: `v0.8.5-beta`
+Current version: `v0.9.5-beta`
 
 ## Support
 

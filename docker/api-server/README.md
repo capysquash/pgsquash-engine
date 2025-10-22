@@ -54,7 +54,7 @@ Response:
   "status": "healthy",
   "timestamp": 1234567890,
   "service": "pgsquash-api",
-  "version": "0.8.5-beta"
+  "version": "0.9.5-beta"
 }
 ```
 
