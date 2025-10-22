@@ -174,6 +174,12 @@ func parseStatementWithNormalizationAndContext(sql string, line int, normalizer 
 	// Plugins can enhance auth patterns, mark critical statements, add dependencies, etc.
 	enrichStatementWithPlugins(context.Background(), stmt)
 
+	// Analyze statement metadata (lock levels, transaction requirements, etc.)
+	// Use PostgreSQL 15 as default version (can be overridden by config later)
+	analyzer := NewStatementAnalyzer("15")
+	analyzer.AnalyzeStatement(stmt)
+	analyzer.AnalyzePragmas(stmt)
+
 	return stmt, nil
 }
 
