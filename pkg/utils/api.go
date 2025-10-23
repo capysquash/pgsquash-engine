@@ -33,20 +33,22 @@ const (
 //   - output: Where to write log messages (typically os.Stdout or os.Stderr)
 //
 // Example:
-//   logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout)
-//   logger.Info("Application started")
+//
+//	logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout)
+//	logger.Info("Application started")
 func NewLogger(level LogLevel, output io.Writer) *Logger {
 	return internal_utils.NewLogger(level, output)
 }
 
 // SetDefaultLogger sets the global default logger instance.
-// This logger will be used throughout the pgsquash engine.
+// This logger will be used throughout the pgsquash-engine.
 //
 // Should be called during application initialization before any other operations.
 //
 // Example:
-//   logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout)
-//   utils.SetDefaultLogger(logger)
+//
+//	logger := utils.NewLogger(utils.LogLevelInfo, os.Stdout)
+//	utils.SetDefaultLogger(logger)
 func SetDefaultLogger(logger *Logger) {
 	internal_utils.SetDefaultLogger(logger)
 }
@@ -55,10 +57,11 @@ func SetDefaultLogger(logger *Logger) {
 // Returns nil if SetDefaultLogger has not been called.
 //
 // Example:
-//   logger := utils.GetDefaultLogger()
-//   if logger != nil {
-//       logger.Info("Using default logger")
-//   }
+//
+//	logger := utils.GetDefaultLogger()
+//	if logger != nil {
+//	    logger.Info("Using default logger")
+//	}
 func GetDefaultLogger() *Logger {
 	return internal_utils.GetDefaultLogger()
 }

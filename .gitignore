@@ -210,7 +210,7 @@ docker/dev-environment/README.md
 audit/AUDIT_CONNECTION_MAP.md
 audit/COMPREHENSIVE_AUDIT_REPORT.md
 audit/final audit.md
-audit/pgsquash Engine plan.md
+audit/pgsquash-engine plan.md
 audit/ULTIMATE_UNIFIED_AUDIT.md
 docs/DOCKER_BEST_PRACTICES.md
 docs/DOCKER_DEPLOYMENT_GUIDE.md
@@ -228,7 +228,7 @@ bin/pgsquash
 docs/FLYIO_DEPLOYMENT.md
 docs/internal/FLYIO_DEPLOYMENT.md
 docs/internal/GITHUB_ALIGNMENT_SUMMARY.md
-CapySquash Feature Roadmap - MoSCoW.md
+CAPYSQUASH Feature Roadmap - MoSCoW.md
 PRODUCT_ROADMAP_AND_GROWTH_STRATEGY.md
 splitting-todo.md
 docs/HOMEBREW_SETUP.md

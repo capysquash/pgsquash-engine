@@ -60,6 +60,55 @@ func NewOperationTracker(databaseURL string) (*OperationTracker, error) {
 	return &OperationTracker{db: db}, nil
 }
 
+// TrackerMetrics represents operation tracking metrics
+type TrackerMetrics struct {
+	TotalOperations  int `json:"total_operations"`
+	ActiveOperations int `json:"active_operations"`
+	CompletedToday   int `json:"completed_today"`
+	FailedToday      int `json:"failed_today"`
+	AvgDurationMs    int `json:"avg_duration_ms"`
+}
+
+// GetMetrics retrieves operation metrics from the database
+func (ot *OperationTracker) GetMetrics(ctx context.Context) (*TrackerMetrics, error) {
+	metrics := &TrackerMetrics{}
+	
+	var avgDuration float64
+	
+	// Total operations
+	_ = ot.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_runs`,
+	).Scan(&metrics.TotalOperations)
+	
+	// Active operations (pending or running)
+	_ = ot.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_runs WHERE status IN ('pending', 'analyzing')`,
+	).Scan(&metrics.ActiveOperations)
+	
+	// Completed today
+	_ = ot.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_runs 
+		 WHERE status = 'complete' AND completed_at >= CURRENT_DATE`,
+	).Scan(&metrics.CompletedToday)
+	
+	// Failed today
+	_ = ot.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM migration_runs 
+		 WHERE status = 'failed' AND updated_at >= CURRENT_DATE`,
+	).Scan(&metrics.FailedToday)
+	
+	// Average duration for completed operations (in milliseconds)
+	_ = ot.db.QueryRowContext(ctx,
+		`SELECT COALESCE(AVG(processing_time_ms), 0) 
+		 FROM migration_runs 
+		 WHERE status = 'complete' AND processing_time_ms IS NOT NULL`,
+	).Scan(&avgDuration)
+	
+	metrics.AvgDurationMs = int(avgDuration)
+	
+	return metrics, nil
+}
+
 // Create creates a new operation in the database
 func (ot *OperationTracker) Create(ctx context.Context, userID, projectID, opType, safetyLevel string) (*Operation, error) {
 	op := &Operation{

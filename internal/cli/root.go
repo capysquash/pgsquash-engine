@@ -81,13 +81,13 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:     "pgsquash",
-	Short:   "pgsquash Engine - Intelligent PostgreSQL migration consolidation",
+	Short:   "pgsquash-engine - Intelligent PostgreSQL migration consolidation",
 	Version: "0.9.5-beta",
-	Long: `pgsquash Engine intelligently consolidates PostgreSQL migration files into
+	Long: `pgsquash-engine intelligently consolidates PostgreSQL migration files into
 clean, production-ready SQL while preserving data integrity, respecting
 dependencies, and validating safety at every step.
 
-The pgsquash Engine is the core consolidation engine that powers
+The pgsquash-engine is the core consolidation engine that powers
 CAPYSQUASH and provides parser-grade accuracy for migration optimization.`,
 	// UX FIX: Silence duplicate error messages - errors are already logged in main()
 	SilenceErrors: true,
@@ -1102,7 +1102,7 @@ func runInitConfig(cmd *cobra.Command, args []string) error {
 	} else {
 		color.Green("☑ Generated default configuration: %s\n", configFile)
 	}
-	fmt.Printf("Edit this file to customize pgsquash Engine behavior\n")
+	fmt.Printf("Edit this file to customize pgsquash-engine behavior\n")
 
 	return nil
 }

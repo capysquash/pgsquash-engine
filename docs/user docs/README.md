@@ -1,6 +1,6 @@
 # pgsquash Documentation
 
-Welcome to the pgsquash Engine documentation. pgsquash is an intelligent PostgreSQL migration consolidation engine that uses parser-grade accuracy and dependency-aware processing to safely reorganize your migration history.
+Welcome to the pgsquash-engine documentation. pgsquash is an intelligent PostgreSQL migration consolidation engine that uses parser-grade accuracy and dependency-aware processing to safely reorganize your migration history.
 
 ## Getting Started
 

@@ -1,16 +1,27 @@
-# pgsquash Engine
+# pgsquash-engine
 
-**The PostgreSQL migration consolidation engine.** Intelligently reorganizes your migration history into clean, production-ready SQL—without breaking anything.
+**The PostgreSQL migration consolidation engine that powers CAPYSQUASH.**
+
+Intelligently reorganizes your migration history into clean, production-ready SQL—without breaking anything.
 
 **Current version:** 1.0.0 (Production Ready) ✅
 
+**Used by:**
+- **CAPYSQUASH Platform** - The web app for one-click migration cleanup
+- **capysquash-cli** - The open-source command-line tool
+- **Custom tools** - Build your own migration tools on top of pgsquash-engine
+
 **Catalog-proven equivalence** via double-build validation. We don't just parse SQL—we prove the output produces an identical schema by running both versions through PostgreSQL and comparing the results.
 
-## Why pgsquash?
+## About pgsquash-engine
+
+**The technology behind CAPYSQUASH.** This is the open-source Go library that powers both the CAPYSQUASH Platform and capysquash-cli.
 
 **Production-ready** with comprehensive validation, safety modes, and proven equivalence guarantees.
 
-**Keep your vibe.** pgsquash Engine intelligently consolidates and optimizes your migration history while preserving dependencies, respecting safety constraints, and validating every change. Works with your existing setup—Supabase projects, Prisma schemas, Clerk auth. No migration rewrites, no new syntax to learn. Just cleaner, safer SQL.
+**For most users:** Use [CAPYSQUASH Platform](https://capysquash.dev) for one-click cleanup or [capysquash-cli](https://github.com/CAPYSQUASH/capysquash-cli) for terminal workflows.
+
+**For developers:** Build custom migration tools using pgsquash-engine's public APIs. Intelligently consolidates and optimizes your migration history while preserving dependencies, respecting safety constraints, and validating every change. Works with your existing setup—Supabase projects, Prisma schemas, Clerk auth. No migration rewrites, no new syntax to learn. Just cleaner, safer SQL.
 
 ## What it does
 
@@ -50,19 +61,39 @@ The TUI gives you a dashboard with stats, live analysis, a config wizard, depend
 
 ## Installation
 
+**For most users:** Try [CAPYSQUASH Platform](https://capysquash.dev) or install [capysquash-cli](https://github.com/CAPYSQUASH/capysquash-cli).
+
+**For developers building custom tools:**
+
 ```bash
-# Build from source
+# As a Go library
+go get github.com/CAPYSQUASH/pgsquash-engine
+
+# Or build from source
 git clone https://github.com/CAPYSQUASH/pgsquash-engine
 cd pgsquash-engine
 go build -o pgsquash cmd/pgsquash/main.go
-
-# Or install directly
-go install github.com/CAPYSQUASH/pgsquash-engine/cmd/pgsquash@latest
 ```
 
-## Quick Start by Use Case
+## Quick Start
 
-### Building with Supabase or Clerk?
+### For Most Users
+
+**Try CAPYSQUASH Platform** (30 seconds):
+- Visit https://capysquash.dev
+- Upload migrations or connect GitHub
+- Get one-click cleanup with visual dashboard
+
+**Or use capysquash-cli** (2 minutes):
+```bash
+brew install capysquash-cli
+capysquash analyze migrations/
+capysquash squash migrations/ --output clean/
+```
+
+### For Developers Using pgsquash-engine
+
+**Building with Supabase or Clerk?**
 
 ```bash
 # Auto-detects auth schemas, RLS policies, storage buckets
@@ -299,8 +330,23 @@ See the [roadmap](docs/internal/roadmap/ROADMAP.md) for details.
 
 MIT License - see LICENSE file
 
+## The CAPYSQUASH Ecosystem
+
+**pgsquash-engine** is the underlying technology that powers the CAPYSQUASH ecosystem:
+
+- **CAPYSQUASH Platform** - Web app with one-click cleanup and GitHub automation ([capysquash.dev](https://capysquash.dev))
+- **capysquash-cli** - Open-source CLI tool for terminal workflows ([GitHub](https://github.com/CAPYSQUASH/capysquash-cli))
+- **pgsquash-engine** - This library: the technology that powers everything
+
+**For most users:** Start with CAPYSQUASH Platform or capysquash-cli.
+
+**For developers:** Use pgsquash-engine to build custom migration tools.
+
+---
+
 ## Links
 
+- **CAPYSQUASH Platform**: <https://capysquash.dev>
 - **GitHub**: <https://github.com/CAPYSQUASH/pgsquash-engine>
 - **Documentation**: [docs/](docs/)
 - **Issues**: <https://github.com/CAPYSQUASH/pgsquash-engine/issues>

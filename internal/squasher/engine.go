@@ -33,6 +33,56 @@ type SquashResult struct {
 	Warnings          []string   // Warnings generated during squash
 	ProvenanceMap     *SquashMap // Provenance tracking information
 	Extensions        []string   // Extensions detected/required
+	
+	// Enhanced metrics for partner integrations
+	DetailedMetrics    *DetailedMetrics    `json:"detailed_metrics,omitempty"`
+	RecommendedActions []RecommendedAction `json:"recommended_actions,omitempty"`
+}
+
+// DetailedMetrics provides comprehensive analysis metrics
+type DetailedMetrics struct {
+	TotalMigrations     int     `json:"total_migrations"`
+	OptimizedMigrations int     `json:"optimized_migrations"`
+	ReductionPercentage float64 `json:"reduction_percentage"`
+	
+	Operations OperationBreakdown `json:"operations"`
+	
+	EstimatedTimeSavingsSeconds int     `json:"estimated_time_savings_seconds"`
+	FileSizeReductionBytes      int64   `json:"file_size_reduction_bytes"`
+	FileSizeReductionPercent    float64 `json:"file_size_reduction_percent"`
+	
+	RedundanciesFound []RedundancyDetail `json:"redundancies_found"`
+}
+
+// OperationBreakdown categorizes SQL operations
+type OperationBreakdown struct {
+	Creates      int `json:"creates"`
+	Alters       int `json:"alters"`
+	Drops        int `json:"drops"`
+	Inserts      int `json:"inserts"`
+	Updates      int `json:"updates"`
+	Deletes      int `json:"deletes"`
+	Consolidated int `json:"consolidated"`
+}
+
+// RedundancyDetail describes a specific redundancy found
+type RedundancyDetail struct {
+	Type        string `json:"type"`         // "drop_create_cycle", "duplicate_alter", etc.
+	ObjectName  string `json:"object_name"`  // "users", "posts", etc.
+	ObjectType  string `json:"object_type"`  // "table", "index", "function"
+	Severity    string `json:"severity"`     // "low", "medium", "high", "critical"
+	Description string `json:"description"`
+	FileNumbers []int  `json:"file_numbers"` // Which migration files involved
+	Savings     string `json:"savings"`      // "2 operations consolidated"
+}
+
+// RecommendedAction suggests next steps
+type RecommendedAction struct {
+	Action      string `json:"action"`       // "auto_cleanup", "manual_review", "guarded_apply"
+	Reason      string `json:"reason"`
+	Priority    string `json:"priority"`     // "high", "medium", "low"
+	AutomateURL string `json:"automate_url"` // Deep link to platform action
+	RiskLevel   string `json:"risk_level"`   // "safe", "moderate", "high"
 }
 
 type SafetyLevel string

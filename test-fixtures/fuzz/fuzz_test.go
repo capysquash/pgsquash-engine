@@ -1,4 +1,4 @@
-// Package fuzz provides property-based testing for pgsquash engine.
+// Package fuzz provides property-based testing for pgsquash-engine.
 // It generates random DDL sequences and validates that squashing preserves schema equivalence.
 package fuzz
 
@@ -362,10 +362,10 @@ func FuzzSquash(f *testing.F) {
 	generator := NewDDLGenerator()
 
 	// Add seed corpus
-	f.Add(1)   // Minimal case
-	f.Add(5)   // Small case
-	f.Add(20)  // Medium case
-	f.Add(50)  // Large case
+	f.Add(1)  // Minimal case
+	f.Add(5)  // Small case
+	f.Add(20) // Medium case
+	f.Add(50) // Large case
 
 	f.Fuzz(func(t *testing.T, migrationCount int) {
 		// Ensure reasonable bounds

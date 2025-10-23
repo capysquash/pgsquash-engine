@@ -1,4 +1,4 @@
-# GoReleaser configuration for pgsquash Engine
+# GoReleaser configuration for pgsquash-engine
 #
 # Uses goreleaser-cross for robust CGO cross-compilation to all Platforms.
 # goreleaser-cross includes pre-built toolchains for Linux, macOS, and Windows.
@@ -261,7 +261,7 @@ release:
   prerelease: auto
   mode: replace
   header: |
-    ## pgsquash Engine {{ .Version }}
+    ## pgsquash-engine {{ .Version }}
 
     **Release Date**: {{ .Date }}
 
@@ -348,7 +348,7 @@ brews:
 #   - name: pgsquash
 #     summary: PostgreSQL migration squasher and optimizer
 #     description: |
-#       pgsquash Engine analyzes PostgreSQL migration files and consolidates them
+#       pgsquash-engine analyzes PostgreSQL migration files and consolidates them
 #       into optimized, organized migration files while preserving data integrity.
 #     grade: stable
 #     confinement: classic

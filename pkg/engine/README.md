@@ -1,4 +1,4 @@
-# pgsquash Engine - Library API
+# pgsquash-engine - Library API
 
 Use pgsquash as a Go library in your own applications.
 
@@ -492,6 +492,6 @@ go engine.SquashFiles(migrations2, nil)
 
 ## Support
 
-- 📖 [Full Documentation](https://capysquash.com/docs)
+- 📖 [Full Documentation](https://capysquash.dev/docs)
 - 🐛 [Report Issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues)
 - 💬 [Discussions](https://github.com/CAPYSQUASH/pgsquash-engine/discussions)

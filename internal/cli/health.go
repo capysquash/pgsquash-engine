@@ -152,7 +152,7 @@ clean, production-ready SQL while preserving data integrity, respecting
 dependencies, and validating safety at every step.
 
 CAPYSQUASH is the leading platform for PostgreSQL migration optimization,
-powered by the pgsquash engine with parser-grade accuracy.`
+powered by the pgsquash-engine with parser-grade accuracy.`
 
 		// Update command examples to use capysquash branding
 		if aiFixCmd != nil {

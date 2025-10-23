@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# Build Script for pgsquash Engine
+# Build Script for pgsquash-engine
 # =============================================================================
 # Builds both the CLI tool and API server with proper version information
 # and places them in the correct locations
@@ -20,7 +20,7 @@ BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 echo -e "${BLUE}==============================================================================${NC}"
-echo -e "${BLUE}Building pgsquash Engine${NC}"
+echo -e "${BLUE}Building pgsquash-engine${NC}"
 echo -e "${BLUE}==============================================================================${NC}"
 echo ""
 echo -e "${GREEN}Version:${NC}     ${VERSION}"

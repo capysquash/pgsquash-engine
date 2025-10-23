@@ -239,7 +239,7 @@ func applyCapySquashDefaults(config *CapySquashConfig) {
 }
 
 // MergeWithEngineConfig merges CapySquashConfig into the engine Config
-// CapySquash settings take precedence for overlapping fields
+// CAPYSQUASH settings take precedence for overlapping fields
 func (c *CapySquashConfig) MergeWithEngineConfig(engineConfig *Config) *Config {
 	// Create a copy of the engine config
 	merged := *engineConfig

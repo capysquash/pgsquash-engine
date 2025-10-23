@@ -1,5 +1,5 @@
 # =============================================================================
-# pgsquash Engine Dockerfile
+# pgsquash-engine Dockerfile
 # ======================================================================
 
 # Build arguments
@@ -109,7 +109,7 @@ USER pgsquash
 WORKDIR /app
 
 # Add OCI labels
-LABEL org.opencontainers.image.title="pgsquash Engine" \
+LABEL org.opencontainers.image.title="pgsquash-engine" \
       org.opencontainers.image.description="PostgreSQL migration squasher and optimizer" \
       org.opencontainers.image.version="${BUILD_VERSION}" \
       org.opencontainers.image.created="${BUILD_DATE}" \

@@ -192,4 +192,4 @@ Found a bug or have a suggestion? Please open an issue or submit a pull request!
 
 ## 📄 License
 
-These scripts are part of the pgsquash Engine and are licensed under the same terms.
+These scripts are part of the pgsquash-engine and are licensed under the same terms.

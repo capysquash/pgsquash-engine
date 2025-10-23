@@ -48,6 +48,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 	
 	internal_config "github.com/CAPYSQUASH/pgsquash-engine/internal/config"
 	internal_parser "github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
@@ -93,6 +94,9 @@ type Config struct {
 	// OutputFormat determines file organization (default: FormatSingle)
 	OutputFormat OutputFormat
 	
+	// SeparateDataOps when true, returns separate DDL and data operations files
+	SeparateDataOps bool
+	
 	// EnableStreaming enables memory-efficient processing for large datasets (default: false)
 	EnableStreaming bool
 	
@@ -109,8 +113,14 @@ type Config struct {
 
 // SquashResult contains the results of a squashing operation.
 type SquashResult struct {
-	// SQL contains the consolidated migration SQL
+	// SQL contains the consolidated migration SQL (BaselineSQL for backwards compatibility)
 	SQL string
+	
+	// BaselineSQL contains DDL-only SQL (same as SQL for single-file mode)
+	BaselineSQL string
+	
+	// DataOperationsSQL contains data operations SQL (INSERT, UPDATE, DELETE)
+	DataOperationsSQL string
 	
 	// Warnings contains any warnings generated during squashing
 	Warnings []string
@@ -123,6 +133,36 @@ type SquashResult struct {
 	
 	// ProcessingTime is the duration of the squashing operation
 	ProcessingTime string
+	
+	// Extensions contains detected/required PostgreSQL extensions
+	Extensions []string
+	
+	// ProvenanceInfo contains metadata about the squashing operation
+	ProvenanceInfo *ProvenanceInfo
+	
+	// DetailedMetrics provides comprehensive analysis metrics for partner integrations
+	DetailedMetrics *DetailedMetrics `json:"detailed_metrics,omitempty"`
+	
+	// RecommendedActions suggests next steps based on analysis
+	RecommendedActions []RecommendedAction `json:"recommended_actions,omitempty"`
+}
+
+// ProvenanceInfo contains metadata about the squashing operation
+type ProvenanceInfo struct {
+	// Version of the squasher used
+	Version string
+	
+	// SafetyLevel applied during squashing
+	SafetyLevel string
+	
+	// InputFiles lists source migration files
+	InputFiles []string
+	
+	// OutputFiles lists generated files
+	OutputFiles []string
+	
+	// ContentHash for integrity verification
+	ContentHash string
 }
 
 // AnalysisResult contains the results of migration analysis.
@@ -211,12 +251,13 @@ func SquashDirectory(directory string, config *Config) (*SquashResult, error) {
 			return nil, err
 		}
 		
+		// Note: Streaming mode doesn't use engine struct, so stats are limited
 		return &SquashResult{
 			SQL:                sql,
 			Warnings:           warnings,
 			FilesProcessed:     countFilesInDir(directory),
-			ObjectsConsolidated: 0, // TODO: track this
-			ProcessingTime:     "N/A",
+			ObjectsConsolidated: 0, // Streaming mode doesn't track this yet
+			ProcessingTime:     "N/A", // Streaming mode doesn't track this yet
 		}, nil
 	}
 	
@@ -266,7 +307,42 @@ func SquashFiles(migrations map[int]string, config *Config) (*SquashResult, erro
 	
 	engine := internal_squasher.NewEngine(engineConfig)
 	
-	// Perform squashing
+	// Get statistics from engine
+	stats := engine.GetStats()
+	
+	// Use separate files mode if requested
+	if config.SeparateDataOps {
+		internalResult, err := engine.SquashWithSeparateFiles(migrations)
+		if err != nil {
+			return nil, err
+		}
+		
+		// Build provenance info
+		var provenanceInfo *ProvenanceInfo
+		if internalResult.ProvenanceMap != nil {
+			provenanceInfo = &ProvenanceInfo{
+				Version:      internalResult.ProvenanceMap.Version,
+				SafetyLevel:  internalResult.ProvenanceMap.SafetyMode,
+				InputFiles:   internalResult.ProvenanceMap.Inputs,
+				OutputFiles:  internalResult.ProvenanceMap.Outputs,
+				ContentHash:  internalResult.ProvenanceMap.ContentHash,
+			}
+		}
+		
+		return &SquashResult{
+			SQL:                 internalResult.BaselineSQL, // For backwards compatibility
+			BaselineSQL:         internalResult.BaselineSQL,
+			DataOperationsSQL:   internalResult.DataOperationsSQL,
+			Warnings:            internalResult.Warnings,
+			FilesProcessed:      len(migrations),
+			ObjectsConsolidated: int(stats.ConsolidationsApplied),
+			ProcessingTime:      formatDuration(stats.ProcessingTime),
+			Extensions:          internalResult.Extensions,
+			ProvenanceInfo:      provenanceInfo,
+		}, nil
+	}
+	
+	// Standard single-file mode
 	sql, warnings, err := engine.Squash(migrations)
 	if err != nil {
 		return nil, err
@@ -274,10 +350,14 @@ func SquashFiles(migrations map[int]string, config *Config) (*SquashResult, erro
 	
 	return &SquashResult{
 		SQL:                 sql,
+		BaselineSQL:         sql, // Same as SQL in single-file mode
+		DataOperationsSQL:   "",
 		Warnings:            warnings,
 		FilesProcessed:      len(migrations),
-		ObjectsConsolidated: 0, // TODO: track this
-		ProcessingTime:      "N/A",
+		ObjectsConsolidated: int(stats.ConsolidationsApplied),
+		ProcessingTime:      formatDuration(stats.ProcessingTime),
+		Extensions:          []string{},
+		ProvenanceInfo:      nil,
 	}, nil
 }
 
@@ -323,12 +403,18 @@ func AnalyzeDirectory(directory string, config *Config) (*AnalysisResult, error)
 	warnings := tracker.ValidateConsistency()
 	
 	// Convert to public types
+	// Convert ObjectsByType map to string keys
+	objectsByTypeStr := make(map[string]int)
+	for objType, count := range stats.ObjectsByType {
+		objectsByTypeStr[string(objType)] = count
+	}
+	
 	result := &AnalysisResult{
 		TotalFiles:      len(migrations),
 		TotalStatements: stats.TotalStatements,
 		TotalObjects:    stats.TotalObjects,
 		Redundancies:    convertRedundancies(redundancies),
-		ObjectsByType:   stats.ObjectCounts,
+		ObjectsByType:   objectsByTypeStr,
 		Warnings:        warnings,
 	}
 	
@@ -354,8 +440,8 @@ func convertConfig(config *Config) *internal_config.Config {
 	}
 	
 	// Create internal config with defaults
-	internalCfg := internal_config.NewDefaultConfig()
-	internalCfg.Safety.Level = string(safetyLevel)
+	internalCfg := internal_config.DefaultConfig()
+	internalCfg.SafetyLevel = string(safetyLevel)
 	internalCfg.Output.Format = string(config.OutputFormat)
 	
 	return internalCfg
@@ -388,7 +474,8 @@ func loadAndParseMigrations(directory string) ([]*internal_types.Migration, erro
 			return nil, fmt.Errorf("failed to read %s: %w", file, err)
 		}
 		
-		migration, err := internal_parser.ParseFile(file, string(content))
+		// Parse migration file
+		migration, err := internal_parser.ParseMigration(string(content), file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse %s: %w", file, err)
 		}
@@ -407,15 +494,44 @@ func countFilesInDir(directory string) int {
 	return len(files)
 }
 
-func convertRedundancies(internal []tracking.RedundantObject) []Redundancy {
+func convertRedundancies(internal []internal_tracking.RedundancyReport) []Redundancy {
 	var redundancies []Redundancy
 	for _, r := range internal {
+		// Determine severity based on pattern
+		severity := "medium"
+		if r.Pattern == internal_tracking.PatternDropCreateSequence || 
+		   r.Pattern == internal_tracking.PatternDuplicateOperations {
+			severity = "high"
+		}
+		
 		redundancies = append(redundancies, Redundancy{
-			Type:        r.Reason,
-			ObjectName:  r.Object.Name,
-			Description: r.Reason,
-			Severity:    "medium",
+			Type:        string(r.Pattern),
+			ObjectName:  r.Object,
+			Description: r.Explanation,
+			Severity:    severity,
 		})
 	}
 	return redundancies
+}
+
+// formatDuration converts time.Duration to human-readable string
+func formatDuration(d time.Duration) string {
+	if d == 0 {
+		return "N/A"
+	}
+	
+	// Round to milliseconds for display
+	ms := d.Milliseconds()
+	
+	if ms < 1000 {
+		return fmt.Sprintf("%dms", ms)
+	}
+	
+	if ms < 60000 {
+		return fmt.Sprintf("%.2fs", float64(ms)/1000.0)
+	}
+	
+	minutes := ms / 60000
+	seconds := (ms % 60000) / 1000
+	return fmt.Sprintf("%dm%ds", minutes, seconds)
 }

@@ -317,10 +317,10 @@ Current version: `v0.9.5-beta`
 
 ## Support
 
-- 📖 [Documentation](https://capysquash.com/docs)
+- 📖 [Documentation](https://capysquash.dev/docs)
 - 🐛 [Report Issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues)
 - 💬 [Discussions](https://github.com/CAPYSQUASH/pgsquash-engine/discussions)
-- 📧 [Email Support](mailto:support@capysquash.com)
+- 📧 [Email Support](mailto:support@capysquash.dev)
 
 ## License
 
