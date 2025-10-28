@@ -26,7 +26,7 @@ func Execute() error {
 //
 // Example:
 //
-//	cli.SetVersionInfo("1.0.0", "2024-10-21T10:00:00Z", "abc123")
+//	cli.SetVersionInfo("0.9.5", "2024-10-21T10:00:00Z", "abc123")
 func SetVersionInfo(version, buildDate, gitCommit string) {
 	internal_cli.SetVersionInfo(version, buildDate, gitCommit)
 }

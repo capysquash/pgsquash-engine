@@ -1,10 +1,11 @@
 package consolidation
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
@@ -62,13 +63,14 @@ func (r *DropCreateCycleRule) Apply(lifecycle *tracking.ObjectLifecycle, engine 
 	}
 
 	// Collect ALL CREATE statements (not just the one after DROP)
+	// CRITICAL: We MUST include CREATE statements in originalStmts because they contain
+	// dependency information (extracted by parser from AST) that's needed for proper ordering
 	var allCreateStmts []types.Statement
 	for _, event := range lifecycle.History {
 		if event.Operation == types.OpCreate {
 			allCreateStmts = append(allCreateStmts, event.Statement)
-			if dropStmt == nil { // If no DROP found yet, add CREATE to originalStmts
-				originalStmts = append(originalStmts, event.Statement)
-			}
+			// ALWAYS add CREATE to originalStmts to preserve dependencies
+			originalStmts = append(originalStmts, event.Statement)
 		}
 	}
 

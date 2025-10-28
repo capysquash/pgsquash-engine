@@ -6,8 +6,8 @@ import (
 	"os"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/styles"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/viewtypes"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/styles"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/viewtypes"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )

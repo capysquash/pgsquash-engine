@@ -223,7 +223,34 @@ BEGIN
     CREATE PUBLICATION supabase_realtime;
   END IF;
 END
-$$;`
+$$;
+
+-- Create storage schema and buckets table stub (Supabase Storage)
+CREATE SCHEMA IF NOT EXISTS storage;
+
+CREATE TABLE IF NOT EXISTS storage.buckets (
+    id TEXT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    owner UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    public BOOLEAN DEFAULT FALSE,
+    avif_autodetection BOOLEAN DEFAULT FALSE,
+    file_size_limit BIGINT,
+    allowed_mime_types TEXT[]
+);
+
+CREATE TABLE IF NOT EXISTS storage.objects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    bucket_id TEXT REFERENCES storage.buckets(id),
+    name TEXT NOT NULL,
+    owner UUID REFERENCES auth.users(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    last_accessed_at TIMESTAMPTZ,
+    metadata JSONB,
+    UNIQUE(bucket_id, name)
+);`
 }
 
 // GenerateAuth0Compatibility creates Auth0 authentication compatibility layer

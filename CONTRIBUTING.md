@@ -1,6 +1,8 @@
-# Contributing to pgsquash
+# Contributing to pgsquash-engine
 
-Thank you for your interest in contributing to pgsquash! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to pgsquash-engine! This is the core technology that powers [CAPYSQUASH](https://capysquash.dev) and [capysquash-cli](https://github.com/CAPYSQUASH/capysquash-cli).
+
+This document provides guidelines and instructions for contributing to the pgsquash-engine library.
 
 ## Code of Conduct
 

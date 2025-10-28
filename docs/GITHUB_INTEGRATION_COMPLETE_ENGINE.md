@@ -476,5 +476,5 @@ Want to help complete the remaining features? Check out:
 ---
 
 **Last Updated**: October 20, 2025
-**Version**: 1.0.0
+**Version**: 0.9.5
 **Status**: Production Ready ☑

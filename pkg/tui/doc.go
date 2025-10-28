@@ -31,31 +31,29 @@
 //
 // # Advanced Usage
 //
-// For more control, create a Model and configure options:
+// For more control, create a Model directly and use custom Bubbletea options:
 //
 //	package main
 //
 //	import (
 //		"log"
-//		"os"
 //		"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui"
+//		tea "github.com/charmbracelet/bubbletea"
 //	)
 //
 //	func main() {
-//		// Verify migration directory exists
-//		if _, err := os.Stat("./migrations"); err != nil {
-//			log.Fatalf("Migration directory not found: %v", err)
+//		// Create TUI model
+//		model := tui.NewModel("./migrations", "pgsquash.config.json")
+//
+//		// Custom Bubbletea options
+//		opts := []tea.ProgramOption{
+//			tea.WithAltScreen(),
+//			tea.WithMouseCellMotion(),
 //		}
 //
-//		// Create TUI with custom options
-//		model := tui.New(tui.Options{
-//			MigrationDir: "./migrations",
-//			ConfigPath:   ".pgsquash.config.json",
-//			AltScreen:    true,
-//		})
-//
-//		// Run the TUI
-//		if err := model.Run(); err != nil {
+//		// Run the TUI with custom options
+//		p := tea.NewProgram(model, opts...)
+//		if _, err := p.Run(); err != nil {
 //			log.Fatalf("TUI error: %v", err)
 //		}
 //	}
@@ -91,35 +89,6 @@
 //   - ViewDependencyGraph: Visual dependency graph
 //   - ViewProgress: Real-time operation progress
 //   - ViewHelp: Keyboard shortcuts and help
-//
-// # Custom Bubbletea Options
-//
-// For advanced users who need full control over the Bubbletea program:
-//
-//	package main
-//
-//	import (
-//		"log"
-//		"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui"
-//		tea "github.com/charmbracelet/bubbletea"
-//	)
-//
-//	func main() {
-//		model := tui.New(tui.Options{
-//			MigrationDir: "./migrations",
-//		})
-//
-//		// Custom Bubbletea options
-//		opts := []tea.ProgramOption{
-//			tea.WithAltScreen(),
-//			tea.WithMouseCellMotion(),
-//			tea.WithMouseAllMotion(),
-//		}
-//
-//		if err := model.RunWithOptions(opts...); err != nil {
-//			log.Fatal(err)
-//		}
-//	}
 //
 // # Integration with CLI Tools
 //

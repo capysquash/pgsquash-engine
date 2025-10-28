@@ -8,8 +8,8 @@ import (
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
 
@@ -322,6 +322,8 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *types.Statem
 		if node.CommentStmt.Object != nil {
 			stmt.ObjectName = extractCommentObjectNameWithNormalization(node.CommentStmt, normalizer)
 			stmt.ObjectType = mapCommentObjectType(node.CommentStmt.Objtype)
+			// Extract dependency on the object being commented
+			stmt.Dependencies = extractCommentDependenciesWithNormalization(node.CommentStmt, normalizer)
 		}
 
 	case *pg_query.Node_CreatePublicationStmt:
@@ -428,8 +430,8 @@ func categorizeStatement(stmt types.Statement) types.Category {
 	case types.TypeExtension:
 		return types.CategoryExtensions
 	case types.TypeComment:
-		// Comments follow the object they're commenting on
-		return types.CategoryFoundation // Default, could be enhanced
+		// Comments must come after the objects they reference
+		return types.CategoryComments
 	default:
 		return types.CategoryFoundation
 	}
@@ -819,6 +821,39 @@ func mapCommentObjectType(objtype pg_query.ObjectType) types.ObjectType {
 	default:
 		return types.TypeComment
 	}
+}
+
+// extractCommentDependenciesWithNormalization extracts the target object that a COMMENT ON references
+func extractCommentDependenciesWithNormalization(commentStmt *pg_query.CommentStmt, normalizer *ContextualNormalizer) []string {
+	if commentStmt.Object == nil {
+		return nil
+	}
+
+	var deps []string
+
+	// Extract the target object name
+	targetName := extractObjectNameWithNormalization(commentStmt.Object, normalizer)
+	if targetName != "" {
+		// For COMMENT ON COLUMN, extract just the table name
+		if commentStmt.Objtype == pg_query.ObjectType_OBJECT_COLUMN {
+			// Format is: table_name.column_name, we want just table_name
+			parts := strings.Split(targetName, ".")
+			if len(parts) >= 2 {
+				// If schema.table.column, use schema.table
+				if len(parts) == 3 {
+					deps = append(deps, fmt.Sprintf("%s.%s", parts[0], parts[1]))
+				} else {
+					// If table.column, use just table
+					deps = append(deps, parts[0])
+				}
+			}
+		} else {
+			// For other object types, use the full name
+			deps = append(deps, targetName)
+		}
+	}
+
+	return deps
 }
 
 // Processing state to prevent duplicate analysis

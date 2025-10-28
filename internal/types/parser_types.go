@@ -171,6 +171,7 @@ const (
 	CategoryIndexes     Category = "indexes"     // Indexes and index-like objects
 	CategoryFunctions   Category = "functions"   // Functions, procedures, triggers
 	CategoryTriggers    Category = "triggers"    // Trigger definitions
+	CategoryComments    Category = "comments"    // COMMENT ON statements (must come after objects)
 	CategorySecurity    Category = "security"    // RLS policies, grants, roles
 	CategoryData        Category = "data"        // INSERT, UPDATE, DELETE statements
 	CategoryExtensions  Category = "extensions"  // PostgreSQL extensions

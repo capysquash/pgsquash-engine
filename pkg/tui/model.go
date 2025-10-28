@@ -3,8 +3,8 @@ package tui
 import (
 	"fmt"
 
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/styles"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/views"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/styles"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/views"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -37,7 +37,7 @@ func NewModel(migrationDir, configPath string) *Model {
 	m.views[ViewAnalysis] = views.NewAnalysisView(migrationDir)
 	m.views[ViewConfig] = views.NewConfigView(configPath)
 	m.views[ViewDependencyGraph] = views.NewDependencyGraphView(migrationDir)
-	m.views[ViewProgress] = views.NewProgressView()
+	m.views[ViewProgress] = views.NewProgressView(migrationDir, configPath)
 	m.views[ViewHelp] = views.NewHelpView()
 
 	// Start with dashboard

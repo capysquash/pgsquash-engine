@@ -41,7 +41,8 @@ var (
 	// Dependency Resolution Patterns - used in internal/squasher/unified_dependency_resolver.go
 	ForeignKeyPattern = regexp.MustCompile(`(?i)FOREIGN\s+KEY\s*\([^)]+\)\s*REFERENCES\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`)
 	DirectRefPattern = regexp.MustCompile(`(?i)REFERENCES\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`)
-	CommentPattern = regexp.MustCompile(`--[^\n]*`)
+	SQLCommentPattern = regexp.MustCompile(`--[^\n]*`) // SQL line comments (-- ...)
+	CommentOnPattern = regexp.MustCompile(`(?i)COMMENT\s+ON\s+(?:COLUMN|TABLE)\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`) // COMMENT ON TABLE/COLUMN statements
 	QualifiedNamePattern = regexp.MustCompile(`(?i)([a-zA-Z_][a-zA-Z0-9_]*)\.[a-zA-Z_][a-zA-Z0-9_]*`)
 	InsertIntoPattern = regexp.MustCompile(`(?i)INSERT\s+INTO\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)\s*\(\s*([^)]+)\)`)
 	ExecuteFunctionPattern = regexp.MustCompile(`(?i)EXECUTE\s+FUNCTION\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?)`)
@@ -99,6 +100,10 @@ var (
 
 	// Enum Deduplication Pattern - used in internal/tracking/consolidation/enum_dedup_rule.go
 	EnumTypePattern = regexp.MustCompile(`(?is)CREATE\s+TYPE\s+([a-zA-Z_][a-zA-Z0-9_]*)\s+AS\s+ENUM\s*\((.*?)\)`)
+
+	// Column Type Usage Pattern - used in internal/squasher/unified_dependency_resolver.go
+	// Matches: column_name type_name (with optional DEFAULT, CHECK, NOT NULL, etc.)
+	ColumnTypePattern = regexp.MustCompile(`(?i)\b([a-zA-Z_][a-zA-Z0-9_]*)\s+([a-zA-Z_][a-zA-Z0-9_]*)(?:\s|,|\)|$|DEFAULT|CHECK|NOT NULL|UNIQUE|PRIMARY KEY|REFERENCES)`)
 
 	// PostgreSQL Type Patterns - used in internal/types/postgresql_types.go
 	ArrayTypePattern = regexp.MustCompile(`^(.+?)(\[\d*\])+$`)

@@ -682,6 +682,16 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		warnings = squashResult.Warnings
 		migrationCount = len(migrations)
 
+		// Create output directory before writing files
+		if err := os.MkdirAll(cfg.Output.Directory, 0755); err != nil {
+			return errors.NewError(
+				errors.ErrorCodeValidationFailed,
+				fmt.Sprintf("Failed to create output directory '%s'", cfg.Output.Directory),
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithFile(cfg.Output.Directory).WithInnerError(err).WithSuggestion("Check directory permissions and ensure parent directory exists")
+		}
+
 		// Write data operations file if present
 		if squashResult.DataOperationsSQL != "" {
 			dataPath := filepath.Join(cfg.Output.Directory, "010_data.sql")
@@ -699,7 +709,7 @@ func runSquash(cmd *cobra.Command, args []string) error {
 		// Write provenance map
 		if squashResult.ProvenanceMap != nil {
 			provenance := squasher.NewProvenanceTracker(
-				"1.0.0",
+				"0.9.5",
 				cfg.SafetyLevel,
 				cfg.PostgreSQLFeatures.TargetVersion,
 				analysis.RequiredExtensions,

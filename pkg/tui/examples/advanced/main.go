@@ -109,15 +109,8 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Using config file: %s\n", configPath)
 	}
 
-	// Create TUI model with options
-	model := tui.New(tui.Options{
-		MigrationDir: migrationDir,
-		ConfigPath:   configPath,
-		AltScreen:    true,
-	})
-
-	// Run the TUI
-	return model.Run()
+	// Launch the TUI using the simple API
+	return tui.Launch(migrationDir, configPath)
 }
 
 // runTUIAnalyze launches the TUI directly in analysis view
@@ -148,15 +141,8 @@ func runTUIConfig(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Launching TUI configuration wizard: %s\n", configFile)
 	}
 
-	// Create model with custom options for config view
-	model := tui.New(tui.Options{
-		MigrationDir: ".",
-		ConfigPath:   configFile,
-		AltScreen:    true,
-	})
-
-	// Run with config view
-	return model.RunWithView(tui.ViewConfig)
+	// Launch directly into config view
+	return tui.LaunchWithView(".", configFile, tui.ViewConfig)
 }
 
 // runTUIDepGraph launches the TUI directly in dependency graph view
@@ -171,24 +157,25 @@ func runTUIDepGraph(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Launching TUI dependency graph view: %s\n", migrationDir)
 	}
 
-	// You can also use RunWithOptions for more control
-	model := tui.New(tui.Options{
-		MigrationDir: migrationDir,
-		ConfigPath:   configPath,
-	})
+	// For advanced control, you can create the model directly and use custom bubbletea options
+	model := tui.NewModel(migrationDir, configPath)
 
 	opts := []tea.ProgramOption{
 		tea.WithAltScreen(),
 		tea.WithMouseCellMotion(), // Enable mouse support for graph
 	}
 
+	p := tea.NewProgram(model, opts...)
+
 	// Send navigation message after program starts
 	go func() {
-		// Note: This is a bit hacky, but demonstrates how to send messages
-		// In production, consider using the RunWithView method instead
+		p.Send(tui.NavigateMsg{View: tui.ViewDependencyGraph})
 	}()
 
-	return model.RunWithOptions(opts...)
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("TUI error: %w", err)
+	}
+	return nil
 }
 
 // Helper functions

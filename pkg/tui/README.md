@@ -1,17 +1,17 @@
 # TUI Package - Public API for pgsquash Terminal User Interface
 
-The `pkg/tui` package provides a public API for integrating the pgsquash Terminal User Interface (TUI) into external applications like capysquash-cli.
+The `pkg/tui` package provides the complete Terminal User Interface (TUI) implementation for pgsquash, fully accessible to external applications like capysquash-cli.
 
 ## Overview
 
-This package exports a clean, stable API for the interactive terminal interface, allowing:
+This package provides a complete, production-ready TUI with:
 - ✅ Interactive migration analysis
 - ✅ Real-time dependency visualization
 - ✅ Configuration wizard
 - ✅ Progress monitoring
 - ✅ Keyboard-driven navigation
 
-The actual TUI implementation remains in `internal/tui/` (private), while this package provides a public wrapper that external tools can depend on.
+**As of version 0.9.5+**, the TUI implementation is fully public (moved from `internal/tui` to `pkg/tui`), making it easy to integrate into any Go application or build custom TUI-based tools.
 
 ## Installation
 
@@ -40,34 +40,32 @@ func main() {
 }
 ```
 
-### With Options
+### Advanced Usage
 
-For more control over the TUI behavior:
+For more control, create the model directly and use custom Bubbletea options:
 
 ```go
 package main
 
 import (
     "log"
-    "os"
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/tui"
+    tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
-    // Verify migration directory exists
-    if _, err := os.Stat("./migrations"); err != nil {
-        log.Fatalf("Migration directory not found: %v", err)
+    // Create TUI model directly
+    model := tui.NewModel("./migrations", "pgsquash.config.json")
+
+    // Custom Bubbletea options
+    opts := []tea.ProgramOption{
+        tea.WithAltScreen(),
+        tea.WithMouseCellMotion(),
     }
 
-    // Create TUI with custom options
-    model := tui.New(tui.Options{
-        MigrationDir: "./migrations",
-        ConfigPath:   ".pgsquash.config.json",
-        AltScreen:    true,
-    })
-
-    // Run the TUI
-    if err := model.Run(); err != nil {
+    // Run with custom options
+    p := tea.NewProgram(model, opts...)
+    if _, err := p.Run(); err != nil {
         log.Fatalf("TUI error: %v", err)
     }
 }
@@ -111,42 +109,13 @@ func main() {
 
 ## API Reference
 
-### Types
+### Core Functions
 
-#### `Model`
-```go
-type Model struct { /* opaque */ }
-```
-Represents the TUI application model. This is an opaque type wrapping the internal implementation.
-
-#### `Options`
-```go
-type Options struct {
-    MigrationDir string   // Directory containing migration files
-    ConfigPath   string   // Path to configuration file
-    InitialView  ViewType // Optional: which view to show on startup
-    AltScreen    bool     // Enable alternate screen buffer (recommended)
-}
-```
-Configuration options for creating a new TUI instance.
-
-#### `ViewType`
-```go
-type ViewType int
-```
-Represents different views in the TUI. Use the exported constants (`ViewDashboard`, `ViewAnalysis`, etc.).
-
-### Functions
-
-#### `New(opts Options) *Model`
-Creates a new TUI model with the given options.
+#### `NewModel(migrationDir, configPath string) *Model`
+Creates a new TUI model. This is the primary way to create a TUI instance.
 
 ```go
-model := tui.New(tui.Options{
-    MigrationDir: "./migrations",
-    ConfigPath:   "pgsquash.config.json",
-    AltScreen:    true,
-})
+model := tui.NewModel("./migrations", "pgsquash.config.json")
 ```
 
 #### `Launch(migrationDir, configPath string) error`
@@ -168,18 +137,21 @@ if err := tui.LaunchWithView("./migrations", "", tui.ViewAnalysis); err != nil {
 }
 ```
 
-### Methods
+### Types
 
-#### `(*Model) Run() error`
-Starts the TUI and blocks until the user exits. Returns an error if the TUI encounters a fatal error.
-
+#### `Model`
 ```go
-model := tui.New(tui.Options{
-    MigrationDir: "./migrations",
-    AltScreen:    true,
-})
-if err := model.Run(); err != nil {
-    log.Fatal(err)
+type Model struct {
+    // Public fields and methods - see model.go
+}
+```
+The main TUI application model. Implements the Bubbletea `tea.Model` interface.
+
+#### `ViewType`
+```go
+type ViewType int
+```
+Represents different views in the TUI. Use the exported constants (`ViewDashboard`, `ViewAnalysis`, etc.).
 }
 ```
 
@@ -264,7 +236,7 @@ func runAnalysis(migrationDir string) error {
             return nil
         }
     }
-    
+
     // Fallback to non-interactive mode
     return runNonInteractiveAnalysis(migrationDir)
 }
@@ -383,39 +355,33 @@ go run pkg/tui/examples/advanced/main.go tui analyze ./migrations
 ## Architecture
 
 ```
-pkg/tui/              # Public API (this package)
-├── api.go            # Main API implementation
+pkg/tui/              # Fully public TUI implementation
+├── api.go            # Convenience functions (Launch, LaunchWithView)
 ├── doc.go            # Package documentation
+├── model.go          # TUI application model (Bubbletea)
+├── types.go          # Type re-exports
+├── styles/           # Visual styling with Lipgloss
+├── views/            # Different TUI views (dashboard, analysis, etc.)
+├── viewtypes/        # View type definitions and messages
 └── examples/         # Usage examples
-
-internal/tui/         # Private implementation
-├── model.go          # TUI application model
-├── types.go          # Type definitions
-├── styles/           # Visual styling
-├── views/            # Different TUI views
-└── viewtypes/        # View type definitions
 ```
 
-The public API (`pkg/tui`) wraps the internal implementation (`internal/tui`) to provide a stable interface that external tools can depend on without being affected by internal refactoring.
+**Note:** As of version 0.9.5+, the entire TUI implementation is public. There is no longer an `internal/tui` package - everything needed to build, customize, or extend the TUI is in `pkg/tui`.
 
-## Migration from Internal Package
+## What Changed (0.9.5+ Migration Notes)
 
-If you were previously importing `internal/tui` directly, update your imports:
+If you were using the TUI before version 0.9.5:
 
-**Before:**
-```go
-import "github.com/CAPYSQUASH/pgsquash-engine/internal/tui"
-```
+**Before (0.8.x - 0.9.4):**
+- TUI implementation was in `internal/tui` (not accessible)
+- Public API in `pkg/tui` was a wrapper with `tui.New(tui.Options{...})`
+- Limited ability to customize or extend
 
-**After:**
-```go
-import "github.com/CAPYSQUASH/pgsquash-engine/pkg/tui"
-```
-
-**Changes:**
-- Use `tui.New()` instead of `tui.NewModel()`
-- Use `model.Run()` instead of manually creating a Bubbletea program
-- View types are exported with `tui.View` prefix (e.g., `tui.ViewDashboard`)
+**Now (0.9.5+):**
+- Entire TUI is in `pkg/tui` (fully accessible)
+- Simplified API: `tui.NewModel()`, `tui.Launch()`, `tui.LaunchWithView()`
+- Full access to all views, styles, and types
+- Can build custom views or extend existing ones
 
 ## Support
 

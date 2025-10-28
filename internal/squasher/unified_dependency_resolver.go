@@ -2,6 +2,7 @@ package squasher
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -43,8 +44,9 @@ func NewUnifiedDependencyResolver() *UnifiedDependencyResolver {
 		types.CategoryIndexes:     3, // Indexes (after constraints)
 		types.CategoryFunctions:   4, // Functions and procedures
 		types.CategoryTriggers:    5, // Triggers (after functions)
-		types.CategorySecurity:    6, // RLS policies, grants
-		types.CategoryData:        7, // INSERT/UPDATE data operations
+		types.CategoryComments:    6, // COMMENT ON statements (after objects exist)
+		types.CategorySecurity:    7, // RLS policies, grants
+		types.CategoryData:        8, // INSERT/UPDATE data operations
 	}
 
 	// Define object type ordering within categories
@@ -83,8 +85,10 @@ func NewUnifiedDependencyResolver() *UnifiedDependencyResolver {
 		// Publications, etc.
 		types.TypePublication: 80,
 		types.TypeComment:     90,
-		types.TypeDoBlock:     91,
-		types.TypeUnknown:     100,
+		// NOTE: DO blocks containing CREATE TYPE should be treated as types (order 11)
+		// This is handled dynamically in getTypeOrder()
+		types.TypeDoBlock: 91,
+		types.TypeUnknown: 100,
 	}
 
 	return resolver
@@ -476,6 +480,23 @@ func (udr *UnifiedDependencyResolver) getTypeOrder(objectType types.ObjectType) 
 	return 100 // Default order
 }
 
+func (udr *UnifiedDependencyResolver) getTypeOrderForLifecycle(objectType types.ObjectType, lifecycle *tracking.ObjectLifecycle) int {
+	// Special handling for DO blocks that contain CREATE TYPE - treat them as types
+	if objectType == types.TypeDoBlock && lifecycle != nil {
+		// Check if any of the lifecycle's history contains CREATE TYPE
+		for _, event := range lifecycle.History {
+			sqlUpper := strings.ToUpper(event.Statement.SQL)
+			if strings.Contains(sqlUpper, "CREATE TYPE") && strings.Contains(sqlUpper, "AS ENUM") {
+				// This is a DO block wrapping a CREATE TYPE - prioritize it like an enum
+				utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("DO block contains CREATE TYPE, treating as enum (order 11 instead of 91)")
+				return 11 // Same as TypeEnum
+			}
+		}
+	}
+
+	return udr.getTypeOrder(objectType)
+}
+
 func (udr *UnifiedDependencyResolver) objectInList(obj tracking.ObjectID, list []tracking.ObjectID) bool {
 	for _, item := range list {
 		if item.Type == obj.Type && item.Name == obj.Name {
@@ -549,6 +570,10 @@ func (udr *UnifiedDependencyResolver) analyzeSQLDependencies(
 	// These are more accurate than regex-based extraction, especially for views
 	for _, stmt := range result.OriginalStatements {
 		info.Dependencies = append(info.Dependencies, stmt.Dependencies...)
+		// Log what dependencies we found from the parser
+		if len(stmt.Dependencies) > 0 {
+			utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Parser found dependencies for %s: %v", objectKey, stmt.Dependencies)
+		}
 	}
 
 	sql := result.ConsolidatedSQL
@@ -563,7 +588,7 @@ func (udr *UnifiedDependencyResolver) analyzeSQLDependencies(
 	case types.CategoryFoundation:
 		info.Dependencies = append(info.Dependencies, udr.extractSchemaDependencies(sql)...)
 		info.Dependencies = append(info.Dependencies, udr.extractExtensionDependencies(sql)...)
-		info.Dependencies = append(info.Dependencies, udr.extractTypeDependencies(sql)...)
+		// Type dependencies are already extracted by parser from AST and included in stmt.Dependencies above
 		// CRITICAL: Extract table-to-table dependencies (foreign keys) for correct ordering
 		info.Dependencies = append(info.Dependencies, udr.extractTableDependencies(sql)...)
 		info.Provides = append(info.Provides, udr.extractTableProvisions(sql)...)
@@ -765,12 +790,16 @@ func (udr *UnifiedDependencyResolver) extractTableDependencies(sql string) []str
 	}
 
 	// Priority 3: COMMENT ON statements - tables must exist before comments
-	commentMatches := patterns.CommentPattern.FindAllStringSubmatch(sql, -1)
+	// COMMENT ON COLUMN table_name.column_name or COMMENT ON TABLE table_name
+	commentMatches := patterns.CommentOnPattern.FindAllStringSubmatch(sql, -1)
 	for _, match := range commentMatches {
 		if len(match) > 1 {
-			tableName := strings.TrimSpace(match[1])
+			qualifiedName := strings.TrimSpace(match[1])
+			// Extract table name from qualified name (e.g., "buddy_connections.group_name" -> "buddy_connections")
+			parts := strings.Split(qualifiedName, ".")
+			tableName := parts[0]
 			if tableName != "" {
-				utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Found comment dependency: comment depends on table %s", tableName)
+				utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Found COMMENT ON dependency: comment depends on table %s", tableName)
 				deps = append(deps, tableName)
 			}
 		}
@@ -1033,14 +1062,80 @@ func (udr *UnifiedDependencyResolver) extractExtensionProvisions(sql string) []s
 // extractTypeDependencies finds type/enum references that need to be created first
 func (udr *UnifiedDependencyResolver) extractTypeDependencies(sql string) []string {
 	var deps []string
+	sqlUpper := strings.ToUpper(sql)
 
-	// Note: Type dependency extraction could be enhanced with additional pattern matching
-	// For now, we rely on the EnumTypePattern from patterns package for enum detection
+	// Only scan CREATE TABLE statements for type dependencies
+	if !strings.Contains(sqlUpper, "CREATE TABLE") {
+		return deps
+	}
+
+	// Extract just the column definitions from CREATE TABLE
+	// Match: CREATE TABLE ... ( ... column definitions ... )
+	tableDefMatch := regexp.MustCompile(`(?is)CREATE\s+TABLE[^(]*\((.*?)\);?`).FindStringSubmatch(sql)
+	if len(tableDefMatch) < 2 {
+		return deps
+	}
+
+	columnDefs := tableDefMatch[1]
+
+	// Now parse column definitions more carefully
+	// Split by comma, but be careful of commas inside CHECK constraints
+	// For simplicity, use a regex to find column definitions
+	// Pattern: column_name custom_type (avoiding SQL keywords and built-in types)
+	colMatches := patterns.ColumnTypePattern.FindAllStringSubmatch(columnDefs, -1)
+
+	seenTypes := make(map[string]bool)
+	postgresBuiltinTypes := map[string]bool{
+		"text": true, "varchar": true, "char": true, "character": true,
+		"integer": true, "int": true, "int2": true, "int4": true, "int8": true,
+		"smallint": true, "bigint": true, "serial": true, "bigserial": true,
+		"numeric": true, "decimal": true, "real": true, "double": true, "float": true,
+		"boolean": true, "bool": true, "date": true, "time": true,
+		"timestamp": true, "timestamptz": true, "interval": true,
+		"json": true, "jsonb": true, "uuid": true, "bytea": true,
+		"array": true, "hstore": true, "xml": true, "money": true,
+		"point": true, "line": true, "lseg": true, "box": true, "path": true,
+		"polygon": true, "circle": true, "cidr": true, "inet": true, "macaddr": true,
+		"tsvector": true, "tsquery": true, "geometry": true, "geography": true,
+	}
+
+	sqlKeywords := map[string]bool{
+		"table": true, "not": true, "null": true, "check": true, "constraint": true,
+		"primary": true, "foreign": true, "key": true, "references": true,
+		"unique": true, "default": true, "exists": true, "if": true, "enable": true,
+		"disable": true, "cascade": true, "restrict": true, "on": true, "delete": true,
+		"update": true, "no": true, "action": true, "set": true, "add": true,
+		"alter": true, "drop": true, "row": true, "level": true, "security": true,
+	}
+
+	for _, match := range colMatches {
+		if len(match) > 2 {
+			// match[1] is column name, match[2] is type name
+			typeName := strings.ToLower(strings.TrimSpace(match[2]))
+
+			// Skip PostgreSQL built-in types, SQL keywords, and empty strings
+			if typeName == "" || postgresBuiltinTypes[typeName] || sqlKeywords[typeName] {
+				continue
+			}
+
+			// Additional filtering: skip if it looks like a SQL keyword combination
+			// (e.g., if "not" appears, it's likely "NOT NULL")
+			if len(typeName) <= 3 {
+				// Very short type names are likely keywords
+				continue
+			}
+
+			// This is likely a custom type - add as dependency
+			if !seenTypes[typeName] {
+				seenTypes[typeName] = true
+				deps = append(deps, fmt.Sprintf("type:%s", typeName))
+				utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Table depends on custom type: %s", typeName)
+			}
+		}
+	}
 
 	return deps
-}
-
-// extractTypeProvisions finds what types/enums this SQL creates
+}// extractTypeProvisions finds what types/enums this SQL creates
 func (udr *UnifiedDependencyResolver) extractTypeProvisions(sql string) []string {
 	var provides []string
 
@@ -1073,6 +1168,17 @@ func (udr *UnifiedDependencyResolver) dependencyMatches(dependency, provision st
 	if strings.HasPrefix(dependency, "type:") && strings.HasPrefix(provision, "type:") {
 		return dependency == provision
 	}
+
+	// Type dependencies from parser don't have "type:" prefix
+	// Match bare type names against "type:typename" provisions
+	if strings.HasPrefix(provision, "type:") {
+		provisionType := strings.TrimPrefix(provision, "type:")
+		if dependency == provisionType {
+			utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Matched type dependency: %s requires type:%s", dependency, provisionType)
+			return true
+		}
+	}
+
 	if strings.HasPrefix(dependency, "column:") {
 		// For column dependencies, we need table to exist first
 		parts := strings.Split(dependency, ":")

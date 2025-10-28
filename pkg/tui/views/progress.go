@@ -10,8 +10,8 @@ import (
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/squasher"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/styles"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/tui/viewtypes"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/styles"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/viewtypes"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -33,8 +33,10 @@ type ProgressView struct {
 }
 
 // NewProgressView creates a new progress view
-func NewProgressView() *ProgressView {
+func NewProgressView(migrationDir, configPath string) *ProgressView {
 	return &ProgressView{
+		migrationDir: migrationDir,
+		configPath:   configPath,
 		progress:     0,
 		currentPhase: "Initializing",
 		logs:         []string{},
@@ -134,12 +136,18 @@ func (p *ProgressView) Type() viewtypes.ViewType {
 // OnEnter is called when entering the view
 func (p *ProgressView) OnEnter() tea.Cmd {
 	// Start squashing when entering the view
-	// Get config from dashboard
+	// Reset state for new squashing operation
+	p.complete = false
+	p.err = nil
+	p.progress = 0
+	p.logs = []string{}
+	p.startTime = time.Now()
+
 	return func() tea.Msg {
 		return SquashConfig{
 			MigrationDir: p.migrationDir,
 			OutputDir:    "squashed",
-			ConfigPath:   "",
+			ConfigPath:   p.configPath,
 		}
 	}
 }

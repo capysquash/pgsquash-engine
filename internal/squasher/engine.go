@@ -18,6 +18,7 @@ import (
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/performance"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/auth"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking/consolidation"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/transformation"
@@ -33,7 +34,7 @@ type SquashResult struct {
 	Warnings          []string   // Warnings generated during squash
 	ProvenanceMap     *SquashMap // Provenance tracking information
 	Extensions        []string   // Extensions detected/required
-	
+
 	// Enhanced metrics for partner integrations
 	DetailedMetrics    *DetailedMetrics    `json:"detailed_metrics,omitempty"`
 	RecommendedActions []RecommendedAction `json:"recommended_actions,omitempty"`
@@ -44,13 +45,13 @@ type DetailedMetrics struct {
 	TotalMigrations     int     `json:"total_migrations"`
 	OptimizedMigrations int     `json:"optimized_migrations"`
 	ReductionPercentage float64 `json:"reduction_percentage"`
-	
+
 	Operations OperationBreakdown `json:"operations"`
-	
+
 	EstimatedTimeSavingsSeconds int     `json:"estimated_time_savings_seconds"`
 	FileSizeReductionBytes      int64   `json:"file_size_reduction_bytes"`
 	FileSizeReductionPercent    float64 `json:"file_size_reduction_percent"`
-	
+
 	RedundanciesFound []RedundancyDetail `json:"redundancies_found"`
 }
 
@@ -219,6 +220,9 @@ func newEngineInternal(engineCfg EngineConfig) *Engine {
 	if needsDB {
 		if cfg.ProdDBDSN == "" {
 			if cfg.SafetyLevel == string(Paranoid) {
+				// TODO: Implement production DSN support for paranoid mode live dead code analysis
+				// For E2E testing, paranoid mode uses mock data without production DSN
+				// Full implementation requires: database connection pooling, query analysis, and runtime statistics
 				logger.Warn("Paranoid safety level selected, but no production database DSN provided. Dead code analysis will be skipped.")
 			}
 			if engineCfg.EnableBackup {
@@ -544,6 +548,15 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 
 	e.logger.Info("Starting enhanced squashing process with %d migration files", len(migrations))
 
+	// Initialize stats
+	e.stats.TotalMigrations = int64(len(migrations))
+	e.stats.MigrationsProcessed = 0
+
+	// Invoke progress callback at start
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(0, e.stats.TotalMigrations, "Initializing")
+	}
+
 	// PHASE 0: Initialize Plugin System
 	// This must happen BEFORE parsing to enable plugin enrichment
 	if err := e.initializePlugins(ctx, migrations); err != nil {
@@ -609,6 +622,10 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 	}
 
 	// Phase 1: Parse and build object lifecycles
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(0, e.stats.TotalMigrations, "Parsing migrations")
+	}
+
 	if err := e.parseAndTrackMigrations(ctx, migrations); err != nil {
 		return "", nil, errors.NewError(
 			errors.ErrorCodeAnalysisError,
@@ -616,6 +633,11 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 			errors.SeverityError,
 			errors.CategoryParsing,
 		).WithInnerError(err)
+	}
+
+	e.stats.MigrationsProcessed = e.stats.TotalMigrations
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(e.stats.MigrationsProcessed, e.stats.TotalMigrations, "Analyzing dependencies")
 	}
 
 	// Phase 2: Analyze dependencies and detect issues
@@ -629,6 +651,10 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 	}
 
 	// Phase 3: Apply consolidation rules
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(e.stats.MigrationsProcessed, e.stats.TotalMigrations, "Applying consolidation rules")
+	}
+
 	consolidatedObjects, err := e.applyConsolidationRules(ctx)
 	if err != nil {
 		return "", nil, errors.NewError(
@@ -640,6 +666,10 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 	}
 
 	// Phase 4: Generate optimized SQL with modern formatting
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(e.stats.MigrationsProcessed, e.stats.TotalMigrations, "Generating SQL")
+	}
+
 	finalSQL, err := e.generateOptimizedSQL(ctx, consolidatedObjects)
 	if err != nil {
 		return "", nil, errors.NewError(
@@ -676,7 +706,13 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 	}
 
 	processingTime := time.Since(startTime)
+	e.stats.ProcessingTime = processingTime
 	e.logger.Info("Enhanced squashing completed in %v", processingTime)
+
+	// Final progress callback
+	if e.progressCb != nil && e.enableProgressTrack {
+		e.progressCb(e.stats.MigrationsProcessed, e.stats.TotalMigrations, "Completed")
+	}
 
 	return finalSQL, e.warnings, nil
 }
@@ -1250,6 +1286,48 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 	e.sqlBuilder.Comment(fmt.Sprintf("Safety level: %s", e.config.SafetyLevel))
 	e.sqlBuilder.Comment(fmt.Sprintf("Generated at: %s", time.Now().Format(time.RFC3339)))
 	e.sqlBuilder.NL()
+
+	// Inject auth compatibility layer if needed (BUG #4 FIX)
+	// Check if any migration uses auth.jwt(), Supabase roles, or storage schema
+	needsAuthCompat := false
+	needsSupabaseCompat := false
+	for _, result := range consolidatedObjects {
+		sqlLower := strings.ToLower(result.ConsolidatedSQL)
+		if strings.Contains(sqlLower, "auth.jwt()") || strings.Contains(sqlLower, "auth.uid()") {
+			needsAuthCompat = true
+			// Detect if it's Supabase (auth.users, storage.) or Clerk (organization patterns)
+			if strings.Contains(sqlLower, "auth.users") || strings.Contains(sqlLower, "storage.") {
+				needsSupabaseCompat = true
+			}
+		}
+		if strings.Contains(sqlLower, "role authenticated") || strings.Contains(sqlLower, "role service_role") {
+			needsAuthCompat = true
+		}
+		if strings.Contains(sqlLower, "supabase_realtime") || strings.Contains(sqlLower, "storage.buckets") {
+			needsSupabaseCompat = true
+		}
+	}
+
+	if needsAuthCompat {
+		e.sqlBuilder.NL().Comment("=== AUTH COMPATIBILITY LAYER ===")
+		e.sqlBuilder.Comment("Auto-injected stubs for Supabase/Clerk authentication")
+		e.sqlBuilder.NL()
+
+		// Use the existing compatibility generator
+		var compatSQL string
+		if needsSupabaseCompat {
+			e.logger.Info("Injecting Supabase auth compatibility layer")
+			generator := auth.NewCompatibilityGenerator(auth.ServiceSupabase)
+			compatSQL = generator.Generate()
+		} else {
+			e.logger.Info("Injecting Clerk auth compatibility layer")
+			generator := auth.NewCompatibilityGenerator(auth.ServiceClerk)
+			compatSQL = generator.Generate()
+		}
+
+		e.sqlBuilder.Statement(compatSQL)
+		e.sqlBuilder.NL().NL()
+	}
 
 	// Group by category for organized output - CRITICAL: Order must ensure dependencies are created first
 	categories := []types.Category{

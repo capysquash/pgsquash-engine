@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // ClaudeProvider implements the AI provider interface for Anthropic's Claude
@@ -33,8 +33,8 @@ func NewClaudeProvider(config *ProviderConfig) (*ClaudeProvider, error) {
 
 	client := anthropic.NewClient(option.WithAPIKey(config.APIKey))
 
-	// Default to Claude 3.5 Sonnet if no model specified
-	model := anthropic.ModelClaude3_5SonnetLatest
+	// Default to Claude Sonnet 4.5 if no model specified
+	model := anthropic.ModelClaudeSonnet4_5
 	if config.Model != "" {
 		model = anthropic.Model(config.Model)
 	}

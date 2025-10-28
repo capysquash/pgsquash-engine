@@ -222,20 +222,48 @@ apply_original_migrations() {
 
 apply_squashed_migration() {
   local container_name="$CONTAINER_PREFIX-postgres"
-  local squashed_file="$OUTPUT_DIR/001_consolidated_migration.sql"
 
-  log_info "Applying squashed migration..."
+  log_info "Applying squashed migrations..."
 
-  if [ ! -f "$squashed_file" ]; then
-    log_error "Squashed migration file not found: $squashed_file"
-    return 1
-  fi
+  # Check for both new format (000_baseline.sql + 010_data.sql) and legacy format (001_consolidated_migration.sql)
+  local baseline_file="$OUTPUT_DIR/000_baseline.sql"
+  local data_file="$OUTPUT_DIR/010_data.sql"
+  local legacy_file="$OUTPUT_DIR/001_consolidated_migration.sql"
 
-  if apply_migration_file "$container_name" "$SQUASHED_DB" "$squashed_file"; then
-    log_success "Squashed migration applied successfully"
+  if [ -f "$baseline_file" ]; then
+    # New format: apply baseline first
+    log_info "Applying baseline migration..."
+    if ! apply_migration_file "$container_name" "$SQUASHED_DB" "$baseline_file"; then
+      log_error "Baseline migration failed"
+      return 1
+    fi
+
+    # Apply data operations if present
+    if [ -f "$data_file" ]; then
+      log_info "Applying data operations..."
+      if ! apply_migration_file "$container_name" "$SQUASHED_DB" "$data_file"; then
+        log_error "Data operations migration failed"
+        return 1
+      fi
+    fi
+
+    log_success "Squashed migrations applied successfully"
     return 0
+
+  elif [ -f "$legacy_file" ]; then
+    # Legacy format: single consolidated file
+    log_info "Applying legacy consolidated migration..."
+    if apply_migration_file "$container_name" "$SQUASHED_DB" "$legacy_file"; then
+      log_success "Squashed migration applied successfully"
+      return 0
+    else
+      log_error "Squashed migration failed"
+      return 1
+    fi
+
   else
-    log_error "Squashed migration failed"
+    log_error "No squashed migration files found in $OUTPUT_DIR"
+    log_error "Expected: $baseline_file or $legacy_file"
     return 1
   fi
 }
