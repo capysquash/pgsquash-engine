@@ -673,6 +673,6 @@ Create `.pgsquash.config.json` in the root of each repository:
 
 ## Support
 
-- **Issues**: <https://github.com/capysquash/pgsquash-engine/issues>
-- **Discussions**: <https://github.com/capysquash/pgsquash-engine/discussions>
+- **Issues**: <https://github.com/CAPYSQUASH/pgsquash-engine/issues>
+- **Discussions**: <https://github.com/CAPYSQUASH/pgsquash-engine/discussions>
 - **Documentation**: <https://capysquash.dev/docs>

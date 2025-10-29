@@ -4,12 +4,13 @@
 package tracking
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"context"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/metadata"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"

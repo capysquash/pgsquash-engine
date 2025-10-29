@@ -1,18 +1,18 @@
 package github
 
 import (
-    "context"
-    "crypto/rand"
-    "encoding/base64"
-    "encoding/json"
-    "fmt"
-    "net/http"
-    "net/url"
-    "strings"
-    "sync"
-    "time"
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 
-    "github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // OAuthHandler handles GitHub OAuth flow with CSRF protection

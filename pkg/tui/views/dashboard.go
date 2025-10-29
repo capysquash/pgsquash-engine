@@ -1,16 +1,16 @@
 package views
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
-    "strings"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
-    tea "github.com/charmbracelet/bubbletea"
-    "github.com/charmbracelet/lipgloss"
-    "github.com/CAPYSQUASH/pgsquash-engine/internal/config"
-    "github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/styles"
-    "github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/viewtypes"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/config"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/styles"
+	"github.com/CAPYSQUASH/pgsquash-engine/pkg/tui/viewtypes"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // DashboardView is the main dashboard view

@@ -1,11 +1,12 @@
 package recovery
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
-    "fmt"
-    "strings"
-    "time"
 )
 
 // ErrorRecoveryStrategy defines different approaches to handling errors

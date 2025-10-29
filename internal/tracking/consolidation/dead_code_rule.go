@@ -1,10 +1,11 @@
 package consolidation
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"

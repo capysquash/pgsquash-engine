@@ -1,10 +1,11 @@
 package squasher
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
 // fixReturnNextWithOutParams fixes RETURN NEXT usage in RETURNS TABLE functions.

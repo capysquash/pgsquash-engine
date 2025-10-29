@@ -1,8 +1,9 @@
 package consolidation
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"

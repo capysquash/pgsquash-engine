@@ -50,7 +50,7 @@ This project adheres to a Code of Conduct that all contributors are expected to 
 ### Reporting Bugs
 
 Before creating a bug report:
-- Check the [existing issues](https://github.com/capysquash/pgsquash-engine/issues) to avoid duplicates
+- Check the [existing issues](https://github.com/CAPYSQUASH/pgsquash-engine/issues) to avoid duplicates
 - Collect relevant information (Go version, OS, Docker version, error messages)
 
 When filing a bug report, include:
@@ -285,7 +285,7 @@ We especially welcome contributions in these areas:
 ### High Priority
 - **Test Coverage** - Currently below 60%, need comprehensive tests
 - **Documentation** - More examples and use case guides
-- **Bug Fixes** - Check [issues labeled "bug"](https://github.com/capysquash/pgsquash-engine/labels/bug)
+- **Bug Fixes** - Check [issues labeled "bug"](https://github.com/CAPYSQUASH/pgsquash-engine/labels/bug)
 - **Platform Support** - Testing on different operating systems
 
 ### Medium Priority
@@ -295,7 +295,7 @@ We especially welcome contributions in these areas:
 - **CI/CD Improvements** - Enhanced testing and release automation
 
 ### Good First Issues
-- Issues labeled [`good first issue`](https://github.com/capysquash/pgsquash-engine/labels/good%20first%20issue)
+- Issues labeled [`good first issue`](https://github.com/CAPYSQUASH/pgsquash-engine/labels/good%20first%20issue)
 - Documentation improvements
 - Adding examples to `examples/` directory
 - Writing tests for existing functionality

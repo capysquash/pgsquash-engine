@@ -2,11 +2,11 @@
 package fileutil
 
 import (
-    "fmt"
-    "os"
-    "path/filepath"
+	"fmt"
+	"os"
+	"path/filepath"
 
-    "github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 )
 
 // WriteSQL writes SQL content to a file with standard permissions (0644).

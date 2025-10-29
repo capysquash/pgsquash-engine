@@ -1,10 +1,11 @@
 package tracking
 
 import (
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/types"
 )

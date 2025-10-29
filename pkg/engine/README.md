@@ -16,7 +16,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -26,7 +26,7 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("Squashed %d files\n", result.FilesProcessed)
     fmt.Println(result.SQL)
 }
@@ -198,7 +198,7 @@ import (
     "fmt"
     "log"
     "os"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -207,13 +207,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Write to file
     err = os.WriteFile("squashed.sql", []byte(result.SQL), 0644)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("✅ Squashed %d migrations\n", result.FilesProcessed)
 }
 ```
@@ -226,7 +226,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -238,14 +238,14 @@ func main() {
         EnableAI:        true,
         Verbose:         true,
     }
-    
+
     result, err := engine.SquashDirectory("./migrations", config)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Println(result.SQL)
-    
+
     if len(result.Warnings) > 0 {
         fmt.Println("\nWarnings:")
         for _, w := range result.Warnings {
@@ -263,7 +263,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -274,12 +274,12 @@ func main() {
         MemoryLimitMB:   512,
         Verbose:         true,
     }
-    
+
     result, err := engine.SquashDirectory("./large_migrations", config)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("Processed %d files with streaming\n", result.FilesProcessed)
     fmt.Printf("Processing time: %s\n", result.ProcessingTime)
 }
@@ -293,7 +293,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -302,17 +302,17 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("📊 Migration Analysis\n")
     fmt.Printf("Files: %d\n", analysis.TotalFiles)
     fmt.Printf("Statements: %d\n", analysis.TotalStatements)
     fmt.Printf("Objects: %d\n", analysis.TotalObjects)
-    
+
     fmt.Println("\nObjects by type:")
     for objType, count := range analysis.ObjectsByType {
         fmt.Printf("  %s: %d\n", objType, count)
     }
-    
+
     if len(analysis.Redundancies) > 0 {
         fmt.Printf("\n⚠️  Found %d redundancies:\n", len(analysis.Redundancies))
         for _, r := range analysis.Redundancies {
@@ -330,7 +330,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -341,17 +341,17 @@ func main() {
         3: "migrations/003_create_posts.sql",
         4: "migrations/004_add_indexes.sql",
     }
-    
+
     config := &engine.Config{
         SafetyLevel: engine.Aggressive,
         Verbose:     true,
     }
-    
+
     result, err := engine.SquashFiles(migrations, config)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Println(result.SQL)
 }
 ```
@@ -365,7 +365,7 @@ import (
     "fmt"
     "log"
     "os"
-    
+
     "github.com/CAPYSQUASH/pgsquash-engine/pkg/engine"
 )
 
@@ -375,13 +375,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Fail CI if too many redundancies
     if len(analysis.Redundancies) > 10 {
         fmt.Printf("❌ Too many redundancies: %d (threshold: 10)\n", len(analysis.Redundancies))
         os.Exit(1)
     }
-    
+
     // Squash if analysis passed
     result, err := engine.SquashDirectory("./migrations", &engine.Config{
         SafetyLevel: engine.Conservative,
@@ -389,13 +389,13 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Write output
     err = os.WriteFile("squashed/migration.sql", []byte(result.SQL), 0644)
     if err != nil {
         log.Fatal(err)
     }
-    
+
     fmt.Printf("✅ CI passed - %d files squashed\n", result.FilesProcessed)
 }
 ```

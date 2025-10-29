@@ -144,7 +144,7 @@ All configuration via environment variables:
 | `GITHUB_CLIENT_ID`      | No       | -                                       | OAuth app client ID                     |
 | `GITHUB_CLIENT_SECRET`  | No       | -                                       | OAuth app client secret                 |
 | `GITHUB_REDIRECT_URL`   | No       | `http://localhost:8080/github/callback` | OAuth redirect URL                      |
-| `CORS_ORIGIN`           | No       | `https://CAPYSQUASH.dev`                | Allowed CORS origins (comma-separated)  |
+| `CORS_ORIGIN`           | No       | `https://capysquash.dev`                | Allowed CORS origins (comma-separated)  |
 | `API_PORT`              | No       | `8080`                                  | Server port                             |
 | `LOG_LEVEL`             | No       | `info`                                  | Log level (debug, info, warning, error) |
 | `LOG_FORMAT`            | No       | `json`                                  | Log format (json, text)                 |

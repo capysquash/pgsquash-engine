@@ -76,7 +76,7 @@ account, or acting as an appointed representative at an online or offline event.
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainers responsible for enforcement at:
 
-**Email**: [Create an issue on GitHub](https://github.com/capysquash/pgsquash-engine/issues/new?template=code_of_conduct.md)
+**Email**: [Create an issue on GitHub](https://github.com/CAPYSQUASH/pgsquash-engine/issues/new?template=code_of_conduct.md)
 
 All complaints will be reviewed and investigated promptly and fairly.
 

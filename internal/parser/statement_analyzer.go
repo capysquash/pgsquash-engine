@@ -308,7 +308,7 @@ func (sa *StatementAnalyzer) estimateExecutionTime(stmt *types.Statement) types.
 func (sa *StatementAnalyzer) AnalyzePragmas(stmt *types.Statement) {
 	for _, comment := range stmt.Comments {
 		commentUpper := strings.ToUpper(comment)
-		
+
 		// Check for pgsquash:ignore pragma
 		if strings.Contains(commentUpper, "PGSQUASH:IGNORE") ||
 			strings.Contains(commentUpper, "PGSQUASH: IGNORE") {

@@ -1,16 +1,16 @@
 package providers
 
 import (
-    "context"
-    "net/http"
-    "strings"
-    "time"
+	"context"
+	"net/http"
+	"strings"
+	"time"
 
-    "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-    "github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
-    "github.com/openai/openai-go"
-    "github.com/openai/openai-go/azure"
-    "github.com/openai/openai-go/option"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
+	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/azure"
+	"github.com/openai/openai-go/option"
 )
 
 // AzureOpenAIProvider implements the AI provider interface for Azure OpenAI

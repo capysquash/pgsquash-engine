@@ -98,7 +98,7 @@ func (tp *TransactionPlanner) PlanTransactions(statements []types.Statement) *Tr
 
 		// Add to current batch
 		currentBatch.Statements = append(currentBatch.Statements, stmt)
-		
+
 		// Update batch metadata
 		if stmt.Metadata.LockLevel > currentBatch.MaxLockLevel {
 			currentBatch.MaxLockLevel = stmt.Metadata.LockLevel
@@ -131,7 +131,7 @@ func (tp *TransactionPlanner) analyzeLockConflicts(plan *TransactionPlan) {
 		for j, stmt1 := range batch.Statements {
 			for k := j + 1; k < len(batch.Statements); k++ {
 				stmt2 := batch.Statements[k]
-				
+
 				// Check if both statements operate on the same object
 				if stmt1.ObjectName == stmt2.ObjectName && stmt1.ObjectType == stmt2.ObjectType {
 					conflict := tp.detectConflict(stmt1, stmt2)
@@ -240,7 +240,7 @@ func (tp *TransactionPlanner) FormatPlan(plan *TransactionPlan) string {
 		output.WriteString(fmt.Sprintf("  Statements: %d\n", len(batch.Statements)))
 		output.WriteString(fmt.Sprintf("  Max Lock:   %s\n", parser.FormatLockLevel(batch.MaxLockLevel)))
 		output.WriteString(fmt.Sprintf("  Est. Time:  %s\n", batch.EstimatedTime))
-		
+
 		// Show first few statements
 		for i, stmt := range batch.Statements {
 			if i >= 3 {
@@ -318,7 +318,7 @@ func (tp *TransactionPlanner) FormatLockAnalysis(statements []types.Statement) s
 			if len(sqlPreview) > 70 {
 				sqlPreview = sqlPreview[:70] + "..."
 			}
-			
+
 			flags := []string{}
 			if stmt.Metadata.Concurrent {
 				flags = append(flags, "CONCURRENT")
@@ -329,12 +329,12 @@ func (tp *TransactionPlanner) FormatLockAnalysis(statements []types.Statement) s
 			if stmt.Metadata.PreserveVerbatim {
 				flags = append(flags, "PRESERVE")
 			}
-			
+
 			flagStr := ""
 			if len(flags) > 0 {
 				flagStr = fmt.Sprintf(" [%s]", strings.Join(flags, ", "))
 			}
-			
+
 			output.WriteString(fmt.Sprintf("  • %s%s\n", sqlPreview, flagStr))
 		}
 		output.WriteString("\n")

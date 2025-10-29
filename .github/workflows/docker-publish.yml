@@ -107,7 +107,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.GHCR_REGISTRY }}/CAPYSQUASH/${{ env.IMAGE_NAME }}
+            ${{ env.GHCR_REGISTRY }}/capysquash/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
