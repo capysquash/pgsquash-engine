@@ -95,6 +95,7 @@ func GetAllFixtures() []FixtureTest {
 			SafetyModes: []SafetyLevel{Paranoid, Conservative, Standard, Aggressive},
 		},
 	}
+}
 
 // TestAllFixtures runs all test fixtures across different safety modes
 func TestAllFixtures(t *testing.T) {

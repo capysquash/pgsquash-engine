@@ -123,7 +123,7 @@ var versionInfo = struct {
 	buildDate string
 	gitCommit string
 }{
-	version:   "0.9.5-beta", // Default fallback
+	version:   "0.9.5", // Default fallback
 	buildDate: "unknown",
 	gitCommit: "unknown",
 }

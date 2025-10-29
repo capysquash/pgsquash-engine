@@ -313,7 +313,7 @@ The public API follows semantic versioning:
 - **Minor** version: New features, backward compatible
 - **Patch** version: Bug fixes
 
-Current version: `v0.9.5-beta`
+Current version: `v0.9.5`
 
 ## Support
 

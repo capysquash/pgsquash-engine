@@ -20,7 +20,7 @@ func Execute() error {
 // This should be called during application initialization, typically in init().
 //
 // Parameters:
-//   - version: The semantic version string (e.g., "0.9.5-beta")
+//   - version: The semantic version string (e.g., "0.9.5")
 //   - buildDate: The build timestamp in ISO 8601 format
 //   - gitCommit: The git commit hash (short or full)
 //

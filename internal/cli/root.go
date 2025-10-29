@@ -82,7 +82,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "pgsquash",
 	Short:   "pgsquash-engine - Intelligent PostgreSQL migration consolidation",
-	Version: "0.9.5-beta",
+	Version: "0.9.5",
 	Long: `pgsquash-engine intelligently consolidates PostgreSQL migration files into
 clean, production-ready SQL while preserving data integrity, respecting
 dependencies, and validating safety at every step.
