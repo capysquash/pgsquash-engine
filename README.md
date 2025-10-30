@@ -216,15 +216,26 @@ See [scripts/README.md](scripts/README.md) for detailed usage and setup instruct
 
 ## Documentation
 
-- [Quickstart](docs/user%20docs/quickstart.md) - get started in 5 minutes
-- [CLI Reference](docs/user%20docs/cli-reference.md) - all commands and flags
-- [Configuration](docs/user%20docs/configuration.md) - config file options
-- [Safety Levels](docs/user%20docs/safety-levels.md) - choosing the right mode
-- [TUI Guide](docs/user%20docs/tui-guide.md) - using the interactive interface
-- [Architecture](docs/user%20docs/architecture.md) - how it works internally
-- [Troubleshooting](docs/user%20docs/troubleshooting.md) - common issues
+**📖 All comprehensive documentation is centralized in the [ecosystem docs](../capysquash-docs/ecosystem%20docs/).**
 
-[See all docs](docs/user%20docs/README.md)
+### Quick Links
+
+**User Guides:**
+- [Quickstart](../capysquash-docs/ecosystem%20docs/pgsquash-engine/user%20docs/quickstart.md) - Get started in 5 minutes
+- [Configuration](../capysquash-docs/ecosystem%20docs/pgsquash-engine/user%20docs/configuration.md) - Config file options
+- [Safety Levels](../capysquash-docs/ecosystem%20docs/pgsquash-engine/user%20docs/safety-levels.md) - Choosing the right mode
+- [Troubleshooting](../capysquash-docs/ecosystem%20docs/pgsquash-engine/user%20docs/troubleshooting.md) - Common issues
+
+**Developer Docs:**
+- [Public API Reference](../capysquash-docs/ecosystem%20docs/pgsquash-engine/PUBLIC_API_REFERENCE.md) - Complete API documentation
+- [Architecture](../capysquash-docs/ecosystem%20docs/pgsquash-engine/ARCHITECTURE.md) - System design
+- [Plugin Development](../capysquash-docs/ecosystem%20docs/pgsquash-engine/user%20docs/plugin-development.md) - Build custom plugins
+
+**Deployment:**
+- [Fly.io Deployment](../capysquash-docs/ecosystem%20docs/pgsquash-engine/FLYIO_DEPLOYMENT.md) - Deploy to Fly.io
+- [Homebrew Setup](../capysquash-docs/ecosystem%20docs/pgsquash-engine/HOMEBREW_SETUP.md) - Publishing via Homebrew
+
+**See also:** [Complete Ecosystem Docs](../capysquash-docs/ecosystem%20docs/README.md) | [Documentation Index](../DOCUMENTATION_INDEX.md)
 
 ## Configuration
 
@@ -258,26 +269,31 @@ Example `pgsquash.config.json`:
 
 Check [configuration.md](docs/configuration.md) for all available options.
 
-## API Server
+## API Server (capysquash-api)
 
-pgsquash-engine includes an HTTP API server for programmatic access and web integrations:
+The HTTP API server is now maintained as a separate module for better modularity and independent versioning:
+
+**[capysquash-api](https://github.com/CAPYSQUASH/capysquash-api)** - Production-ready REST API server
 
 ```bash
-# Build API server
-go build -o api-server cmd/api-server/main.go
-
-# Run API server
+# Clone and build the API server (separate repository)
+git clone https://github.com/CAPYSQUASH/capysquash-api
+cd capysquash-api
+go build -o api-server ./cmd/api-server
 ./api-server
 ```
 
 **Features:**
 
 - REST endpoints for analyze and squash operations
+- JWT authentication with database persistence
 - GitHub webhook integration for PR automation
+- AI-powered analysis endpoints
+- Rules and plugins management
+- Operations tracking and monitoring
 - CORS support for web platforms
-- Health checks and monitoring
 
-See [cmd/api-server/README.md](cmd/api-server/README.md) for API documentation.
+See the [capysquash-api repository](https://github.com/CAPYSQUASH/capysquash-api) for complete API documentation and deployment guides.
 
 ## Building from source
 
@@ -299,8 +315,7 @@ The codebase is organized as:
 
 ```
 cmd/
-├── pgsquash/           # CLI entry
-└── api-server/         # HTTP API server
+└── pgsquash/           # CLI entry point
 internal/
 ├── parser/             # SQL parsing via pg_query_go
 ├── tracking/           # Object lifecycle tracking
@@ -310,7 +325,11 @@ internal/
 ├── github/             # GitHub integration
 ├── plugins/            # Plugin system
 └── transformation/     # SQL transformations
+pkg/
+└── engine/             # Public Go API for library usage
 ```
+
+**Note:** The HTTP API server (`cmd/api-server`) has been moved to [capysquash-api](https://github.com/CAPYSQUASH/capysquash-api) as a separate module.
 
 ## What's next
 
@@ -330,13 +349,41 @@ MIT License - see LICENSE file
 
 ## The CAPYSQUASH Ecosystem
 
-pgsquash-engine is the underlying technology that powers the CAPYSQUASH ecosystem:
+pgsquash-engine is the core Go library that powers the CAPYSQUASH ecosystem:
 
-- **[CAPYSQUASH](https://capysquash.dev)** - The platform. One-click cleanup with GitHub automation, visual dashboards, and team features
-- **[capysquash-cli](https://github.com/CAPYSQUASH/capysquash-cli)** - Open-source CLI tool for terminal workflows and CI/CD pipelines
-- **pgsquash-engine** (this library) - The core technology that powers everything
+```
+┌─────────────────────────────────────────┐
+│     CAPYSQUASH Platform (capysquash.dev)│  ← Web app with UI, automation
+│  - Next.js frontend                     │
+│  - Team features & dashboards           │
+└──────────┬──────────────────────────────┘
+           │
+           ├─── HTTP API ───┐
+           │                │
+┌──────────▼────────────┐   │
+│   capysquash-api      │   │  ← REST API server
+│  - JWT auth           │   │
+│  - GitHub webhooks    │   │
+│  - Operations tracker │   │
+└──────────┬────────────┘   │
+           │                │
+┌──────────▼────────────┐   │
+│   capysquash-cli      │   │  ← CLI tool
+│  - Terminal UI        │   │
+│  - CI/CD friendly     │   │
+└──────────┬────────────┘   │
+           │                │
+           └────────────────┘
+                   │
+           ┌───────▼──────────┐
+           │ pgsquash-engine  │  ← Core library (this repo)
+           │ - SQL parser     │
+           │ - Consolidation  │
+           │ - Validation     │
+           └──────────────────┘
+```
 
-**For most users:** Start with CAPYSQUASH for the easiest experience or capysquash-cli for terminal workflows.
+**For most users:** Start with [CAPYSQUASH](https://capysquash.dev) for the easiest experience or [capysquash-cli](https://github.com/CAPYSQUASH/capysquash-cli) for terminal workflows.
 
 **For developers:** Use pgsquash-engine to build custom migration tools and integrations.
 

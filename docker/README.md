@@ -36,17 +36,22 @@ docker compose -f docker-compose.yml -f docker-compose.tools.yml up -d
 # Access Filebrowser: http://localhost:8081
 ```
 
-### API Server (standalone)
+### API Server (separate repository)
+
+> **Note**: The API server has been moved to a separate repository: [capysquash-api](https://github.com/CAPYSQUASH/capysquash-api)
 
 ```bash
-# Deploy just the API server with GitHub integration
-cd docker/api-server
+# Clone and deploy the API server (separate repository)
+git clone https://github.com/CAPYSQUASH/capysquash-api
+cd capysquash-api
 docker compose up -d
 
 # Service: API server only
 # RAM usage: ~200MB
 # Access API: http://localhost:8080/health
 ```
+
+See [docker/api-server/README.md](api-server/README.md) in this repository for migration information.
 
 ---
 
@@ -62,10 +67,8 @@ docker/
 ├── README.md                     # This file
 ├── entrypoint.sh                # Container entrypoint script
 │
-├── api-server/                  # API Server Deployment
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── README.md
+├── api-server/                  # API Server Migration Guide (see README)
+│   └── README.md                # ⚠️ API moved to capysquash-api repository
 │
 ├── engine/                      # Containerized CLI
 │   ├── quick-start.yml
@@ -138,14 +141,20 @@ Spin up ephemeral PostgreSQL containers to validate migration squashing results.
 
 ---
 
-### 3. API Server
+### 3. API Server (Moved to Separate Repository)
 
-HTTP API with GitHub webhook integration for Platforms.
+> **⚠️ Important**: The API server has been moved to its own repository for better modularity.
+
+**New Location**: [capysquash-api](https://github.com/CAPYSQUASH/capysquash-api)
+
+HTTP API with GitHub webhook integration for platforms.
 
 **Use Case**: Web frontends, mobile apps, GitHub PR automation
 
 ```bash
-cd docker/api-server
+# Clone the separate repository
+git clone https://github.com/CAPYSQUASH/capysquash-api
+cd capysquash-api
 docker compose up -d
 
 # Test health endpoint
@@ -160,7 +169,9 @@ curl http://localhost:8080/health
 - `POST /github/webhook` - GitHub webhook handler
 - `GET /github/login` - GitHub OAuth login
 
-**Documentation**: [api-server/README.md](api-server/README.md)
+**Documentation**:
+- **Migration Guide**: [docker/api-server/README.md](api-server/README.md) (in this repo)
+- **Full Docs**: [capysquash-api repository](https://github.com/CAPYSQUASH/capysquash-api)
 
 ---
 
@@ -213,8 +224,9 @@ For Platform deployment and documentation, see the Platform repository.
 | File                             | Services | Purpose               | RAM Usage |
 | -------------------------------- | -------- | --------------------- | --------- |
 | `engine/quick-start.yml`         | 1        | CLI-only container    | \~200MB   |
-| `api-server/docker-compose.yml`  | 1        | API server standalone | \~200MB   |
 | `dev-environment/full-stack.yml` | 2        | Simplified dev setup  | \~500MB   |
+
+> **Note**: API server compose files have moved to [capysquash-api repository](https://github.com/CAPYSQUASH/capysquash-api)
 
 ---
 
@@ -331,7 +343,9 @@ POSTGRES_PASSWORD=pgsquash_secure_password
 POSTGRES_PRIMARY_PORT=5432
 ```
 
-**API Server Variables**:
+**API Server Variables** (for [capysquash-api](https://github.com/CAPYSQUASH/capysquash-api)):
+
+> See [capysquash-api environment variables documentation](https://github.com/CAPYSQUASH/capysquash-api/blob/main/docs/ENVIRONMENT_VARIABLES.md) for complete reference.
 
 ```bash
 GITHUB_TOKEN=ghp_your_token_here
@@ -411,8 +425,9 @@ docker compose -f docker/engine/quick-start.yml run --rm pgsquash squash
 ### Production
 
 ```bash
-# Use API server for production deployments
-cd docker/api-server
+# Use API server for production deployments (separate repository)
+git clone https://github.com/CAPYSQUASH/capysquash-api
+cd capysquash-api
 docker compose up -d
 
 # Set resource limits in compose file
@@ -422,6 +437,8 @@ deploy:
       cpus: '2.0'
       memory: 2G
 ```
+
+See [capysquash-api deployment guide](https://github.com/CAPYSQUASH/capysquash-api) for production setup.
 
 ---
 
@@ -508,7 +525,7 @@ docker buildx build --Platform linux/amd64,linux/arm64 -t pgsquash:latest .
 
 ## Documentation
 
-- **API Server**: [api-server/README.md](api-server/README.md)
+- **API Server**: [api-server/README.md](api-server/README.md) (migration guide) | [capysquash-api repository](https://github.com/CAPYSQUASH/capysquash-api) (current docs)
 - **CLI Engine**: [engine/README.md](engine/README.md)
 - **Validation**: [validation/README.md](validation/README.md)
 - **Development**: [dev-environment/README.md](dev-environment/README.md)

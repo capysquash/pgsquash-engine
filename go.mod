@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.0
-	github.com/anthropics/anthropic-sdk-go v1.15.0
+	github.com/anthropics/anthropic-sdk-go v1.16.0
 	github.com/bradleyfalzon/ghinstallation/v2 v2.17.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0

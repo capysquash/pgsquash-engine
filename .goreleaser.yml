@@ -105,89 +105,6 @@ builds:
       - -trimpath
     mod_timestamp: '{{ .CommitTimestamp }}'
 
-  # capysquash - Linux AMD64
-  - id: capysquash-linux-amd64
-    main: ./cmd/capysquash
-    binary: capysquash
-    env:
-      - CGO_ENABLED=1
-      - CC=x86_64-linux-gnu-gcc
-      - CXX=x86_64-linux-gnu-g++
-    goos:
-      - linux
-    goarch:
-      - amd64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.buildDate={{.Date}}
-      - -X main.gitCommit={{.FullCommit}}
-    flags:
-      - -trimpath
-    mod_timestamp: '{{ .CommitTimestamp }}'
-
-  # capysquash - Linux ARM64
-  - id: capysquash-linux-arm64
-    main: ./cmd/capysquash
-    binary: capysquash
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
-      - CXX=aarch64-linux-gnu-g++
-    goos:
-      - linux
-    goarch:
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.buildDate={{.Date}}
-      - -X main.gitCommit={{.FullCommit}}
-    flags:
-      - -trimpath
-    mod_timestamp: '{{ .CommitTimestamp }}'
-
-  # capysquash - macOS AMD64 (Intel)
-  - id: capysquash-darwin-amd64
-    main: ./cmd/capysquash
-    binary: capysquash
-    env:
-      - CGO_ENABLED=1
-      - CC=o64-clang
-      - CXX=o64-clang++
-    goos:
-      - darwin
-    goarch:
-      - amd64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.buildDate={{.Date}}
-      - -X main.gitCommit={{.FullCommit}}
-    flags:
-      - -trimpath
-    mod_timestamp: '{{ .CommitTimestamp }}'
-
-  # capysquash - macOS ARM64 (Apple Silicon)
-  - id: capysquash-darwin-arm64
-    main: ./cmd/capysquash
-    binary: capysquash
-    env:
-      - CGO_ENABLED=1
-      - CC=oa64-clang
-      - CXX=oa64-clang++
-    goos:
-      - darwin
-    goarch:
-      - arm64
-    ldflags:
-      - -s -w
-      - -X main.version={{.Version}}
-      - -X main.buildDate={{.Date}}
-      - -X main.gitCommit={{.FullCommit}}
-    flags:
-      - -trimpath
-    mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
   - id: pgsquash-archive
@@ -207,10 +124,6 @@ archives:
       - pgsquash-linux-arm64
       - pgsquash-darwin-amd64
       - pgsquash-darwin-arm64
-      - capysquash-linux-amd64
-      - capysquash-linux-arm64
-      - capysquash-darwin-amd64
-      - capysquash-darwin-arm64
     files:
       - LICENSE
       - README.md
@@ -341,7 +254,6 @@ brews:
     commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
     install: |
       bin.install "pgsquash"
-      bin.install "capysquash"
 
 # Snapcraft (Linux) - optional
 # snapcrafts:

@@ -98,6 +98,66 @@ if err := plugins.RegisterDefault(); err != nil {
 
 ---
 
+### 🐙 `pkg/github` - GitHub Integration API
+
+GitHub App client library for webhook handling and repository operations.
+
+```go
+import "github.com/CAPYSQUASH/pgsquash-engine/pkg/github"
+
+// Create GitHub App client
+appClient, err := github.NewAppClientFromEnv()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Get installation client for a repository
+installClient, err := appClient.GetInstallationClientForRepo(ctx, owner, repo)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Create check run on PR
+checkRun := &github.CheckRun{
+    Name:       "capysquash/analysis",
+    HeadSHA:    pr.HeadSHA,
+    Status:     "completed",
+    Conclusion: "success",
+}
+_, err = installClient.CreateCheckRun(ctx, owner, repo, checkRun)
+```
+
+**Types:**
+- `AppClient` - GitHub App authentication client
+- `InstallationClient` - Per-installation API client
+- `WebhookHandler` - Webhook event processor
+- `CheckRun` - Check run definition
+- `PullRequest` - PR metadata
+
+**Functions:**
+- `NewAppClientFromEnv()` - Create client from environment variables
+- `appClient.GetInstallationClientForRepo(ctx, owner, repo)` - Get installation client
+- `installClient.CreateCheckRun(ctx, owner, repo, checkRun)` - Create check run
+- `installClient.CreateComment(ctx, owner, repo, number, body)` - Post PR comment
+
+**Environment Variables:**
+- `GITHUB_APP_ID` - GitHub App ID
+- `GITHUB_APP_PRIVATE_KEY` - Private key (PEM format)
+- `GITHUB_APP_PRIVATE_KEY_PATH` - Path to private key file
+
+**Use Cases:**
+- GitHub App integration
+- Webhook processing
+- PR automation
+- Check run management
+- Repository operations
+
+**Note:** HTTP endpoints are hosted in [capysquash-api](https://github.com/CAPYSQUASH/capysquash-api). This package provides the client library.
+
+[Full Documentation](../docs/GITHUB_INTEGRATION_COMPLETE_ENGINE.md)
+
+---
+
 ### 📝 `pkg/utils` - Utility API
 
 Logging and utility functions for pgsquash integration.
@@ -144,6 +204,7 @@ logger.Info("Application started")
 | **cli** | Run CLI programmatically | Custom CLI wrappers, branded binaries |
 | **engine** | Library API for squashing | Custom tools, automation, batch processing |
 | **plugins** | Plugin registration | Platform integrations, custom plugins |
+| **github** | GitHub App client library | Webhook handling, PR automation, check runs |
 | **utils** | Logging utilities | Application logging, debugging |
 
 ## Installation
