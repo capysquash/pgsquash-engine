@@ -442,8 +442,13 @@ func (bg *BackupGenerator) generateRollbackForStatement(stmt types.Statement, or
 			rollback.Description = fmt.Sprintf("Recreate function %s", stmt.ObjectName)
 			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP FUNCTION %s (requires backup restore)", stmt.ObjectName)
 		default:
-			rollback.Description = fmt.Sprintf("Recreate %s %s", stmt.ObjectType, stmt.ObjectName)
-			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP %s %s", stmt.ObjectType, stmt.ObjectName)
+			// Handle UNKNOWN type gracefully
+			objectTypeStr := string(stmt.ObjectType)
+			if stmt.ObjectType == types.TypeUnknown || stmt.ObjectType == "" {
+				objectTypeStr = "object"
+			}
+			rollback.Description = fmt.Sprintf("Recreate %s %s", objectTypeStr, stmt.ObjectName)
+			rollback.SQL = fmt.Sprintf("-- Cannot automatically rollback DROP %s %s", objectTypeStr, stmt.ObjectName)
 		}
 
 	case types.OpAlter:

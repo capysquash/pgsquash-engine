@@ -623,6 +623,16 @@ func (b *SQLBuilder) fromASTStatement(stmt types.Statement) *SQLBuilder {
 }
 
 func (b *SQLBuilder) fromDropStatement(stmt types.Statement) *SQLBuilder {
+	// CRITICAL FIX: Check for UNKNOWN type to prevent invalid SQL generation
+	if stmt.ObjectType == types.TypeUnknown || stmt.ObjectType == "" {
+		// Cannot generate valid DROP statement for unknown object types
+		// Generate a comment instead
+		b.P("-- WARNING: Cannot generate DROP statement for object '").P(stmt.ObjectName).P("' with unknown type")
+		b.NL()
+		b.P("-- Consider manual cleanup if this object exists in your database")
+		return b
+	}
+
 	b.P("DROP").S().P(string(stmt.ObjectType))
 	if stmt.IfNotExists {
 		b.P("IF EXISTS")

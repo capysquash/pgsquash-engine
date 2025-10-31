@@ -410,6 +410,14 @@ func categorizeStatement(stmt types.Statement) types.Category {
 		return types.CategoryData
 	}
 
+	// CRITICAL FIX: Check Operation first before ObjectType
+	// COMMENT ON statements have ObjectType set to the object being commented (e.g., TypeTable),
+	// but must be categorized as CategoryComments to ensure they come after object creation
+	if stmt.Operation == types.OpComment {
+		// Comments must come after the objects they reference
+		return types.CategoryComments
+	}
+
 	switch stmt.ObjectType {
 	case types.TypeTable, types.TypeSequence, types.TypeType, types.TypeEnum, types.TypeComposite, types.TypeDomain:
 		return types.CategoryFoundation
@@ -431,6 +439,8 @@ func categorizeStatement(stmt types.Statement) types.Category {
 		return types.CategoryExtensions
 	case types.TypeComment:
 		// Comments must come after the objects they reference
+		// Note: This case is now redundant due to the OpComment check above,
+		// but kept for clarity and as a fallback
 		return types.CategoryComments
 	default:
 		return types.CategoryFoundation
