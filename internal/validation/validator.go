@@ -2059,13 +2059,21 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 		if sv.config.Verbose {
 			color.Cyan("🔐 Creating plugin compatibility layers...\n")
 		}
-		if _, err := db.Exec(compatibilitySQL); err != nil {
-			return errors.NewError(
-				errors.ErrorCodeInvalidSQL,
-				"failed to create compatibility layer",
-				errors.SeverityError,
-				errors.CategoryValidation,
-			).WithInnerError(err).WithSuggestion("Plugin compatibility SQL may have errors - check plugin configuration")
+		// Split and execute compatibility SQL statements
+		statements := splitSQLStatements(compatibilitySQL)
+		for i, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := db.Exec(stmt); err != nil {
+				return errors.NewError(
+					errors.ErrorCodeInvalidSQL,
+					fmt.Sprintf("failed to create compatibility layer (statement %d)", i+1),
+					errors.SeverityError,
+					errors.CategoryValidation,
+				).WithInnerError(err).WithSuggestion(fmt.Sprintf("Plugin compatibility SQL may have errors - check plugin configuration.\nFailed statement:\n%s", stmt))
+			}
 		}
 		if sv.config.Verbose {
 			color.Green("☑ Compatibility layers created successfully\n")
@@ -2099,13 +2107,9 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 		// This ensures validation catches any bugs in the squasher's output
 		sqlContent := string(content)
 
-		if _, err := db.Exec(sqlContent); err != nil {
-			return errors.NewError(
-				errors.ErrorCodeInvalidSQL,
-				fmt.Sprintf("failed to execute migration %s", migrationPath),
-				errors.SeverityError,
-				errors.CategoryValidation,
-			).WithInnerError(err).WithSuggestion("The migration contains invalid SQL - review the generated migration file")
+		// Use executeSQLFile which can handle multiple statements
+		if err := sv.executeSQLFile(db, sqlContent, migrationPath); err != nil {
+			return err
 		}
 
 		return nil
@@ -2126,17 +2130,158 @@ func (sv *SchemaValidator) applyMigrationsToDatabase(dsn, migrationPath string) 
 		// This ensures validation catches any bugs in the squasher's output
 		sqlContent := string(content)
 
-		if _, err := db.Exec(sqlContent); err != nil {
-			return errors.NewError(
-				errors.ErrorCodeInvalidSQL,
-				fmt.Sprintf("failed to execute migration %s", path),
-				errors.SeverityError,
-				errors.CategoryValidation,
-			).WithInnerError(err).WithSuggestion("The migration contains invalid SQL - review the migration file")
+		// Use executeSQLFile which can handle multiple statements
+		if err := sv.executeSQLFile(db, sqlContent, path); err != nil {
+			return err
 		}
 
 		return nil
 	})
+}
+
+// executeSQLFile executes a SQL file that may contain multiple statements
+// Splits the SQL into individual statements and executes them one by one
+func (sv *SchemaValidator) executeSQLFile(db *sql.DB, sqlContent, filePath string) error {
+	// Split SQL into individual statements
+	statements := splitSQLStatements(sqlContent)
+
+	// Execute each statement
+	for i, stmt := range statements {
+		// Skip empty statements
+		stmt = strings.TrimSpace(stmt)
+		if stmt == "" {
+			continue
+		}
+
+		// Execute the statement
+		if _, err := db.Exec(stmt); err != nil {
+			return errors.NewError(
+				errors.ErrorCodeInvalidSQL,
+				fmt.Sprintf("failed to execute statement %d in migration %s", i+1, filePath),
+				errors.SeverityError,
+				errors.CategoryValidation,
+			).WithInnerError(err).WithSuggestion(fmt.Sprintf("The migration contains invalid SQL at statement %d.\nPostgreSQL error: %v\n\nStatement:\n%s", i+1, err, stmt))
+		}
+	}
+
+	return nil
+}
+
+// splitSQLStatements splits a SQL file into individual statements
+// Handles PostgreSQL-specific syntax including dollar-quoted strings and DO blocks
+func splitSQLStatements(sql string) []string {
+	var statements []string
+	var current strings.Builder
+	var inDollarQuote bool
+	var dollarTag string
+	var inString bool
+	var inLineComment bool
+	var inBlockComment bool
+
+	runes := []rune(sql)
+	for i := 0; i < len(runes); i++ {
+		ch := runes[i]
+
+		// Handle line comments (-- ...)
+		if !inString && !inDollarQuote && !inBlockComment && i < len(runes)-1 && ch == '-' && runes[i+1] == '-' {
+			inLineComment = true
+			current.WriteRune(ch)
+			continue
+		}
+
+		// End of line comment
+		if inLineComment && ch == '\n' {
+			inLineComment = false
+			current.WriteRune(ch)
+			continue
+		}
+
+		// Handle block comments (/* ... */)
+		if !inString && !inDollarQuote && !inLineComment && i < len(runes)-1 && ch == '/' && runes[i+1] == '*' {
+			inBlockComment = true
+			current.WriteRune(ch)
+			continue
+		}
+
+		// End of block comment
+		if inBlockComment && i < len(runes)-1 && ch == '*' && runes[i+1] == '/' {
+			inBlockComment = false
+			current.WriteRune(ch)
+			i++ // Skip the '/'
+			current.WriteRune(runes[i])
+			continue
+		}
+
+		// Skip processing if in comment
+		if inLineComment || inBlockComment {
+			current.WriteRune(ch)
+			continue
+		}
+
+		// Handle regular strings ('')
+		if !inDollarQuote && ch == '\'' {
+			// Check if it's an escaped quote
+			if i > 0 && runes[i-1] == '\\' {
+				current.WriteRune(ch)
+				continue
+			}
+			inString = !inString
+			current.WriteRune(ch)
+			continue
+		}
+
+		// Handle dollar-quoted strings ($$...$$, $tag$...$tag$)
+		if !inString && ch == '$' {
+			// Try to match dollar quote
+			tag := string(ch)
+			j := i + 1
+			for j < len(runes) && (runes[j] == '_' || (runes[j] >= 'a' && runes[j] <= 'z') || (runes[j] >= 'A' && runes[j] <= 'Z') || (runes[j] >= '0' && runes[j] <= '9')) {
+				tag += string(runes[j])
+				j++
+			}
+			if j < len(runes) && runes[j] == '$' {
+				tag += "$"
+				if inDollarQuote {
+					// Check if this closes the dollar quote
+					if tag == dollarTag {
+						inDollarQuote = false
+						dollarTag = ""
+					}
+				} else {
+					// Start dollar quote
+					inDollarQuote = true
+					dollarTag = tag
+				}
+				current.WriteString(tag)
+				i = j
+				continue
+			}
+		}
+
+		// Handle statement terminator (semicolon)
+		if !inString && !inDollarQuote && ch == ';' {
+			current.WriteRune(ch)
+			stmt := strings.TrimSpace(current.String())
+			if stmt != "" {
+				statements = append(statements, stmt)
+			}
+			current.Reset()
+			continue
+		}
+
+		// Regular character
+		current.WriteRune(ch)
+	}
+
+	// Add any remaining content
+	if current.Len() > 0 {
+		stmt := strings.TrimSpace(current.String())
+		if stmt != "" {
+			statements = append(statements, stmt)
+		}
+	}
+
+	return statements
 }
 
 func (sv *SchemaValidator) applyMigrationsToContainer(ctx context.Context, containerInfo *ContainerInfo, migrationPath string) error {

@@ -26,10 +26,10 @@ func (cp *ClerkPlugin) TransformSQL(ctx context.Context, sql string) (string, er
 }
 
 // FixFunctionVolatility adds STABLE markers to Clerk auth functions
-// Delegates to shared volatility fixer to eliminate duplication
+// Uses AST-based parsing for more accurate and maintainable transformations
 func (cp *ClerkPlugin) FixFunctionVolatility(ctx context.Context, functionSQL string) (string, error) {
     registry := volatility.CreateClerkRegistry()
-    fixer := volatility.NewVolatilityFixer(registry)
+    fixer := volatility.NewASTVolatilityFixer(registry)
     return fixer.Fix(functionSQL)
 }
 

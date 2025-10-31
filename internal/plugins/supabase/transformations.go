@@ -28,10 +28,10 @@ func (sp *SupabasePlugin) TransformSQL(ctx context.Context, sql string) (string,
 }
 
 // FixFunctionVolatility adds STABLE markers to Supabase auth functions
-// Delegates to shared volatility fixer to eliminate duplication
+// Uses AST-based parsing for more accurate and maintainable transformations
 func (sp *SupabasePlugin) FixFunctionVolatility(ctx context.Context, functionSQL string) (string, error) {
     registry := volatility.CreateSupabaseRegistry()
-    fixer := volatility.NewVolatilityFixer(registry)
+    fixer := volatility.NewASTVolatilityFixer(registry)
     return fixer.Fix(functionSQL)
 }
 

@@ -315,8 +315,75 @@ func (b *SQLBuilder) CreateFunction(function *FunctionDefinition) *SQLBuilder {
 	// Return type
 	b.NL().P("RETURNS").S().P(function.ReturnType)
 
-	// Language
-	b.NL().P("LANGUAGE").S().P(function.Language)
+	// Prepare body and handle language declaration
+	body := function.Body
+	bodyLanguage := ""
+
+	// ALWAYS remove trailing language clauses using string replacement
+	// This handles all cases regardless of format
+	body = strings.ReplaceAll(body, " language 'plpgsql';", "")
+	body = strings.ReplaceAll(body, " language 'sql';", "")
+	body = strings.ReplaceAll(body, " language plpgsql;", "")
+	body = strings.ReplaceAll(body, " language sql;", "")
+
+	// Find and extract language declaration from body if present
+	// Check for common trailing language patterns and remove them
+	patterns := []string{
+		" language 'plpgsql';",
+		" language 'sql';",
+		" language plpgsql;",
+		" language sql;",
+		" language 'plpgsql'",
+		" language 'sql'",
+		" language plpgsql",
+		" language sql",
+		"\nlanguage 'plpgsql';",
+		"\nlanguage 'sql';",
+		"\nlanguage plpgsql;",
+		"\nlanguage sql;",
+	}
+
+	bodyLower := strings.ToLower(body)
+	for _, pattern := range patterns {
+		if idx := strings.LastIndex(bodyLower, pattern); idx > 0 {
+			// Extract language from pattern
+			if strings.Contains(pattern, "plpgsql") {
+				bodyLanguage = "plpgsql"
+			} else {
+				bodyLanguage = "sql"
+			}
+
+			// Remove the pattern from the body
+			body = body[:idx]
+			break
+		}
+	}
+
+	// Determine language with priority:
+	// 1. Extracted from body (most reliable)
+	// 2. Infer from body content (overrides function.Language if body has plpgsql constructs)
+	// 3. Use function.Language
+	// 4. Default to sql
+	language := bodyLanguage
+
+	if language == "" {
+		// Check body content for plpgsql constructs
+		bodyLowerForInfer := strings.ToLower(body)
+		hasPlpgsqlConstructs := strings.Contains(bodyLowerForInfer, "declare") ||
+			(strings.Contains(bodyLowerForInfer, "begin") && strings.Contains(bodyLowerForInfer, "end")) ||
+			strings.Contains(bodyLowerForInfer, "perform ")
+
+		if hasPlpgsqlConstructs {
+			language = "plpgsql"
+		} else if function.Language != "" {
+			language = function.Language
+		} else {
+			language = "sql"
+		}
+	}
+
+	// Add LANGUAGE clause
+	b.NL().P("LANGUAGE").S().P(language)
 
 	// Properties
 	if function.Volatility != "" && function.Volatility != "VOLATILE" {
@@ -332,7 +399,7 @@ func (b *SQLBuilder) CreateFunction(function *FunctionDefinition) *SQLBuilder {
 	}
 
 	// Body
-	b.NL().P("AS").S().P(function.Body)
+	b.NL().P("AS").S().P(strings.TrimSpace(body))
 
 	return b
 }

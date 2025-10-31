@@ -284,3 +284,4 @@ test-configs/paranoid-ai.json
 test-configs/paranoid-no-ai.json
 test-configs/standard-ai.json
 test-configs/standard-no-ai.json
+test-results/test1-nami-paranoid.log

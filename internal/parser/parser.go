@@ -316,13 +316,17 @@ func analyzeStatementWithNormalization(raw *pg_query.RawStmt, stmt *types.Statem
 		stmt.ObjectName = normalizer.NormalizeIdentifier(node.CreateExtensionStmt.Extname)
 
 	case *pg_query.Node_CommentStmt:
-		stmt.ObjectType = types.TypeUnknown // Will be determined by objtype
+		// CRITICAL FIX (Bug #5 revised): COMMENT statements should always be TypeComment
+		// The object being commented on is tracked via Dependencies, not ObjectType
+		// This prevents "Object X::VIEW depends on X which is never created" false warnings
+		// where COMMENT ON VIEW was being stored as a VIEW object instead of a COMMENT object
+		stmt.ObjectType = types.TypeComment
 		stmt.Operation = types.OpComment
 		// Extract object name and type from comment statement
 		if node.CommentStmt.Object != nil {
 			stmt.ObjectName = extractCommentObjectNameWithNormalization(node.CommentStmt, normalizer)
-			stmt.ObjectType = mapCommentObjectType(node.CommentStmt.Objtype)
-			// Extract dependency on the object being commented
+			// Extract dependency on the object being commented (with proper type)
+			// This creates a dependency like: "collection_contents::COMMENT depends on collection_contents::VIEW"
 			stmt.Dependencies = extractCommentDependenciesWithNormalization(node.CommentStmt, normalizer)
 		}
 
@@ -821,19 +825,39 @@ func extractCommentObjectNameWithNormalization(commentStmt *pg_query.CommentStmt
 }
 
 func mapCommentObjectType(objtype pg_query.ObjectType) types.ObjectType {
+	// CRITICAL FIX (Bug #5): Map all PostgreSQL object types that can have COMMENTs
+	// This prevents "never created" warnings for COMMENT ON VIEW, COMMENT ON POLICY, etc.
 	switch objtype {
 	case pg_query.ObjectType_OBJECT_TABLE:
 		return types.TypeTable
 	case pg_query.ObjectType_OBJECT_COLUMN:
 		return types.TypeTable // Column comments are table-related
+	case pg_query.ObjectType_OBJECT_VIEW:
+		return types.TypeView
+	case pg_query.ObjectType_OBJECT_INDEX:
+		return types.TypeIndex
 	case pg_query.ObjectType_OBJECT_FUNCTION:
 		return types.TypeFunction
+	case pg_query.ObjectType_OBJECT_TRIGGER:
+		return types.TypeTrigger
+	case pg_query.ObjectType_OBJECT_SEQUENCE:
+		return types.TypeSequence
+	case pg_query.ObjectType_OBJECT_POLICY:
+		return types.TypePolicy
+	case pg_query.ObjectType_OBJECT_SCHEMA:
+		return types.TypeSchema
+	case pg_query.ObjectType_OBJECT_EXTENSION:
+		return types.TypeExtension
+	case pg_query.ObjectType_OBJECT_TYPE:
+		return types.TypeType
 	default:
 		return types.TypeComment
 	}
 }
 
 // extractCommentDependenciesWithNormalization extracts the target object that a COMMENT ON references
+// Returns dependencies with type prefix in format: "TYPE:name" (e.g., "VIEW:collection_contents")
+// This allows proper dependency tracking using the same pattern as CONSTRAINT: and COLUMN: prefixes
 func extractCommentDependenciesWithNormalization(commentStmt *pg_query.CommentStmt, normalizer *ContextualNormalizer) []string {
 	if commentStmt.Object == nil {
 		return nil
@@ -844,22 +868,26 @@ func extractCommentDependenciesWithNormalization(commentStmt *pg_query.CommentSt
 	// Extract the target object name
 	targetName := extractObjectNameWithNormalization(commentStmt.Object, normalizer)
 	if targetName != "" {
+		// Get the target object type
+		targetType := mapCommentObjectType(commentStmt.Objtype)
+
 		// For COMMENT ON COLUMN, extract just the table name
 		if commentStmt.Objtype == pg_query.ObjectType_OBJECT_COLUMN {
 			// Format is: table_name.column_name, we want just table_name
 			parts := strings.Split(targetName, ".")
 			if len(parts) >= 2 {
-				// If schema.table.column, use schema.table
+				// If schema.table.column, use TABLE:schema.table
 				if len(parts) == 3 {
-					deps = append(deps, fmt.Sprintf("%s.%s", parts[0], parts[1]))
+					deps = append(deps, fmt.Sprintf("%s:%s.%s", types.TypeTable, parts[0], parts[1]))
 				} else {
-					// If table.column, use just table
-					deps = append(deps, parts[0])
+					// If table.column, use TABLE:table
+					deps = append(deps, fmt.Sprintf("%s:%s", types.TypeTable, parts[0]))
 				}
 			}
 		} else {
-			// For other object types, use the full name
-			deps = append(deps, targetName)
+			// For other object types, use prefix format: "TYPE:name"
+			// This matches the CONSTRAINT: and COLUMN: prefix pattern used elsewhere
+			deps = append(deps, fmt.Sprintf("%s:%s", targetType, targetName))
 		}
 	}
 

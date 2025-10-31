@@ -78,7 +78,7 @@ END
 $$;
 
 -- Mock Clerk auth.jwt() function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   -- Return a mock Clerk JWT payload for validation purposes
   RETURN jsonb_build_object(
@@ -96,33 +96,33 @@ BEGIN
     'iss', 'https://mock-clerk.clerk.accounts.dev'
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Mock current_user_id helper (common in Clerk setups)
-CREATE OR REPLACE FUNCTION current_user_id() RETURNS text AS $$
+CREATE OR REPLACE FUNCTION current_user_id() RETURNS text LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN (auth.jwt() ->> 'sub')::text;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Mock organization helpers
-CREATE OR REPLACE FUNCTION current_organization_id() RETURNS text AS $$
+CREATE OR REPLACE FUNCTION current_organization_id() RETURNS text LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN (auth.jwt()->'o'->>'id')::text;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
-CREATE OR REPLACE FUNCTION current_organization_role() RETURNS text AS $$
+CREATE OR REPLACE FUNCTION current_organization_role() RETURNS text LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN (auth.jwt()->'o'->>'role')::text;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
-CREATE OR REPLACE FUNCTION current_organization_name() RETURNS text AS $$
+CREATE OR REPLACE FUNCTION current_organization_name() RETURNS text LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN (auth.jwt()->'o'->>'name')::text;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Create Supabase Realtime publication if it doesn't exist (often used with Clerk)
 DO $$
@@ -197,14 +197,14 @@ END
 $$;
 
 -- Mock Supabase auth.uid() function
-CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS $$
+CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Mock Supabase auth.jwt() function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN jsonb_build_object(
     'sub', 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
@@ -214,7 +214,7 @@ BEGIN
     'exp', extract(epoch from now()) + 3600
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+$$;
 
 -- Create Supabase Realtime publication if it doesn't exist
 DO $$
@@ -259,7 +259,7 @@ func (g *CompatibilityGenerator) GenerateAuth0Compatibility() string {
 CREATE SCHEMA IF NOT EXISTS auth;
 
 -- Mock Auth0 JWT function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN jsonb_build_object(
     'sub', 'auth0|mock_user_id',
@@ -271,7 +271,7 @@ BEGIN
     'exp', extract(epoch from now()) + 3600
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;`
+$$;`
 }
 
 // GenerateNextAuthCompatibility creates NextAuth authentication compatibility layer
@@ -325,7 +325,7 @@ func (g *CompatibilityGenerator) GenerateFirebaseCompatibility() string {
 CREATE SCHEMA IF NOT EXISTS auth;
 
 -- Mock Firebase JWT function
-CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb AS $$
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER STABLE AS $$
 BEGIN
   RETURN jsonb_build_object(
     'sub', 'mock_firebase_uid',
@@ -343,7 +343,7 @@ BEGIN
     )
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;`
+$$;`
 }
 
 // GetServiceFromString converts string to ServiceType

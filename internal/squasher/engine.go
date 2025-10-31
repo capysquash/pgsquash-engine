@@ -1545,6 +1545,9 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 	finalSQL = removeOrphanedAlterStatements(finalSQL)
 	finalSQL = fixMalformedFunctions(finalSQL)
 	// splitConcatenatedFunctions() REMOVED - now handled in FunctionDeduplicationRule.Apply()
+	// CRITICAL FIX ORDER: Remove trailing language clauses BEFORE fixFunctionLanguageConflicts
+	// This allows fixFunctionLanguageConflicts to properly normalize remaining functions
+	finalSQL = fixRedundantTrailingLanguageClauses(finalSQL)
 	// fixFunctionLanguageConflicts() FIXED - regex now uses precise matching to avoid matching across function boundaries
 	finalSQL = fixFunctionLanguageConflicts(finalSQL)
 	finalSQL = fixReturnNextWithOutParams(finalSQL)
@@ -2622,4 +2625,56 @@ func fixFunctionLanguageConflicts(sql string) string {
 	}
 
 	return transformedSQL
+}
+
+// fixRedundantTrailingLanguageClauses removes redundant LANGUAGE clauses that appear after
+// the closing $$ delimiter in function definitions. PostgreSQL rejects these as
+// "conflicting or redundant options" when LANGUAGE is also in the header.
+//
+// This function handles all variations of trailing language clauses:
+//   - $$ language 'plpgsql';   → $$;
+//   - $$ language 'sql';       → $$;
+//   - $$ language plpgsql;     → $$;
+//   - $$ LANGUAGE SQL;         → $$;
+//   - $$\nlanguage 'plpgsql';  → $$;  (with newline)
+//   - $tag$ language plpgsql;  → $tag$;  (tagged dollar quotes)
+//
+// NOTE: This function only REMOVES trailing clauses. The fixFunctionLanguageConflicts
+// function (which runs after this) handles moving LANGUAGE to the correct header position.
+//
+// EXECUTION: Called in post-processing phase BEFORE fixFunctionLanguageConflicts.
+func fixRedundantTrailingLanguageClauses(sql string) string {
+	// Pattern matches: closing dollar-quote delimiter + whitespace + language clause + semicolon
+	// Groups:
+	//   1. Closing delimiter ($$ or $tag$)
+	//   2. Language name (for logging only, not used in replacement)
+	pattern := regexp.MustCompile(
+		`(\$+(?:[a-z_][a-z0-9_]*)?\$)\s*[lL][aA][nN][gG][uU][aA][gG][eE]\s+['"]?(plpgsql|sql|c|internal)['"]?\s*;`,
+	)
+
+	// Find all matches before replacement (for logging)
+	matches := pattern.FindAllStringSubmatch(sql, -1)
+
+	// Replace: keep the closing delimiter, remove language clause, keep semicolon
+	fixedSQL := pattern.ReplaceAllString(sql, "$1;")
+
+	if len(matches) > 0 {
+		utils.GetDefaultLogger().WithPrefix("ENGINE").Info(
+			"Removed %d redundant trailing LANGUAGE clauses from function definitions",
+			len(matches),
+		)
+
+		// Log examples (helpful for debugging)
+		for i, match := range matches {
+			if i < 3 { // Only log first 3 to avoid spam
+				utils.GetDefaultLogger().WithPrefix("ENGINE").Info(
+					"  Example %d: Removed '$$ language %s;'",
+					i+1,
+					match[2], // match[2] is the language name from capture group 2
+				)
+			}
+		}
+	}
+
+	return fixedSQL
 }

@@ -854,7 +854,19 @@ func runSquash(cmd *cobra.Command, args []string) error {
 			valResult, valErr := runValidationCheck(cfg, originalPath, cfg.Output.Directory)
 
 			if valErr != nil {
+				// Print the main error
 				fmt.Println(color.RedString("❌ Validation failed: %v", valErr))
+
+				// If it's a structured error with an inner error, print that too
+				if structErr, ok := valErr.(*errors.StructuredError); ok && structErr.InnerError != nil {
+					fmt.Println(color.RedString("   Inner error: %v", structErr.InnerError))
+
+					// If the inner error is also structured, print its details
+					if innerStruct, ok := structErr.InnerError.(*errors.StructuredError); ok && innerStruct.InnerError != nil {
+						fmt.Println(color.RedString("   PostgreSQL error: %v", innerStruct.InnerError))
+					}
+				}
+
 				if failOnDiff {
 					return errors.NewError(
 						errors.ErrorCodeValidationFailed,

@@ -960,6 +960,28 @@ func (ut *UnifiedTracker) parseObjectID(identifier string) ObjectID {
 					return ObjectID{Name: tableParts[0], Type: types.TypeTable}
 				}
 				return ObjectID{Name: actualIdentifier, Type: types.TypeTable} // Assume table reference
+		// CRITICAL FIX (Bug #5): Handle COMMENT ON dependencies with explicit types
+		// These come from extractCommentDependenciesWithNormalization in parser
+		case "TABLE":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeTable}
+		case "VIEW":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeView}
+		case "POLICY":
+			return ObjectID{Name: actualIdentifier, Type: types.TypePolicy}
+		case "FUNCTION":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeFunction}
+		case "INDEX":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeIndex}
+		case "TRIGGER":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeTrigger}
+		case "SEQUENCE":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeSequence}
+		case "SCHEMA":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeSchema}
+		case "EXTENSION":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeExtension}
+		case "TYPE":
+			return ObjectID{Name: actualIdentifier, Type: types.TypeType}
 			default:
 				// Fallback to parsing the actual identifier without prefix
 				return ut.parseObjectID(actualIdentifier)
@@ -1068,15 +1090,24 @@ func (ut *UnifiedTracker) extractDatabaseMetadata(dbMeta *metadata.DatabaseMetad
 }
 
 // makeKey creates a unique key for an object
-// For functions, strips schema qualifiers to treat "public.foo" and "foo" as the same function
+// CRITICAL FIX: Strips schema qualifiers for ALL object types to ensure consistent lookups
+// This prevents false "never created" warnings when objects are referenced with/without schema
 func makeKey(name string, objType types.ObjectType) string {
 	normalizedName := strings.ToLower(name)
 
-	// For functions, strip schema qualifier (e.g., "public.clerk_user_id" → "clerk_user_id")
-	// This prevents duplicate tracking of the same function with/without schema qualifier
-	if objType == types.TypeFunction {
+	// Strip schema qualifier for ALL object types (e.g., "public.blueprints" → "blueprints")
+	// This ensures consistent keying whether an object is created as "public.table" or "table"
+	// and whether dependencies reference it as "public.table" or "table"
+	//
+	// Why this matters:
+	// - CREATE TABLE public.blueprints (...) creates key "blueprints::TABLE"
+	// - INDEX on blueprints references it as "blueprints", looks for "blueprints::TABLE"
+	// - Without stripping, "public.blueprints::TABLE" != "blueprints::TABLE" → false warning
+	//
+	// Special case: For schema objects themselves (CREATE SCHEMA foo), preserve the name
+	if objType != types.TypeSchema {
 		if dotIndex := strings.LastIndex(normalizedName, "."); dotIndex > 0 {
-			// Extract just the function name after the last dot
+			// Extract just the object name after the last dot
 			normalizedName = normalizedName[dotIndex+1:]
 		}
 	}
