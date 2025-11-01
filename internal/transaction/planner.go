@@ -1,5 +1,5 @@
-// Package squasher provides transaction planning and lock analysis for migration squashing.
-package squasher
+// Package transaction provides transaction planning and lock analysis for migration squashing.
+package transaction
 
 import (
 	"fmt"

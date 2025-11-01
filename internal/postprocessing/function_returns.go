@@ -1,4 +1,4 @@
-package squasher
+package postprocessing
 
 import (
 	"fmt"
@@ -8,7 +8,11 @@ import (
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 )
 
-// fixReturnNextWithOutParams fixes RETURN NEXT usage in RETURNS TABLE functions.
+// FixCallback is called when a fix is applied, allowing tracking of transformations.
+// Parameters: description, before (original SQL), after (fixed SQL)
+type FixCallback func(description, before, after string)
+
+// FixReturnNextWithOutParams fixes RETURN NEXT usage in RETURNS TABLE functions.
 //
 // PostgreSQL Issue:
 // RETURNS TABLE creates implicit OUT parameters. Using RETURN NEXT with arguments
@@ -20,7 +24,10 @@ import (
 //
 // This function is called in post-processing to fix any functions that slipped through
 // the SQL transformation phase (when EnableTransformation is false).
-func fixReturnNextWithOutParams(sql string) string {
+//
+// The optional callback parameter allows tracking transformations for reporting.
+// Pass nil if tracking is not needed.
+func FixReturnNextWithOutParams(sql string, callback FixCallback) string {
 	// Find all functions with RETURNS TABLE
 	returnsTableRegex := regexp.MustCompile(`(?ims)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*RETURNS\s+TABLE\s*\(\s*([^)]+)\)`)
 
@@ -29,7 +36,7 @@ func fixReturnNextWithOutParams(sql string) string {
 		return sql // No RETURNS TABLE functions found
 	}
 
-	utils.GetDefaultLogger().WithPrefix("RETURN-NEXT-FIX").Info("[fixReturnNextWithOutParams] Found %d RETURNS TABLE functions", len(matches))
+	utils.GetDefaultLogger().WithPrefix("POSTPROCESS").Info("Found %d RETURNS TABLE functions", len(matches))
 
 	transformedSQL := sql
 	offset := 0
@@ -74,7 +81,7 @@ func fixReturnNextWithOutParams(sql string) string {
 			continue
 		}
 
-		utils.GetDefaultLogger().WithPrefix("RETURN-NEXT-FIX").Info("[fixReturnNextWithOutParams] Found %d RETURN NEXT statements in function %s", len(returnMatches), funcName)
+		utils.GetDefaultLogger().WithPrefix("POSTPROCESS").Info("Found %d RETURN NEXT statements in function %s", len(returnMatches), funcName)
 
 		fixedBody := body
 		bodyOffset := 0
@@ -111,7 +118,17 @@ func fixReturnNextWithOutParams(sql string) string {
 
 			bodyOffset += len(selectStmt) - len(oldStmt)
 
-			utils.GetDefaultLogger().WithPrefix("RETURN-NEXT-FIX").Info("[fixReturnNextWithOutParams] Fixed RETURN NEXT in function %s: %s → %s", funcName, strings.TrimSpace(oldStmt), strings.TrimSpace(selectStmt))
+			// Log the fix
+			utils.GetDefaultLogger().WithPrefix("POSTPROCESS").Info("Fixed RETURN NEXT in function %s: %s → %s", funcName, strings.TrimSpace(oldStmt), strings.TrimSpace(selectStmt))
+
+			// Notify callback if provided
+			if callback != nil {
+				callback(
+					fmt.Sprintf("Fixed RETURN NEXT syntax in function %s (RETURNS TABLE should use RETURN QUERY SELECT)", funcName),
+					strings.TrimSpace(oldStmt),
+					strings.TrimSpace(selectStmt),
+				)
+			}
 		}
 
 		// Replace the function body in the transformed SQL
@@ -168,4 +185,10 @@ func parseTableColumns(columnsSpec string) []string {
 	}
 
 	return columns
+}
+
+// FixReturnNextWithOutParamsSimple is a backward-compatible wrapper that fixes RETURN NEXT
+// without tracking transformations. For new code, prefer FixReturnNextWithOutParams with a callback.
+func FixReturnNextWithOutParamsSimple(sql string) string {
+	return FixReturnNextWithOutParams(sql, nil)
 }

@@ -642,32 +642,54 @@ func (udr *UnifiedDependencyResolver) analyzeSQLDependencies(
 }
 
 // topologicalSortSQL performs dependency-based sorting for SQL consolidation results
+// Delegates to tracking.DependencyGraph for topological sorting to maintain single source of truth
 func (udr *UnifiedDependencyResolver) topologicalSortSQL(dependencies map[string]*SQLDependencyInfo, category types.Category) []string {
-	// Build adjacency list and in-degree count
-	graph := make(map[string][]string)
-	inDegree := make(map[string]int)
-	allNodes := make(map[string]bool)
+	// Separate RequiredFirst and RequiredLast items for special handling
+	var requiredFirst []string
+	var requiredLast []string
+	normalDeps := make(map[string]*SQLDependencyInfo)
 
-	// Initialize all nodes
-	for key := range dependencies {
-		allNodes[key] = true
-		inDegree[key] = 0
-		graph[key] = []string{}
+	for key, info := range dependencies {
+		if info.RequiredFirst {
+			requiredFirst = append(requiredFirst, key)
+		} else if info.RequiredLast {
+			requiredLast = append(requiredLast, key)
+		} else {
+			normalDeps[key] = info
+		}
 	}
 
-	// Build the graph based on dependencies
-	for key, info := range dependencies {
+	// Build a tracking.DependencyGraph for normal dependencies
+	depGraph := tracking.NewDependencyGraph()
+	keyToObjectID := make(map[string]tracking.ObjectID)
+	objectIDToKey := make(map[tracking.ObjectID]string)
+
+	// Add all nodes
+	for key := range normalDeps {
+		// Create ObjectID using the key as the name
+		objID := tracking.ObjectID{
+			Type: types.TypeUnknown, // Type doesn't matter for ordering
+			Name: key,
+		}
+		depGraph.AddNode(objID)
+		keyToObjectID[key] = objID
+		objectIDToKey[objID] = key
+	}
+
+	// Build edges based on dependencies
+	for key, info := range normalDeps {
+		fromID := keyToObjectID[key]
 		for _, dep := range info.Dependencies {
 			// Find if any other object provides this dependency
-			for otherKey, otherInfo := range dependencies {
+			for otherKey, otherInfo := range normalDeps {
 				if otherKey == key {
 					continue
 				}
 				for _, provides := range otherInfo.Provides {
 					if udr.dependencyMatches(dep, provides) {
 						// otherKey must come before key
-						graph[otherKey] = append(graph[otherKey], key)
-						inDegree[key]++
+						toID := keyToObjectID[otherKey]
+						depGraph.AddEdge(fromID, toID)
 						break
 					}
 				}
@@ -675,85 +697,32 @@ func (udr *UnifiedDependencyResolver) topologicalSortSQL(dependencies map[string
 		}
 	}
 
-	// Kahn's algorithm for topological sorting
-	var queue []string
-	var result []string
+	// Perform topological sort using tracking.DependencyGraph
+	sortedIDs, err := depGraph.TopologicalSort()
+	var normalResult []string
 
-	// Handle special cases first
-	for key, info := range dependencies {
-		if info.RequiredFirst {
-			queue = append(queue, key)
+	if err != nil {
+		// Cycles detected - fall back to best-effort ordering
+		utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Circular dependencies in category %s, using fallback ordering", category)
+		for key := range normalDeps {
+			normalResult = append(normalResult, key)
 		}
-	}
-
-	// Add nodes with no incoming edges
-	for key, degree := range inDegree {
-		if degree == 0 && !dependencies[key].RequiredFirst {
-			queue = append(queue, key)
-		}
-	}
-
-	// Process the queue
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-
-		// Skip if this should be last but we haven't processed all others
-		if dependencies[current].RequiredLast {
-			// Check if there are still non-RequiredLast nodes to process
-			hasNonLast := false
-			for _, neighbor := range graph[current] {
-				if !dependencies[neighbor].RequiredLast {
-					hasNonLast = true
-					break
-				}
-			}
-			if hasNonLast {
-				// Put it at the end of queue and continue
-				queue = append(queue, current)
-				continue
-			}
-		}
-
-		result = append(result, current)
-
-		// Reduce in-degree for neighbors
-		for _, neighbor := range graph[current] {
-			inDegree[neighbor]--
-			if inDegree[neighbor] == 0 {
-				queue = append(queue, neighbor)
+		// Sort alphabetically for stability
+		sort.Strings(normalResult)
+	} else {
+		// Convert ObjectIDs back to string keys
+		for _, objID := range sortedIDs {
+			if key, exists := objectIDToKey[objID]; exists {
+				normalResult = append(normalResult, key)
 			}
 		}
 	}
 
-	// Handle remaining nodes (potential circular dependencies)
-	for key := range dependencies {
-		found := false
-		for _, resultKey := range result {
-			if resultKey == key {
-				found = true
-				break
-			}
-		}
-		if !found {
-			utils.GetDefaultLogger().WithPrefix("DEP-RESOLVER").Info("Warning: Object %s may have circular dependency, adding to end", key)
-			result = append(result, key)
-		}
-	}
-
-	// Final sort for RequiredLast items
-	sort.SliceStable(result, func(i, j int) bool {
-		iLast := dependencies[result[i]].RequiredLast
-		jLast := dependencies[result[j]].RequiredLast
-
-		if iLast && !jLast {
-			return false // i goes after j
-		}
-		if !iLast && jLast {
-			return true // i goes before j
-		}
-		return false // maintain stable order
-	})
+	// Combine: RequiredFirst + Normal + RequiredLast
+	result := make([]string, 0, len(dependencies))
+	result = append(result, requiredFirst...)
+	result = append(result, normalResult...)
+	result = append(result, requiredLast...)
 
 	return result
 }

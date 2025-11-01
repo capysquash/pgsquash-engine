@@ -8,6 +8,7 @@ import (
 
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/errors"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/postprocessing"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/utils"
 	pg_query "github.com/pganalyze/pg_query_go/v6"
 )
@@ -584,190 +585,24 @@ func (st *SQLTransformer) fixCommonSyntaxErrors(ctx context.Context, sql string,
 	return transformedSQL, nil
 }
 
-// fixReturnNextWithOutParams fixes RETURN NEXT usage in RETURNS TABLE functions
+// fixReturnNextWithOutParams fixes RETURN NEXT usage in RETURNS TABLE functions.
+// Delegates to postprocessing package with transformation tracking.
+//
+// PostgreSQL Issue:
+// RETURNS TABLE creates implicit OUT parameters. Using RETURN NEXT with arguments
+// in such functions causes: "pq: RETURN NEXT cannot have a parameter in function with OUT parameters"
+//
+// This method wraps the postprocessing implementation and captures transformations for reporting.
 func (st *SQLTransformer) fixReturnNextWithOutParams(sql string, result *TransformationResult) string {
-	// Find all functions with RETURNS TABLE
-	// Pattern: CREATE OR REPLACE FUNCTION func_name() RETURNS TABLE(col1 TYPE, col2 TYPE) ... RETURN NEXT record_var;
-
-	// This is a complex fix that requires understanding the function structure
-	// We'll use regex to find problematic patterns and fix them
-
-	// Find RETURNS TABLE declarations and track the columns
-	returnsTableRegex := regexp.MustCompile(`(?ims)CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^)]*\)\s*RETURNS\s+TABLE\s*\(\s*([^)]+)\)`)
-
-	matches := returnsTableRegex.FindAllStringSubmatchIndex(sql, -1)
-	if len(matches) == 0 {
-		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] No RETURNS TABLE functions found")
-		return sql // No RETURNS TABLE functions found
-	}
-	utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] Found %d RETURNS TABLE functions", len(matches))
-
-	transformedSQL := sql
-	offset := 0
-
-	for _, match := range matches {
-		if len(match) < 6 {
-			continue
-		}
-
-		funcNameStart := match[2] + offset
-		funcNameEnd := match[3] + offset
-		columnsStart := match[4] + offset
-		columnsEnd := match[5] + offset
-
-		funcName := sql[funcNameStart:funcNameEnd]
-		columnsSpec := sql[columnsStart:columnsEnd]
-
-		// Parse column names from TABLE(...) definition
-		columnNames := st.parseTableColumns(columnsSpec)
-		if len(columnNames) == 0 {
-			continue
-		}
-
-		// Find the function body (between AS $$ and $$)
-		funcStart := match[0] + offset
-		bodyRegex := regexp.MustCompile(`(?s)AS\s+\$\$(.+?)\$\$`)
-		bodyMatch := bodyRegex.FindStringSubmatchIndex(transformedSQL[funcStart:])
-
-		if len(bodyMatch) < 4 {
-			continue
-		}
-
-		bodyStart := funcStart + bodyMatch[2]
-		bodyEnd := funcStart + bodyMatch[3]
-		body := transformedSQL[bodyStart:bodyEnd]
-
-		// Find RETURN NEXT statements (with or without arguments) in this function body
-		// Pattern 1: RETURN NEXT variable_name; (with argument - needs conversion)
-		// Pattern 2: RETURN NEXT; (no argument - also invalid with RETURNS TABLE)
-		returnNextRegex := regexp.MustCompile(`RETURN\s+NEXT(?:\s+([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*))?(\s*);`)
-		returnMatches := returnNextRegex.FindAllStringSubmatchIndex(body, -1)
-
-		if len(returnMatches) == 0 {
-			utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] No RETURN NEXT found in function %s", funcName)
-			continue
-		}
-		utils.GetDefaultLogger().WithPrefix("SQL-TRANSFORM").Info("[fixReturnNextWithOutParams] Found %d RETURN NEXT statements in function %s", len(returnMatches), funcName)
-
-		fixedBody := body
-		bodyOffset := 0
-
-		for _, returnMatch := range returnMatches {
-			if len(returnMatch) < 2 {
-				continue
-			}
-
-			// Check if there's a variable name (Group 1)
-			var varName string
-			if returnMatch[2] >= 0 && returnMatch[3] >= 0 {
-				// Has variable: RETURN NEXT variable_name;
-				varName = fixedBody[returnMatch[2]+bodyOffset : returnMatch[3]+bodyOffset]
-			}
-
-			var selectStmt string
-			if varName != "" {
-				// Case 1: RETURN NEXT record_var; → RETURN QUERY SELECT record_var.field1, record_var.field2;
-				var selectColumns []string
-				for _, colName := range columnNames {
-					selectColumns = append(selectColumns, fmt.Sprintf("%s.%s", varName, colName))
-				}
-				selectStmt = fmt.Sprintf("RETURN QUERY SELECT %s;", strings.Join(selectColumns, ", "))
-			} else {
-				// Case 2: RETURN NEXT; (no argument)
-				// The function should have already assigned to OUT parameter variables.
-				// We need to RETURN the OUT parameters directly.
-				// Build: RETURN QUERY SELECT col1, col2, col3;
-				// where col1, col2, col3 are the OUT parameter names from RETURNS TABLE
-				selectStmt = fmt.Sprintf("RETURN QUERY SELECT %s;", strings.Join(columnNames, ", "))
-			}
-
-			// Replace RETURN NEXT with RETURN QUERY SELECT
-			oldStmt := fixedBody[returnMatch[0]+bodyOffset : returnMatch[1]+bodyOffset]
-			fixedBody = fixedBody[:returnMatch[0]+bodyOffset] + selectStmt + fixedBody[returnMatch[1]+bodyOffset:]
-
-			bodyOffset += len(selectStmt) - len(oldStmt)
-
-			// Record the transformation
-			result.Transformations = append(result.Transformations, TransformationApplied{
-				Type:        UnsafeToSafe,
-				Description: fmt.Sprintf("Fixed RETURN NEXT syntax in function %s (RETURNS TABLE should use RETURN QUERY SELECT)", funcName),
-				Before:      strings.TrimSpace(oldStmt),
-				After:       strings.TrimSpace(selectStmt),
-			})
-		}
-
-		// Replace the function body in the transformed SQL
-		transformedSQL = transformedSQL[:bodyStart] + fixedBody + transformedSQL[bodyEnd:]
-		offset += len(fixedBody) - len(body)
-	}
-
-	return transformedSQL
-}
-
-// parseTableColumns extracts column names from RETURNS TABLE(...) specification
-func (st *SQLTransformer) parseTableColumns(columnsSpec string) []string {
-	// Split by commas, handling nested parentheses
-	var columns []string
-	var current strings.Builder
-	depth := 0
-
-	for _, char := range columnsSpec {
-		switch char {
-		case '(':
-			depth++
-			current.WriteRune(char)
-		case ')':
-			depth--
-			current.WriteRune(char)
-		case ',':
-			if depth == 0 {
-				colDef := strings.TrimSpace(current.String())
-				if colDef != "" {
-					// Extract just the column name (first word)
-					parts := strings.Fields(colDef)
-					if len(parts) > 0 {
-						columns = append(columns, parts[0])
-					}
-				}
-				current.Reset()
-			} else {
-				current.WriteRune(char)
-			}
-		default:
-			current.WriteRune(char)
-		}
-	}
-
-	// Handle last column
-	if current.Len() > 0 {
-		colDef := strings.TrimSpace(current.String())
-		if colDef != "" {
-			parts := strings.Fields(colDef)
-			if len(parts) > 0 {
-				columns = append(columns, parts[0])
-			}
-		}
-	}
-
-	return columns
-}
-
-// fixMissingSemicolons adds missing semicolons to function definitions
-//nolint:unused // Reserved for future semicolon fixing functionality
-func (st *SQLTransformer) fixMissingSemicolons(sql string, result *TransformationResult) string {
-	// Look for $$ followed by newline without semicolon
-	// Use a simpler approach compatible with RE2: match $$ + whitespace + newline + non-semicolon
-	regex := regexp.MustCompile(`(?m)\$\$\s*\n\s*([^;])`)
-
-	if regex.MatchString(sql) {
-		sql = regex.ReplaceAllString(sql, "$$;\n$1")
+	return postprocessing.FixReturnNextWithOutParams(sql, func(description, before, after string) {
+		// Track transformation for reporting
 		result.Transformations = append(result.Transformations, TransformationApplied{
 			Type:        UnsafeToSafe,
-			Description: "Added missing semicolons after function definitions",
+			Description: description,
+			Before:      before,
+			After:       after,
 		})
-	}
-
-	return sql
+	})
 }
 
 // fixCommentSyntax fixes invalid COMMENT ON syntax

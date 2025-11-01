@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -17,8 +16,8 @@ import (
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/metadata"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/parser"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/performance"
-	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/plugins/auth"
+	"github.com/CAPYSQUASH/pgsquash-engine/internal/postprocessing"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/tracking/consolidation"
 	"github.com/CAPYSQUASH/pgsquash-engine/internal/transformation"
@@ -559,10 +558,11 @@ func (e *Engine) Squash(migrations map[int]string) (string, []string, error) {
 
 	// PHASE 0: Initialize Plugin System
 	// This must happen BEFORE parsing to enable plugin enrichment
-	if err := e.initializePlugins(ctx, migrations); err != nil {
-		e.logger.Info("Warning: Plugin initialization failed: %v", err)
-		e.warnings = append(e.warnings, fmt.Sprintf("Plugin initialization warning: %v", err))
-	}
+	// NOTE: Plugin initialization has been moved to CLI/API layer
+	// if err := e.initializePlugins(ctx, migrations); err != nil {
+	// 	e.logger.Info("Warning: Plugin initialization failed: %v", err)
+	// 	e.warnings = append(e.warnings, fmt.Sprintf("Plugin initialization warning: %v", err))
+	// }
 
 	// Analyze extensions required for validation
 	extDetector := NewExtensionDetector()
@@ -1540,19 +1540,16 @@ func (e *Engine) generateOptimizedSQL(ctx context.Context, consolidatedObjects m
 	// ================================================================
 
 	finalSQL := e.sqlBuilder.String()
-	finalSQL = fixMalformedDropTriggers(finalSQL)
-	finalSQL = fixExtensionOrder(finalSQL)
-	finalSQL = removeOrphanedAlterStatements(finalSQL)
-	finalSQL = fixMalformedFunctions(finalSQL)
-	// splitConcatenatedFunctions() REMOVED - now handled in FunctionDeduplicationRule.Apply()
-	// CRITICAL FIX ORDER: Remove trailing language clauses BEFORE fixFunctionLanguageConflicts
-	// This allows fixFunctionLanguageConflicts to properly normalize remaining functions
-	finalSQL = fixRedundantTrailingLanguageClauses(finalSQL)
-	// fixFunctionLanguageConflicts() FIXED - regex now uses precise matching to avoid matching across function boundaries
-	finalSQL = fixFunctionLanguageConflicts(finalSQL)
-	finalSQL = fixReturnNextWithOutParams(finalSQL)
-	finalSQL = fixMissingSemicolons(finalSQL)
-	finalSQL = e.fixEliminatedEnumReferences(finalSQL)
+
+	// Build enum replacements map
+	enumReplacements := e.buildEnumReplacementsMap()
+
+	// Apply post-processing
+	processor := postprocessing.NewProcessor(e.config)
+	finalSQL, err := processor.Apply(finalSQL, enumReplacements)
+	if err != nil {
+		return "", err
+	}
 
 	return finalSQL, nil
 }
@@ -1618,6 +1615,51 @@ func (e *Engine) getObjectsByCategoryAsMap(consolidatedObjects map[string]*track
 	}
 
 	return objects
+}
+
+// buildEnumReplacementsMap builds a map of eliminated ENUM names to their primary replacements.
+// This is used during post-processing to rewrite references to eliminated ENUMs.
+func (e *Engine) buildEnumReplacementsMap() map[string]string {
+	enumReplacements := make(map[string]string)
+
+	// Iterate through all consolidation results to find eliminated ENUMs
+	for key, result := range e.consolidationResults {
+		lifecycle, exists := e.lifecycles[key]
+		if !exists {
+			continue
+		}
+
+		// Check if this is an ENUM type
+		if lifecycle.Type != types.TypeEnum && lifecycle.Type != types.TypeType {
+			continue
+		}
+
+		// Check if it was eliminated (ConsolidatedSQL is a comment)
+		if strings.HasPrefix(strings.TrimSpace(result.ConsolidatedSQL), "-- Duplicate ENUM eliminated:") {
+			// Parse the warning to extract the mapping
+			// Warning format: "ENUM <eliminated> is a duplicate of <primary> - eliminated to prevent conflicts"
+			for _, warning := range result.Warnings {
+				if strings.Contains(warning, "is a duplicate of") && strings.Contains(warning, "eliminated to prevent conflicts") {
+					// Extract eliminated and primary names
+					// Format: "ENUM verification_status_enum is a duplicate of verification_status - eliminated to prevent conflicts"
+					parts := strings.Split(warning, " is a duplicate of ")
+					if len(parts) == 2 {
+						eliminatedName := strings.TrimPrefix(parts[0], "ENUM ")
+						primaryName := strings.Split(parts[1], " - ")[0]
+
+						enumReplacements[eliminatedName] = primaryName
+						e.logger.Info("Enum mapping: %s → %s", eliminatedName, primaryName)
+					}
+				}
+			}
+		}
+	}
+
+	if len(enumReplacements) > 0 {
+		e.logger.Info("Built ENUM replacements map with %d entries", len(enumReplacements))
+	}
+
+	return enumReplacements
 }
 
 // validateAgainstDatabase validates the generated SQL against the production database
@@ -1934,747 +1976,3 @@ func OptimizedSquashFromDirectory(cfg *config.Config, dir string, memoryLimitMB 
 	return engine.SquashFromDirectory(dir)
 }
 
-// fixMalformedDropTriggers fixes DROP TRIGGER statements that use qualified table.trigger_name syntax
-// PostgreSQL requires: DROP TRIGGER IF EXISTS trigger_name ON table_name;
-// Not: DROP TRIGGER IF EXISTS table_name.trigger_name;
-func fixMalformedDropTriggers(sql string) string {
-	// Pattern: DROP TRIGGER IF EXISTS table_name.trigger_name;
-	// Replace with: DROP TRIGGER IF EXISTS trigger_name ON table_name;
-
-	lines := strings.Split(sql, "\n")
-	for i, line := range lines {
-		upperLine := strings.ToUpper(strings.TrimSpace(line))
-
-		// Check if this is a DROP TRIGGER statement with qualified name
-		if strings.HasPrefix(upperLine, "DROP TRIGGER IF EXISTS") && strings.Contains(line, ".") {
-			// Extract the qualified name
-			// Format: DROP TRIGGER IF EXISTS table_name.trigger_name;
-			parts := strings.Fields(line)
-			if len(parts) >= 5 {
-				qualifiedName := parts[4] // table_name.trigger_name or table_name.trigger_name;
-				qualifiedName = strings.TrimSuffix(qualifiedName, ";")
-
-				// Split on the dot
-				dotIndex := strings.Index(qualifiedName, ".")
-				if dotIndex > 0 {
-					tableName := qualifiedName[:dotIndex]
-					triggerName := qualifiedName[dotIndex+1:]
-
-					// Reconstruct with correct syntax
-					lines[i] = fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON %s;", triggerName, tableName)
-					utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Fixed malformed DROP TRIGGER: %s.%s -> %s ON %s", tableName, triggerName, triggerName, tableName)
-				}
-			}
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// fixExtensionOrder ensures extensions are in correct dependency order
-// cube must come before earthdistance
-func fixExtensionOrder(sql string) string {
-	// Correct order (cube before earthdistance)
-	correctOrder := []string{
-		"cube",
-		"earthdistance",
-		"postgis",
-		"uuid-ossp",
-		"pg_trgm",
-		"pg_stat_statements",
-		"btree_gin",
-		"pgcrypto",
-	}
-
-	// Find all CREATE EXTENSION statements and their positions
-	lines := strings.Split(sql, "\n")
-	extensionMap := make(map[string]string)  // extension name -> full line
-	extensionPositions := make(map[int]bool) // line numbers to remove
-
-	for i, line := range lines {
-		upperLine := strings.ToUpper(strings.TrimSpace(line))
-		if strings.HasPrefix(upperLine, "CREATE EXTENSION") {
-			// Extract extension name
-			// Format: CREATE EXTENSION IF NOT EXISTS "name"; or CREATE EXTENSION "name";
-			parts := strings.Fields(line)
-
-			// Find the extension name (last meaningful part before semicolon)
-			var extName string
-			for j := len(parts) - 1; j >= 0; j-- {
-				part := strings.Trim(parts[j], `";`)
-				if part != "" && strings.ToUpper(part) != "EXISTS" && strings.ToUpper(part) != "NOT" &&
-					strings.ToUpper(part) != "IF" && strings.ToUpper(part) != "EXTENSION" && strings.ToUpper(part) != "CREATE" {
-					extName = part
-					break
-				}
-			}
-
-			if extName != "" {
-				extensionMap[extName] = line
-				extensionPositions[i] = true
-				utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Found extension: %s at line %d", extName, i+1)
-			}
-		}
-	}
-
-	utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Total extensions found: %d", len(extensionMap))
-
-	// If we found extensions, rebuild with correct order
-	if len(extensionMap) > 0 {
-		// Find the extension section header
-		extensionHeaderIdx := -1
-		for i, line := range lines {
-			if strings.Contains(line, "=== EXTENSIONS OBJECTS ===") {
-				extensionHeaderIdx = i
-				break
-			}
-		}
-
-		if extensionHeaderIdx >= 0 {
-			// Build new file: header + sorted extensions + rest
-			var result []string
-
-			// Add everything before extension section
-			for i := 0; i <= extensionHeaderIdx; i++ {
-				result = append(result, lines[i])
-			}
-			result = append(result, "")
-
-			// Add extensions in correct order
-			for _, extName := range correctOrder {
-				if line, exists := extensionMap[extName]; exists {
-					result = append(result, line)
-					result = append(result, "")
-					delete(extensionMap, extName)
-				}
-			}
-
-			// Add any remaining extensions not in predefined order (must iterate in stable order)
-			var remainingExtNames []string
-			for extName := range extensionMap {
-				remainingExtNames = append(remainingExtNames, extName)
-			}
-			// Sort remaining extensions by name for stable output
-			for _, extName := range remainingExtNames {
-				if line, exists := extensionMap[extName]; exists {
-					result = append(result, line)
-					result = append(result, "")
-				}
-			}
-
-			// Add rest of file (skipping old extension lines)
-			for i := extensionHeaderIdx + 1; i < len(lines); i++ {
-				if !extensionPositions[i] {
-					result = append(result, lines[i])
-				}
-			}
-
-			utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Reordered %d extensions to ensure correct dependency order", len(extensionMap))
-			return strings.Join(result, "\n")
-		}
-	}
-
-	return sql
-}
-
-// sortExtensionsByDependency sorts extension CREATE statements by dependency order
-// Some extensions depend on others and must be created in the right order
-//
-//nolint:unused // Reserved for future extension dependency sorting
-func sortExtensionsByDependency(extensionLines []string) []string {
-	// Simple hardcoded order for known dependencies
-	// cube must come before earthdistance
-	order := []string{
-		"cube",
-		"earthdistance",
-		"postgis",
-		"uuid-ossp",
-		"pg_trgm",
-		"pg_stat_statements",
-		"btree_gin",
-		"pgcrypto",
-	}
-
-	// Map extension names to their lines
-	extLineMap := make(map[string]string)
-	for _, line := range extensionLines {
-		parts := strings.Fields(line)
-		if len(parts) >= 5 {
-			extName := parts[4]                   // Position after "CREATE EXTENSION IF NOT EXISTS"
-			extName = strings.Trim(extName, `";`) // Remove quotes and semicolon
-			extLineMap[extName] = line
-		}
-	}
-
-	// Build result in correct order
-	var result []string
-	for _, extName := range order {
-		if line, exists := extLineMap[extName]; exists {
-			result = append(result, line)
-			delete(extLineMap, extName) // Mark as processed
-		}
-	}
-
-	// Add any remaining extensions not in the predefined order
-	for _, line := range extLineMap {
-		result = append(result, line)
-	}
-
-	utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Sorted %d extensions by dependency order", len(result))
-	return result
-}
-
-// fixMalformedFunctions repairs common function definition issues from consolidation
-// Issues fixed:
-// 1. Missing AS keyword before function body
-// 2. Duplicate LANGUAGE clauses
-// 3. Standalone LANGUAGE lines after $$
-// 4. Multiple volatility markers (STABLE and IMMUTABLE together)
-// 5. Orphaned function bodies without CREATE FUNCTION headers
-func fixMalformedFunctions(sql string) string {
-	lines := strings.Split(sql, "\n")
-	var result []string
-	fixedCount := 0
-	inOrphanedBody := false
-
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
-
-		// Detect orphaned function body starting with "SET search_path" followed by volatility marker
-		// This happens when function header is missing but body remains
-		if (strings.HasPrefix(trimmed, "SET search_path") || strings.Contains(trimmed, "SET search_path")) &&
-			(strings.Contains(trimmed, " STABLE") || strings.Contains(trimmed, " VOLATILE") || strings.Contains(trimmed, " IMMUTABLE")) {
-			// This is an orphaned function body without CREATE FUNCTION header
-			inOrphanedBody = true
-			fixedCount++
-			utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Detected orphaned function body at line %d (SET search_path with volatility marker), removing", i+1)
-			continue
-		}
-
-		// If in orphaned body, skip until we find the end of the function
-		if inOrphanedBody {
-			// Look for end of function: END; followed by $$ LANGUAGE or just $$;
-			if (strings.HasPrefix(trimmed, "END;") || strings.Contains(trimmed, "$$")) &&
-				(i+1 < len(lines) && (strings.Contains(strings.ToUpper(lines[i+1]), "LANGUAGE") || strings.Contains(lines[i+1], "$$"))) {
-				// Skip this line and check next
-				continue
-			} else if strings.Contains(trimmed, "$$ LANGUAGE") || (trimmed == "$$;" && i > 0 && strings.HasPrefix(strings.TrimSpace(lines[i-1]), "END")) {
-				// Found end marker, skip it and exit orphaned body mode
-				inOrphanedBody = false
-				fixedCount++
-				continue
-			} else if strings.HasPrefix(trimmed, "CREATE ") || strings.HasPrefix(trimmed, "ALTER ") || strings.HasPrefix(trimmed, "DROP ") {
-				// Found a new statement, exit orphaned body mode without skipping this line
-				inOrphanedBody = false
-			} else {
-				// Still in orphaned body, skip this line
-				continue
-			}
-		}
-
-		// Don't skip if they're part of a valid function definition (between RETURNS and AS)
-		// Valid: CREATE FUNCTION foo() RETURNS text [LANGUAGE sql] [SECURITY DEFINER] AS $$
-		isOrphanedModifier := (trimmed == "LANGUAGE plpgsql" || trimmed == "LANGUAGE SQL" || trimmed == "LANGUAGE sql" ||
-			trimmed == "SECURITY DEFINER" || trimmed == "VOLATILE" || trimmed == "STABLE" || trimmed == "IMMUTABLE")
-
-		if isOrphanedModifier {
-			// Check if this might be part of a valid function definition
-			// Look back for RETURNS (not followed by $$; or end of function) and forward for AS $$
-			isPartOfFunction := false
-			if i > 0 && i < len(lines)-1 {
-				// Look back through recent lines to check if we're in a function header
-				hasReturnsAbove := false
-				hasEndOfFunctionAbove := false
-
-				for j := i - 1; j >= max(0, i-10); j-- {
-					prevLine := strings.TrimSpace(lines[j])
-					prevLineUpper := strings.ToUpper(prevLine)
-
-					// If we hit CREATE FUNCTION, we're likely in a header
-					if strings.Contains(prevLineUpper, "CREATE") && strings.Contains(prevLineUpper, "FUNCTION") {
-						hasReturnsAbove = true // CREATE FUNCTION implies there will be/was RETURNS
-						break
-					}
-
-					// If we find RETURNS, check it's not part of a completed function
-					if strings.Contains(prevLineUpper, "RETURNS") {
-						hasReturnsAbove = true
-						// But if there's a $$; after RETURNS, the function already ended
-						for k := j + 1; k < i; k++ {
-							checkLine := strings.TrimSpace(lines[k])
-							if strings.HasSuffix(checkLine, "$$;") || checkLine == "$$;" {
-								hasEndOfFunctionAbove = true
-								break
-							}
-						}
-						break
-					}
-
-					// Stop if we hit a previous statement end
-					if strings.HasPrefix(prevLineUpper, "$$;") || prevLine == "$$;" ||
-						strings.HasPrefix(prevLineUpper, "CREATE ") ||
-						strings.HasPrefix(prevLineUpper, "ALTER ") {
-						break
-					}
-				}
-
-				// Check next few lines for AS $$
-				hasASBelow := false
-				for j := i + 1; j < min(i+5, len(lines)); j++ {
-					nextLine := strings.TrimSpace(lines[j])
-					nextLineUpper := strings.ToUpper(nextLine)
-					if strings.Contains(nextLineUpper, " AS ") || strings.HasPrefix(nextLineUpper, "AS ") {
-						hasASBelow = true
-						break
-					}
-					// Stop if we hit another statement
-					if strings.HasPrefix(nextLineUpper, "CREATE ") ||
-						strings.HasPrefix(nextLineUpper, "ALTER ") {
-						break
-					}
-				}
-
-				// It's part of a function if we found RETURNS/CREATE FUNCTION above (and not after function end) and AS below
-				isPartOfFunction = hasReturnsAbove && !hasEndOfFunctionAbove && hasASBelow
-			}
-
-			if !isPartOfFunction {
-				fixedCount++
-				continue // Skip this truly orphaned line
-			}
-			// Otherwise, keep it - it's part of a valid function definition
-		}
-
-		// Fix functions missing AS keyword: "RETURNS type\nLANGUAGE lang\n$$" -> "RETURNS type AS $$"
-		if strings.HasPrefix(trimmed, "LANGUAGE ") && i > 0 && i < len(lines)-1 {
-			prevLine := strings.TrimSpace(lines[i-1])
-			nextLine := strings.TrimSpace(lines[i+1])
-
-			// Check if this is part of a malformed function header
-			if strings.HasPrefix(prevLine, "RETURNS ") && (strings.HasPrefix(nextLine, "$$") || strings.HasPrefix(nextLine, "$")) {
-				// This LANGUAGE line is in the wrong place - skip it, AS will be added later
-				fixedCount++
-				continue
-			}
-		}
-
-		result = append(result, line)
-	}
-
-	if fixedCount > 0 {
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Fixed %d malformed function definition lines", fixedCount)
-	}
-
-	return strings.Join(result, "\n")
-}
-
-// removeOrphanedAlterStatements removes ALTER TABLE statements for tables that don't exist
-// This happens when a table was created in early migrations but replaced/renamed in later ones
-func removeOrphanedAlterStatements(sql string) string {
-	lines := strings.Split(sql, "\n")
-
-	// First pass: collect all tables that are actually created
-	createdTables := make(map[string]bool)
-	createTablePattern := regexp.MustCompile(`(?i)CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)`)
-
-	for _, line := range lines {
-		if matches := createTablePattern.FindStringSubmatch(line); len(matches) > 1 {
-			tableName := strings.ToLower(strings.TrimSpace(matches[1]))
-			createdTables[tableName] = true
-		}
-	}
-
-	utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Found %d created tables", len(createdTables))
-
-	// Second pass: filter out ALTER statements for non-existent tables
-	var result []string
-	alterTablePattern := regexp.MustCompile(`(?i)ALTER\s+TABLE\s+([a-zA-Z_][a-zA-Z0-9_]*)`)
-	removedCount := 0
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		// Check if this is an ALTER TABLE statement
-		if matches := alterTablePattern.FindStringSubmatch(trimmed); len(matches) > 1 {
-			tableName := strings.ToLower(strings.TrimSpace(matches[1]))
-
-			// Only keep ALTER if the table was actually created
-			if !createdTables[tableName] {
-				utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Removing orphaned ALTER for non-existent table: %s", tableName)
-				removedCount++
-				continue // Skip this line
-			}
-		}
-
-		result = append(result, line)
-	}
-
-	if removedCount > 0 {
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Removed %d orphaned ALTER TABLE statements", removedCount)
-	}
-
-	return strings.Join(result, "\n")
-}
-
-// fixMissingSemicolons adds missing semicolons after CREATE TABLE and other DDL statements
-// This fixes "syntax error at or near ALTER" when a CREATE TABLE is missing its trailing semicolon
-func fixMissingSemicolons(sql string) string {
-	lines := strings.Split(sql, "\n")
-	var result []string
-	fixedCount := 0
-
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
-
-		// Check if this line ends a CREATE TABLE (closing parenthesis)
-		// and the next line starts with ALTER, CREATE, DROP, or COMMENT
-		if trimmed == ")" && i+1 < len(lines) {
-			nextLine := strings.TrimSpace(lines[i+1])
-			nextUpper := strings.ToUpper(nextLine)
-
-			// Check if next line starts a new statement
-			startsNewStatement := strings.HasPrefix(nextUpper, "ALTER ") ||
-				strings.HasPrefix(nextUpper, "CREATE ") ||
-				strings.HasPrefix(nextUpper, "DROP ") ||
-				strings.HasPrefix(nextUpper, "COMMENT ") ||
-				strings.HasPrefix(nextUpper, "GRANT ") ||
-				strings.HasPrefix(nextUpper, "REVOKE ")
-
-			if startsNewStatement {
-				// Add semicolon to this line
-				result = append(result, line+";")
-				fixedCount++
-				utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Added missing semicolon after closing parenthesis at line %d", i+1)
-				continue
-			}
-		}
-
-		// Check for closing parenthesis with options like );
-		// but followed immediately by a new statement without blank line
-		if strings.HasSuffix(trimmed, ")") && !strings.HasSuffix(trimmed, ";") && i+1 < len(lines) {
-			nextLine := strings.TrimSpace(lines[i+1])
-			nextUpper := strings.ToUpper(nextLine)
-
-			// Check if next line starts a new statement
-			startsNewStatement := strings.HasPrefix(nextUpper, "ALTER ") ||
-				strings.HasPrefix(nextUpper, "CREATE ") ||
-				strings.HasPrefix(nextUpper, "DROP ") ||
-				strings.HasPrefix(nextUpper, "COMMENT ") ||
-				strings.HasPrefix(nextUpper, "GRANT ") ||
-				strings.HasPrefix(nextUpper, "REVOKE ")
-
-			if startsNewStatement {
-				// Add semicolon to this line
-				result = append(result, line+";")
-				fixedCount++
-				utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Added missing semicolon after closing parenthesis at line %d", i+1)
-				continue
-			}
-		}
-
-		result = append(result, line)
-	}
-
-	if fixedCount > 0 {
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Fixed %d missing semicolons", fixedCount)
-	}
-
-	return strings.Join(result, "\n")
-}
-
-// initializePlugins discovers and initializes plugins from migrations
-// This enables plugin-specific enrichment, transformations, and consolidation rules
-func (e *Engine) initializePlugins(ctx context.Context, migrations map[int]string) error {
-	// Parse migrations to types.Migration format for plugin detection
-	var parsedMigrations []*types.Migration
-	for id, sql := range migrations {
-		filename := fmt.Sprintf("migration_%d.sql", id)
-		migration, err := parser.ParseMigration(sql, filename)
-		if err != nil {
-			e.logger.Info("Warning: Failed to parse migration %d for plugin detection: %v", id, err)
-			continue
-		}
-		parsedMigrations = append(parsedMigrations, migration)
-	}
-
-	// Extract plugin configuration from engine config
-	pluginConfig := make(map[string]interface{})
-	if e.config != nil {
-		// Map config to plugin-specific sections
-		pluginConfig["clerk"] = e.config.ThirdPartyIntegrations.ClerkIntegration
-		pluginConfig["supabase"] = e.config.ThirdPartyIntegrations.SupabaseIntegration
-		pluginConfig["auth0"] = e.config.ThirdPartyIntegrations.Auth0Integration
-		pluginConfig["nextauth"] = e.config.ThirdPartyIntegrations.NextAuthIntegration
-	}
-
-	// Initialize plugin registry
-	registry := plugins.GlobalRegistry()
-	if err := registry.DiscoverAndInitialize(ctx, parsedMigrations, pluginConfig); err != nil {
-		return errors.NewError(
-			errors.ErrorCodeValidationFailed,
-			"plugin initialization failed",
-			errors.SeverityError,
-			errors.CategoryValidation,
-		).WithInnerError(err)
-	}
-
-	activePlugins := registry.ActivePlugins()
-	if len(activePlugins) > 0 {
-		var pluginNames []string
-		for _, p := range activePlugins {
-			pluginNames = append(pluginNames, p.Name())
-		}
-		e.logger.Info("☑ Activated plugins: %v", pluginNames)
-	} else {
-		e.logger.Info("ℹ No plugins activated (no third-party patterns detected)")
-	}
-
-	return nil
-}
-
-// shouldPreserveStatement checks if plugins want to preserve a statement
-// Preserved statements are marked as critical and skipped during consolidation
-//
-//nolint:unused // Plugin preservation feature not yet integrated
-func (e *Engine) shouldPreserveStatement(stmt *types.Statement) bool {
-	registry := plugins.GlobalRegistry()
-	return registry.ShouldPreserve(stmt)
-}
-
-// getPluginConsolidationRules retrieves consolidation rules from all active plugins
-// These rules are merged with standard consolidation rules
-//
-//nolint:unused // Plugin consolidation rules not yet integrated
-func (e *Engine) getPluginConsolidationRules() []plugins.ConsolidationRule {
-	registry := plugins.GlobalRegistry()
-	return registry.GetConsolidationRules()
-}
-
-// fixEliminatedEnumReferences rewrites references to eliminated ENUM types
-// When EnumDeduplicationRule eliminates a duplicate ENUM, all references to it
-// must be rewritten to use the primary (kept) ENUM instead.
-// Example: verification_status_enum eliminated → rewrite to verification_status
-func (e *Engine) fixEliminatedEnumReferences(sql string) string {
-	// Build a map of eliminated ENUMs → primary ENUMs from consolidation results
-	enumReplacements := make(map[string]string)
-
-	for _, result := range e.consolidationResults {
-		// Check if this is an eliminated ENUM (has a comment marker)
-		if strings.Contains(result.ConsolidatedSQL, "-- Duplicate ENUM eliminated:") {
-			// Extract the eliminated ENUM name and the primary ENUM name
-			// Format: "-- Duplicate ENUM eliminated: eliminated_name (similar to primary_name)"
-			pattern := regexp.MustCompile(`-- Duplicate ENUM eliminated: ([a-zA-Z_][a-zA-Z0-9_]*) \(similar to ([a-zA-Z_][a-zA-Z0-9_]*)\)`)
-			if matches := pattern.FindStringSubmatch(result.ConsolidatedSQL); len(matches) == 3 {
-				eliminatedName := matches[1]
-				primaryName := matches[2]
-				enumReplacements[eliminatedName] = primaryName
-				e.logger.Info("fixEliminatedEnumReferences: Will replace %s → %s", eliminatedName, primaryName)
-			}
-		}
-	}
-
-	if len(enumReplacements) == 0 {
-		return sql // No ENUMs were eliminated
-	}
-
-	// Rewrite all references to eliminated ENUMs
-	fixedSQL := sql
-	fixedCount := 0
-
-	for eliminatedName, primaryName := range enumReplacements {
-		// Pattern 1: Column type declarations in CREATE TABLE
-		// Example: status verification_status_enum DEFAULT
-		pattern1 := regexp.MustCompile(`\b` + regexp.QuoteMeta(eliminatedName) + `\b`)
-
-		// Count matches before replacement
-		matches := pattern1.FindAllStringIndex(fixedSQL, -1)
-		if len(matches) > 0 {
-			fixedSQL = pattern1.ReplaceAllString(fixedSQL, primaryName)
-			fixedCount += len(matches)
-			e.logger.Info("fixEliminatedEnumReferences: Replaced %d reference(s) to %s with %s", len(matches), eliminatedName, primaryName)
-		}
-	}
-
-	if fixedCount > 0 {
-		e.logger.Info("Fixed %d ENUM references to eliminated types", fixedCount)
-	}
-
-	return fixedSQL
-}
-
-// fixFunctionLanguageConflicts fixes functions with conflicting VOLATILE/LANGUAGE placement.
-// This is a safety net post-processor that catches any functions where normalization didn't run
-// or where SQL transformation added volatility markers incorrectly.
-//
-// Problem Pattern (Invalid PostgreSQL syntax):
-//
-//	CREATE FUNCTION foo() RETURNS text VOLATILE AS $$ ... $$ LANGUAGE plpgsql;
-//
-// Fixed Pattern (Valid):
-//
-//	CREATE FUNCTION foo() RETURNS text LANGUAGE plpgsql VOLATILE AS $$ ... $$;
-//
-// Root Cause:
-// When volatility markers (VOLATILE/STABLE/IMMUTABLE) are added before AS $$,
-// PostgreSQL requires LANGUAGE to also be before AS $$, not after the function body.
-//
-// This function detects and fixes three scenarios:
-// 1. VOLATILE AS $$ ... $$ LANGUAGE plpgsql → LANGUAGE plpgsql VOLATILE AS $$ ... $$
-// 2. STABLE AS $$ ... $$ LANGUAGE plpgsql → LANGUAGE plpgsql STABLE AS $$ ... $$
-// 3. IMMUTABLE AS $$ ... $$ LANGUAGE plpgsql → LANGUAGE plpgsql IMMUTABLE AS $$ ... $$
-func fixFunctionLanguageConflicts(sql string) string {
-	// Regex Pattern:
-	// Group 1: CREATE [OR REPLACE] FUNCTION name(...) RETURNS type
-	// Group 2: Optional existing modifiers (SECURITY DEFINER, etc.)
-	// Group 3: Volatility marker (VOLATILE|STABLE|IMMUTABLE)
-	// Group 4: AS $$
-	// Group 5: Function body
-	// Group 6: $$ (closing delimiter)
-	// Group 7: LANGUAGE clause (this needs to be moved)
-	// Group 8: Optional SECURITY DEFINER after LANGUAGE
-	//
-	// We look for functions where volatility comes before AS but LANGUAGE comes after body
-	// CRITICAL FIX: Instead of using (.+?) which can match across function boundaries,
-	// we match specifically up to and including "$$ LANGUAGE" to ensure we only match ONE function
-	// Pattern: Match everything up to the FIRST occurrence of $$ followed immediately by LANGUAGE
-	// This prevents the regex from accidentally spanning multiple adjacent functions
-	pattern := regexp.MustCompile(
-		`(?ims)(CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:[a-z_][a-z0-9_]*\.)?[a-z_][a-z0-9_]*\s*\([^)]*\)\s*RETURNS\s+(?:TABLE\s*\([^)]+\)|SETOF\s+[^\s]+|[^\s]+))((?:\s+(?:SECURITY\s+DEFINER|SET\s+[^\s]+\s*=\s*[^\s]+))*?)\s+(VOLATILE|STABLE|IMMUTABLE)(\s+AS\s+\$\$)([\s\S]*?)(\$\$\s+LANGUAGE\s+[a-z]+)((?:\s+SECURITY\s+DEFINER)?)`,
-	)
-
-	matches := pattern.FindAllStringSubmatchIndex(sql, -1)
-	if len(matches) == 0 {
-		return sql // No conflicting functions found
-	}
-
-	transformedSQL := sql
-	offset := 0
-	fixedCount := 0
-
-	for _, match := range matches {
-		if len(match) < 16 {
-			continue
-		}
-
-		// Extract parts (Groups changed because we now capture "$$ LANGUAGE" as combined Group 6)
-		signature := transformedSQL[match[0]+offset : match[1]+offset]           // Group 1: CREATE FUNCTION...RETURNS type
-		existingModifiers := transformedSQL[match[2]+offset : match[3]+offset]   // Group 2: Existing modifiers
-		volatility := transformedSQL[match[4]+offset : match[5]+offset]          // Group 3: VOLATILE/STABLE/IMMUTABLE
-		asKeyword := transformedSQL[match[6]+offset : match[7]+offset]           // Group 4: AS $$
-		body := transformedSQL[match[8]+offset : match[9]+offset]                // Group 5: function body
-		closingLangClause := transformedSQL[match[10]+offset : match[11]+offset] // Group 6: $$ LANGUAGE plpgsql (combined!)
-		securityAfterLang := ""
-		if match[12] >= 0 && match[13] >= 0 {
-			securityAfterLang = transformedSQL[match[12]+offset : match[13]+offset] // Group 7: SECURITY DEFINER
-		}
-
-		// Extract $$ and LANGUAGE separately from the combined group
-		// closingLangClause is like "$$ LANGUAGE plpgsql"
-		parts := strings.Fields(closingLangClause) // Split on whitespace
-		closingDelim := "$$"
-		languageClause := ""
-		if len(parts) >= 3 {
-			// parts[0] = "$$", parts[1] = "LANGUAGE", parts[2] = "plpgsql"
-			languageClause = strings.Join(parts[1:], " ") // "LANGUAGE plpgsql"
-		}
-
-		// Build corrected function:
-		// signature + existingModifiers + LANGUAGE + volatility + SECURITY + AS $$ + body + $$;
-		normalizedModifiers := strings.TrimSpace(existingModifiers)
-		normalizedLanguage := strings.TrimSpace(languageClause)
-		normalizedVolatility := strings.TrimSpace(volatility)
-		normalizedSecurity := strings.TrimSpace(securityAfterLang)
-
-		// Build modifier chain in correct order: LANGUAGE → VOLATILITY → SECURITY
-		var modifiers string
-		if normalizedModifiers != "" {
-			// Already have modifiers, add LANGUAGE and VOLATILITY
-			modifiers = normalizedModifiers + " " + normalizedLanguage + " " + normalizedVolatility
-		} else {
-			// No existing modifiers
-			modifiers = normalizedLanguage + " " + normalizedVolatility
-		}
-
-		// Add SECURITY DEFINER at the end if it was after LANGUAGE
-		if normalizedSecurity != "" {
-			modifiers = modifiers + " " + normalizedSecurity
-		}
-
-		// Reconstruct: signature + " " + modifiers + AS $$ + body + $$;
-		fixedFunction := signature + " " + modifiers + asKeyword + body + closingDelim + ";"
-
-		// Calculate old function length (everything we're replacing)
-		oldFunctionEnd := match[11] + offset
-		if match[12] >= 0 { // Has SECURITY DEFINER after LANGUAGE
-			oldFunctionEnd = match[13] + offset
-		}
-		oldFunction := transformedSQL[match[0]+offset : oldFunctionEnd]
-
-		// Replace in SQL
-		transformedSQL = transformedSQL[:match[0]+offset] + fixedFunction + transformedSQL[oldFunctionEnd:]
-		offset += len(fixedFunction) - len(oldFunction)
-		fixedCount++
-
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Fixed function with conflicting %s placement (moved LANGUAGE before AS)", normalizedVolatility)
-	}
-
-	if fixedCount > 0 {
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info("Fixed %d functions with conflicting VOLATILE/STABLE/IMMUTABLE and LANGUAGE placement", fixedCount)
-	}
-
-	return transformedSQL
-}
-
-// fixRedundantTrailingLanguageClauses removes redundant LANGUAGE clauses that appear after
-// the closing $$ delimiter in function definitions. PostgreSQL rejects these as
-// "conflicting or redundant options" when LANGUAGE is also in the header.
-//
-// This function handles all variations of trailing language clauses:
-//   - $$ language 'plpgsql';   → $$;
-//   - $$ language 'sql';       → $$;
-//   - $$ language plpgsql;     → $$;
-//   - $$ LANGUAGE SQL;         → $$;
-//   - $$\nlanguage 'plpgsql';  → $$;  (with newline)
-//   - $tag$ language plpgsql;  → $tag$;  (tagged dollar quotes)
-//
-// NOTE: This function only REMOVES trailing clauses. The fixFunctionLanguageConflicts
-// function (which runs after this) handles moving LANGUAGE to the correct header position.
-//
-// EXECUTION: Called in post-processing phase BEFORE fixFunctionLanguageConflicts.
-func fixRedundantTrailingLanguageClauses(sql string) string {
-	// Pattern matches: closing dollar-quote delimiter + whitespace + language clause + semicolon
-	// Groups:
-	//   1. Closing delimiter ($$ or $tag$)
-	//   2. Language name (for logging only, not used in replacement)
-	pattern := regexp.MustCompile(
-		`(\$+(?:[a-z_][a-z0-9_]*)?\$)\s*[lL][aA][nN][gG][uU][aA][gG][eE]\s+['"]?(plpgsql|sql|c|internal)['"]?\s*;`,
-	)
-
-	// Find all matches before replacement (for logging)
-	matches := pattern.FindAllStringSubmatch(sql, -1)
-
-	// Replace: keep the closing delimiter, remove language clause, keep semicolon
-	fixedSQL := pattern.ReplaceAllString(sql, "$1;")
-
-	if len(matches) > 0 {
-		utils.GetDefaultLogger().WithPrefix("ENGINE").Info(
-			"Removed %d redundant trailing LANGUAGE clauses from function definitions",
-			len(matches),
-		)
-
-		// Log examples (helpful for debugging)
-		for i, match := range matches {
-			if i < 3 { // Only log first 3 to avoid spam
-				utils.GetDefaultLogger().WithPrefix("ENGINE").Info(
-					"  Example %d: Removed '$$ language %s;'",
-					i+1,
-					match[2], // match[2] is the language name from capture group 2
-				)
-			}
-		}
-	}
-
-	return fixedSQL
-}
