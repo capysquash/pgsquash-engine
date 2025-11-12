@@ -99,7 +99,7 @@ func (r *RuleRegistry) Register(rule ConsolidationRule, metadata RuleMetadata) e
 		metadata.Provider = "core"
 	}
 	if metadata.Version == "" {
-		metadata.Version = "0.9.5"
+		metadata.Version = "0.9.7"
 	}
 
 	// Check for conflicts
@@ -427,7 +427,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "standard"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -440,7 +440,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "standard", "execution-order"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -453,7 +453,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "standard"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -466,7 +466,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "optimization"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -479,7 +479,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "deduplication"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -492,7 +492,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "replication"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -505,7 +505,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"aggressive", "cleanup"},
 				Enabled:     false, // Disabled by default (aggressive)
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -518,7 +518,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "types"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -531,7 +531,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"standard", "schema"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -544,7 +544,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "security", "rls"},
 				Enabled:     true, // Re-enabled: Now works with SeparateAlterRule for proper RLS handling
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -557,7 +557,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "types", "do_block"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -570,7 +570,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"standard", "dependencies"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -583,7 +583,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "schema"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -596,7 +596,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "transactions"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 		{
@@ -609,7 +609,7 @@ func RegisterCoreRules(registry *RuleRegistry) error {
 				Provider:    "core",
 				Tags:        []string{"safe", "recovery"},
 				Enabled:     true,
-				Version:     "0.9.5",
+				Version:     "0.9.7",
 			},
 		},
 	}

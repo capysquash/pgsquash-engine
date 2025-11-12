@@ -304,7 +304,7 @@ setup_error_handling() {
 # ============================================================================
 
 get_script_version() {
-  echo "0.9.6"
+  echo "0.9.7"
 }
 
 check_prerequisites() {

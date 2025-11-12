@@ -63,7 +63,7 @@ func NewExtensionDetector() *ExtensionDetector {
 // initializeExtensions populates the known extensions map
 func (ed *ExtensionDetector) initializeExtensions() {
 	// Extension definitions with Debian-based Docker images
-	// Migrated from Alpine to standard postgres (Debian) images
+	// Migrated from ubuntu to standard postgres (Debian) images
 	// PostGIS uses the official PostGIS image which is Debian-based
 	extensions := []ExtensionInfo{
 		{

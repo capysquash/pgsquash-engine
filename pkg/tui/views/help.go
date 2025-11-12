@@ -152,7 +152,7 @@ func (h *HelpView) renderAbout() string {
 		"",
 		styles.SubtitleStyle.Render("About"),
 		"",
-		styles.TextStyle.Render("  pgsquash v0.9.5"),
+		styles.TextStyle.Render("  pgsquash v0.9.7"),
 		styles.MutedStyle.Render("  PostgreSQL Migration Consolidation Tool"),
 		"",
 		styles.TextStyle.Render("  Features:"),

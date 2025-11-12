@@ -1399,13 +1399,13 @@ func (sv *SchemaValidator) createEnhancedContainer(ctx context.Context, extensio
 	// - Production parity: matches AWS RDS, GCP CloudSQL, Azure Database
 	//
 	// MIGRATION HISTORY:
-	// - Previously used Alpine (postgres:15-alpine) with apk package manager
+	// - Previously used ubuntu (postgres:15-ubuntu) with apk package manager
 	// - Migrated to Debian/Ubuntu for:
 	//   * Better extension support (PostGIS available via apt vs compilation)
 	//   * Production environment parity (AWS/GCP/Azure all use Debian)
 	//   * Faster package installation (5s vs 5-10 min compilation)
 	//   * No musl/glibc collation compatibility issues
-	// - See docs/ALPINE_VS_DEBIAN_ANALYSIS.md for detailed rationale
+	// - See docs/ubuntu_VS_DEBIAN_ANALYSIS.md for detailed rationale
 	//
 	// FUTURE ENHANCEMENT (Solution 3): Custom Docker Image Building
 	// - Build custom images on-demand with Dockerfile templates
@@ -1435,9 +1435,9 @@ func (sv *SchemaValidator) createEnhancedContainer(ctx context.Context, extensio
 		postgresVersion = sv.config.PostgreSQLVersion
 	}
 
-	// Use standard Debian-based PostgreSQL image (NOT Alpine)
+	// Use standard Debian-based PostgreSQL image (NOT ubuntu)
 	// Rationale: Debian provides pre-compiled extensions (PostGIS, etc.) via apt
-	// See docs/ALPINE_VS_DEBIAN_ANALYSIS.md for detailed comparison
+	// See docs/ubuntu_VS_DEBIAN_ANALYSIS.md for detailed comparison
 	postgresImage := fmt.Sprintf("postgres:%s", postgresVersion)
 	sv.logInfo("🐘 Using Debian-based PostgreSQL image: %s (production-grade, fast extensions)", postgresImage)
 

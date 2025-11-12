@@ -29,7 +29,7 @@ jobs:
       fail-fast: false
       matrix:
         postgres: [12, 13, 14, 15, 16, 17]
-        go-version: [1.21, 1.22]
+        go-version: ["1.25.4", "1.25.x"]
         test-type: [unit, integration]
 
     services:
@@ -120,7 +120,7 @@ jobs:
           ./pgsquash validate test_migrations/ test_output/
 
       - name: Upload coverage to Codecov
-        if: matrix.test-type == 'unit' && matrix.postgres == 15 && matrix.go-version == '1.22'
+        if: matrix.test-type == 'unit' && matrix.postgres == 15 && matrix.go-version == '1.25.4'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
@@ -183,12 +183,12 @@ jobs:
           echo "|------------|----|------------|-------------|------------|-------------|" >> compatibility-report.md
 
           # This would be populated with actual test results in a real implementation
-          echo "| ✅ 12 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
-          echo "| ✅ 13 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
-          echo "| ✅ 14 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
-          echo "| ✅ 15 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
-          echo "| ✅ 16 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
-          echo "| ✅ 17 | ✅ 1.21, 1.22 | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 12 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 13 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 14 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 15 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 16 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
+          echo "| ✅ 17 | ✅ 1.25.4, 1.25.x | ✅ | ✅ | ✅ | ✅ |" >> compatibility-report.md
 
       - name: Upload compatibility report
         uses: actions/upload-artifact@v4

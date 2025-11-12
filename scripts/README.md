@@ -153,7 +153,7 @@ Automatically validates squashed migrations on pull requests using Neon's epheme
 Install jq:
 - macOS: `brew install jq`
 - Ubuntu/Debian: `sudo apt-get install jq`
-- Alpine: `apk add jq`
+- ubuntu: `apk add jq`
 
 ### "DATABASE_URL not set"
 Export your database connection string:
